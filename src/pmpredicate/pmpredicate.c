@@ -19,128 +19,78 @@
 #include "impl.h"
 #include <assert.h>
 
+#define MAX_METRICS 10
+
+static char *predicate_name = NULL;
+static int metric_count=0;
+static char *metric_name[MAX_METRICS];
+
 pmLongOptions longopts[] = {
     PMAPI_GENERAL_OPTIONS,
     PMAPI_OPTIONS_HEADER("Reporting options"),
     { "pause", 0, 'P', 0, "pause between updates for archive replay" },
+    { "filter", 1, 'f', "PREDICATE", "predicate to filter ony" },
+    { "metric", 1, 'm', "METRIC", "metrics to collect" },
     PMAPI_OPTIONS_END
 };
 
 pmOptions opts = {
     .flags = PM_OPTFLAG_STDOUT_TZ,
-    .short_options = PMAPI_OPTIONS "P",
+    .short_options = PMAPI_OPTIONS "Pf:m:",
     .long_options = longopts,
 };
 
-typedef struct {
-    struct timeval	timestamp;	/* last fetched time */
-    double		cpu_util;	/* aggregate CPU utilization, usr+sys */
-    int			peak_cpu;	/* most utilized CPU, if > 1 CPU */
-    double		peak_cpu_util;	/* utilization for most utilized CPU */
-    pmAtomValue		freemem;	/* free memory (Mbytes) */
-    pmAtomValue		dkiops;		/* aggregate disk I/O's per second */
-    pmAtomValue		load1;		/* 1 minute load average */
-    pmAtomValue		load15;		/* 15 minute load average */
-    pmAtomValue		ncpu;		/* number of cpus */
-    unsigned int	last_ncpu;	/* last seen number of cpus */
-} info_t;
 
-static info_t		info;
 static pmFG		pmfg;
+enum { indom_maxnum = 1024 };
+static int		predicate_inst[indom_maxnum];
+static pmAtomValue 	predicate[indom_maxnum];
+static unsigned		num_predicate;
+static int		metric_inst[MAX_METRICS][indom_maxnum];
+static pmAtomValue	metric[MAX_METRICS][indom_maxnum];
+static unsigned		num_metric[MAX_METRICS];
 
 static void
-get_sample(void)
+init_sample(void)
 {
-    enum { indom_maxnum = 1024 };
-    static int		cpu_user_inst[indom_maxnum]; 
-    static pmAtomValue 	cpu_user[indom_maxnum];
-    static unsigned	num_cpu_user;
-    static int		cpu_sys_inst[indom_maxnum];
-    static pmAtomValue	cpu_sys[indom_maxnum];
-    static unsigned	num_cpu_sys;
-    static int		setup;
     int			sts;
-    int			i;
+    int i;
 
-    if (!setup) {
-	setup = 1;
-
-	if ((sts = pmExtendFetchGroup_item(pmfg, "hinv.ncpu", NULL, NULL,
-					   &info.ncpu, PM_TYPE_32, &sts)) < 0) {
-	    fprintf(stderr, "%s: Failed hinv.ncpu ExtendFetchGroup: %s\n",
-		    pmProgname, pmErrStr(sts));
-	    exit(1);
-	}
-	
-	/*
-	 * Because of pmfg_item's willingness to scan to the end of an
-	 * archive to do metric/instance resolution, we don't have to
-	 * specially handle the PM_CONTEXT_ARCHIVE case here.
-	 */
-
-	if ((sts = pmExtendFetchGroup_item(pmfg,
-				"kernel.all.load", "1 minute", NULL,
-				&info.load1, PM_TYPE_DOUBLE, NULL)) < 0) {
-	    fprintf(stderr, "%s: Failed kernel.all.load[1] "
-			    "ExtendFetchGroup: %s\n",
-		    pmProgname, pmErrStr(sts));
-	    exit(1);
-	}
-	if ((sts = pmExtendFetchGroup_item(pmfg,
-				"kernel.all.load", "15 minute", NULL,
-				&info.load15, PM_TYPE_DOUBLE, NULL)) < 0) {
-	    fprintf(stderr, "%s: Failed kernel.all.load[15] "
-			    "ExtendFetchGroup: %s\n",
-		    pmProgname, pmErrStr(sts));
-	    exit(1);
-	}
+    /* set up predicate fetch if there is a predicate */
+    if (predicate_name) {
+	/* FIXME be more flexible on the units/conversions */
 	if ((sts = pmExtendFetchGroup_indom(pmfg,
-				"kernel.percpu.cpu.user", "second/second",
-				cpu_user_inst, NULL, cpu_user, PM_TYPE_DOUBLE,
-				NULL, indom_maxnum, &num_cpu_user, NULL)) < 0) {
-	    fprintf(stderr, "%s: Failed kernel.percpu.cpu.user "
-				"ExtendFetchGroup: %s\n",
-		    pmProgname, pmErrStr(sts));
+					    predicate_name, "second/second",
+					    predicate_inst, NULL, predicate, PM_TYPE_DOUBLE,
+					    NULL, indom_maxnum, &num_predicate, NULL)) < 0) {
+	    fprintf(stderr, "%s: Failed %s "
+		    "ExtendFetchGroup: %s\n",
+		    pmProgname, predicate_name, pmErrStr(sts));
 	    exit(1);
 	}
+    }
 
+    for (i=0; metric_name[i] && i<MAX_METRICS; ++i){
+	/* FIXME be more flexible on the units/conversions */
 	if ((sts = pmExtendFetchGroup_indom(pmfg,
-				"kernel.percpu.cpu.sys", "second/second",
-				cpu_sys_inst, NULL, cpu_sys, PM_TYPE_DOUBLE,
-				NULL, indom_maxnum, &num_cpu_sys, NULL)) < 0) {
+				metric_name[i], "second/second",
+				metric_inst[i], NULL, metric[i], PM_TYPE_DOUBLE,
+				NULL, indom_maxnum, &num_metric[i], NULL)) < 0) {
 	    fprintf(stderr, "%s: Failed kernel.percpu.cpu.sys "
 				"ExtendFetchGroup: %s\n",
 		    pmProgname, pmErrStr(sts));
 	    exit(1);
 	}
-	if ((sts = pmExtendFetchGroup_item(pmfg,
-				"mem.freemem", NULL, "Mbyte",
-				&info.freemem, PM_TYPE_DOUBLE, NULL)) < 0) {
-	    fprintf(stderr, "%s: Failed mem.freemem "
-				"ExtendFetchGroup: %s\n",
-		    pmProgname, pmErrStr(sts));
-	    exit(1);
-	}
-	if ((sts = pmExtendFetchGroup_item(pmfg,
-				"disk.all.total", NULL, "count/second",
-				&info.dkiops, PM_TYPE_32, NULL)) < 0) {
-	    fprintf(stderr, "%s: Failed disk.all.total "
-				"ExtendFetchGroup: %s\n",
-		    pmProgname, pmErrStr(sts));
-	    exit(1);
-	}
-	if ((sts = pmExtendFetchGroup_timestamp(pmfg, &info.timestamp)) < 0) {
-	    fprintf(stderr, "%s: Failed ExtendFetchGroup: %s\n",
-		    pmProgname, pmErrStr(sts));
-	    exit(1);
-	}
-
-	/*
-	 * Since we don't have a "last" call, we will have some
-	 * some memory at exit, namely the cpu_sys and cpu_user
-	 * arrays, and the object hiding behind pmfg.
-	 */
+	/* FIXME check to make sure metric same number of indoms as predicate */
     }
+}
+
+static void
+get_sample(void)
+{
+    int			sts;
+    int			i, j;
+    int			last_empty;
 
     /*
      * Fetch the current metrics; fill many info.* fields.  Since we
@@ -153,35 +103,22 @@ get_sample(void)
 	exit(1);
     }
 
-    /* compute rate-converted values */
-    info.cpu_util = 0;
-    info.peak_cpu_util = -1;	/* force re-assignment at first CPU */
-
-    /*
-     * Safely assume that the cpu_user and cpu_sys indoms are identical
-     * and that each has a corresponding set of values, so we zip them
-     * up pairwise with one iteration and no auxiliary data structures.
-     */
-    assert(num_cpu_user == num_cpu_sys);
-    for (i = 0; i < num_cpu_user; i++) {
-	double util;
-
-	/* corresponding instances */
-	assert(cpu_user_inst[i] == cpu_sys_inst[i]);
-
-	util = cpu_user[i].d + cpu_sys[i].d; /* already rate-converted */
-	if (util > 1.0)
-	    /* small errors are possible, so clip the utilization at 1.0 */
-	    util = 1.0;
-	info.cpu_util += util;
-	if (util > info.peak_cpu_util) {
-	    info.peak_cpu_util = util;
-	    /* NB: i is indom instance, not result index */
-	    info.peak_cpu = cpu_user_inst[i];
+    /* Do predicate filtering on each metric. */
+    if (predicate_name) {
+	for (i=0; metric_name[i] && i<MAX_METRICS; ++i){
+	    last_empty=0;
+	    for (j=0; j<num_predicate; ++j){
+		/* filter out any elements without true predicates */
+		if (predicate[j].d>0) {
+		    metric_inst[i][last_empty] = metric_inst[i][j];
+		    metric[i][last_empty] = metric[i][j];
+		    ++last_empty;
+		} else {
+		    --num_metric[i];
+		}
+	    }
 	}
     }
-    assert(info.ncpu.l != 0);
-    info.cpu_util /= info.ncpu.l;
 }
 
 int
@@ -193,8 +130,7 @@ main(int argc, char **argv)
     int			pauseFlag = 0;
     int			lines = 0;
     char		*source;
-    const char		*host;
-    char		timebuf[26];	/* for pmCtime result */
+    int			i, j;
 
     setlinebuf(stdout);
 
@@ -202,6 +138,17 @@ main(int argc, char **argv)
 	switch (c) {
 	case 'P':
 	    pauseFlag++;
+	    break;
+	case 'f':
+	    predicate_name = opts.optarg;
+	    break;
+	case 'm':
+	    if (metric_count<MAX_METRICS) {
+		metric_name[metric_count] = opts.optarg;
+		++metric_count;
+	    } else {
+		opts.errors++;
+	    }
 	    break;
 	default:
 	    opts.errors++;
@@ -246,8 +193,6 @@ main(int argc, char **argv)
 	exit(1);
     }
 
-    host = pmGetContextHostName(c);
-
     if ((opts.context == PM_CONTEXT_ARCHIVE) &&
 	(opts.start.tv_sec != 0 || opts.start.tv_usec != 0)) {
 	if ((sts = pmSetMode(PM_MODE_FORW, &opts.start, 0)) < 0) {
@@ -257,9 +202,7 @@ main(int argc, char **argv)
 	}
     }
 
-    if (opts.context == PM_CONTEXT_ARCHIVE)
-	get_sample(); /* fetch the separate early ncpu record */
-    get_sample(); /* fetch other rate metrics */
+    init_sample();
 
     /* set a default sampling interval if none has been requested */
     if (opts.interval.tv_sec == 0 && opts.interval.tv_usec == 0)
@@ -268,36 +211,31 @@ main(int argc, char **argv)
     /* set sampling loop termination via the command line options */
     samples = opts.samples ? opts.samples : -1;
 
+    get_sample();
+
     while (samples == -1 || samples-- > 0) {
 	if (lines % 15 == 0) {
 	    if (opts.context == PM_CONTEXT_ARCHIVE)
 		printf("Archive: %s, ", opts.archives[0]);
-	    printf("Host: %s, %d cpu(s), %s",
-		   host, info.ncpu.l,
-		   pmCtime(&info.timestamp.tv_sec, timebuf));
-/* - report format
-  CPU  Busy    Busy  Free Mem   Disk     Load Average
- Util   CPU    Util  (Mbytes)   IOPS    1 Min  15 Min
-X.XXX   XXX   X.XXX XXXXX.XXX XXXXXX  XXXX.XX XXXX.XX
-*/
-	    printf("  CPU");
-	    if (info.ncpu.l > 1)
-		printf("  Busy    Busy");
-	    printf("  Free Mem   Disk     Load Average\n");
-	    printf(" Util");
-	    if (info.ncpu.l > 1)
-		printf("   CPU    Util");
-	    printf("  (Mbytes)   IOPS    1 Min  15 Min\n");
+	    printf("predicate: %s with %d instances\n", predicate_name, num_predicate);
+	    for(j=0; j<metric_count; ++j) {
+		printf("metric[%2d]: %s with %d instances\n", j, metric_name[j], num_metric[j]);
+	    }
 	}
 	if (opts.context != PM_CONTEXT_ARCHIVE || pauseFlag)
 	    __pmtimevalSleep(opts.interval);
 	get_sample();
-	printf("%5.2f", info.cpu_util);
-	if (info.ncpu.l > 1)
-	    printf("   %3d   %5.2f", info.peak_cpu, info.peak_cpu_util);
-	printf(" %9.3f", info.freemem.d);
-	printf(" %6d", info.dkiops.l);
-	printf("  %7.2f %7.2f\n", info.load1.d, info.load15.d);
+	printf("predicate: %s ", predicate_name);
+	for(i=0; i<num_predicate; ++i) {
+	    printf("%f ", predicate[i].d);
+	}
+	printf("\n");
+	for(i=0; i<metric_count; ++i) {
+	    printf("metric[%2d]: %s ", i, metric_name[i]);
+	    for(j=0; j<num_metric[i]; ++j)
+		printf("%f ", metric[i][j].d);
+	    printf("\n");
+	}
  	lines++;
     }
     exit(0);
