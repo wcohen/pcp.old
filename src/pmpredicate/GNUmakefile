@@ -20,9 +20,7 @@ CFILES	= pmpredicate.c
 CMDTARGET = pmpredicate$(EXECSUFFIX)
 TARGETS = $(CMDTARGET)
 LLDLIBS	= $(PCPLIB)
-LDIRT	= pmnsmap.h mylog.* runme.sh *.o $(TARGETS)
-CONFIGS	= pmnsmap.spec pmlogger.config
-LSRCFILES = README GNUmakefile.install $(CONFIGS)
+LSRCFILES = GNUmakefile.install $(CONFIGS)
 DEMODIR	= $(PCP_DEMOS_DIR)/pmpredicate
 
 default:	$(TARGETS)
@@ -33,20 +31,11 @@ install:	$(TARGETS)
 	$(INSTALL) -m 755 $(CMDTARGET) $(PCP_BIN_DIR)/$(CMDTARGET)
 	$(INSTALL) -m 755 -d $(DEMODIR)
 	$(INSTALL) -m 644 GNUmakefile.install $(DEMODIR)/Makefile
-	$(INSTALL) -m 644 $(CFILES) $(CONFIGS) README $(DEMODIR)
-
-pmpredicate.o:	pmnsmap.h
+	$(INSTALL) -m 644 $(CFILES) $(DEMODIR)
 
 pmpredicate$(EXECSUFFIX):  pmpredicate.o
 	rm -f $@
 	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS) $(LDLIBS)
-
-pmgenmap.sh:
-	sed -e "s;^\. .PCP_DIR.etc.pcp.env;. $(TOPDIR)/src/include/pcp.env;" \
-	$(TOPDIR)/src/pmgenmap/pmgenmap.sh > pmgenmap.sh
-
-pmnsmap.h:	pmgenmap.sh pmnsmap.spec
-	$(PMGENMAP) pmnsmap.spec > pmnsmap.h
 
 default_pcp:	default
 
