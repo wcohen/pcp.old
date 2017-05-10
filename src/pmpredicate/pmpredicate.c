@@ -60,7 +60,7 @@ init_sample(void)
     if (predicate_name) {
 	/* FIXME be more flexible on the units/conversions */
 	if ((sts = pmExtendFetchGroup_indom(pmfg,
-					    predicate_name, "second/second",
+					    predicate_name, NULL,
 					    predicate_inst, NULL, predicate, PM_TYPE_DOUBLE,
 					    NULL, indom_maxnum, &num_predicate, NULL)) < 0) {
 	    fprintf(stderr, "%s: Failed %s "
@@ -73,7 +73,7 @@ init_sample(void)
     for (i=0; metric_name[i] && i<MAX_METRICS; ++i){
 	/* FIXME be more flexible on the units/conversions */
 	if ((sts = pmExtendFetchGroup_indom(pmfg,
-				metric_name[i], "second/second",
+				metric_name[i], NULL,
 				metric_inst[i], NULL, metric[i], PM_TYPE_DOUBLE,
 				NULL, indom_maxnum, &num_metric[i], NULL)) < 0) {
 	    fprintf(stderr, "%s: Failed kernel.percpu.cpu.sys "
