@@ -119,6 +119,20 @@ get_sample(void)
 	    }
 	}
     }
+
+    /* FIXME The following is only for diagnostic purposes.
+       It will be replaced by MMV/JSON code to feed data back into the pmcd */
+    printf("predicate: %s ", predicate_name);
+    for(i=0; i<num_predicate; ++i) {
+	printf("%f ", predicate[i].d);
+    }
+    printf("\n");
+    for(i=0; i<metric_count; ++i) {
+	printf("metric[%2d]: %s ", i, metric_name[i]);
+	for(j=0; j<num_metric[i]; ++j)
+	    printf("%f ", metric[i][j].d);
+	printf("\n");
+    }
 }
 
 int
@@ -128,9 +142,7 @@ main(int argc, char **argv)
     int			sts;
     int			samples;
     int			pauseFlag = 0;
-    int			lines = 0;
     char		*source;
-    int			i, j;
 
     setlinebuf(stdout);
 
@@ -214,29 +226,9 @@ main(int argc, char **argv)
     get_sample();
 
     while (samples == -1 || samples-- > 0) {
-	if (lines % 15 == 0) {
-	    if (opts.context == PM_CONTEXT_ARCHIVE)
-		printf("Archive: %s, ", opts.archives[0]);
-	    printf("predicate: %s with %d instances\n", predicate_name, num_predicate);
-	    for(j=0; j<metric_count; ++j) {
-		printf("metric[%2d]: %s with %d instances\n", j, metric_name[j], num_metric[j]);
-	    }
-	}
 	if (opts.context != PM_CONTEXT_ARCHIVE || pauseFlag)
 	    __pmtimevalSleep(opts.interval);
 	get_sample();
-	printf("predicate: %s ", predicate_name);
-	for(i=0; i<num_predicate; ++i) {
-	    printf("%f ", predicate[i].d);
-	}
-	printf("\n");
-	for(i=0; i<metric_count; ++i) {
-	    printf("metric[%2d]: %s ", i, metric_name[i]);
-	    for(j=0; j<num_metric[i]; ++j)
-		printf("%f ", metric[i][j].d);
-	    printf("\n");
-	}
- 	lines++;
     }
     exit(0);
 }
