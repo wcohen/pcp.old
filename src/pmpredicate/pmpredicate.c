@@ -50,6 +50,10 @@ static int		metric_inst[MAX_METRICS][indom_maxnum];
 static pmAtomValue	metric[MAX_METRICS][indom_maxnum];
 static unsigned		num_metric[MAX_METRICS];
 
+static int		hotproc_inst[MAX_METRICS][indom_maxnum];
+static pmAtomValue	hotproc[MAX_METRICS][indom_maxnum];
+static unsigned		num_hotproc[MAX_METRICS];
+
 static void
 init_sample(void)
 {
@@ -110,13 +114,12 @@ get_sample(void)
 	    for (j=0; j<num_predicate; ++j){
 		/* filter out any elements without true predicates */
 		if (predicate[j].d>0) {
-		    metric_inst[i][last_empty] = metric_inst[i][j];
-		    metric[i][last_empty] = metric[i][j];
+		    hotproc_inst[i][last_empty] = metric_inst[i][j];
+		    hotproc[i][last_empty] = metric[i][j];
 		    ++last_empty;
-		} else {
-		    --num_metric[i];
 		}
 	    }
+	    num_hotproc[i] = last_empty;
 	}
     }
 
@@ -129,8 +132,8 @@ get_sample(void)
     printf("\n");
     for(i=0; i<metric_count; ++i) {
 	printf("metric[%2d]: %s ", i, metric_name[i]);
-	for(j=0; j<num_metric[i]; ++j)
-	    printf("%f ", metric[i][j].d);
+	for(j=0; j<num_hotproc[i]; ++j)
+	    printf("%f ", hotproc[i][j].d);
 	printf("\n");
     }
 }
