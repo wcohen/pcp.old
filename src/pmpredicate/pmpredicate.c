@@ -49,6 +49,8 @@ static unsigned		num_predicate;
 static int		metric_inst[MAX_METRICS][indom_maxnum];
 static pmAtomValue	metric[MAX_METRICS][indom_maxnum];
 static unsigned		num_metric[MAX_METRICS];
+static unsigned int	metric_pmid[MAX_METRICS];
+static pmDesc		metric_desc[MAX_METRICS];
 
 static int		hotproc_inst[indom_maxnum];
 static int		num_hotproc;
@@ -73,18 +75,27 @@ init_sample(void)
 	}
     }
 
-    for (i=0; metric_name[i] && i<MAX_METRICS; ++i){
-	/* FIXME be more flexible on the units/conversions */
+    if ((sts = pmLookupName(metric_count, &(metric_name[0]), metric_pmid) < 0)) {
+	    fprintf(stderr, "%s: Failed to find pmid for the metrics: %s\n",
+		    pmProgname, pmErrStr(sts));
+	    exit(1);
+    }
+
+    for (i=0; metric_name[i] && i<metric_count; ++i){
+	if ((sts = pmLookupDesc(metric_pmid[i], &metric_desc[i]))) {
+	    fprintf(stderr, "%s: Failed to find pmDesc for %s\n",
+		    pmProgname, pmErrStr(sts));
+	    exit(1);
+	}
 	if ((sts = pmExtendFetchGroup_indom(pmfg,
 				metric_name[i], NULL,
-				metric_inst[i], NULL, metric[i], PM_TYPE_DOUBLE,
+				metric_inst[i], NULL, metric[i], metric_desc[i].type,
 				NULL, indom_maxnum, &num_metric[i], NULL)) < 0) {
 	    fprintf(stderr, "%s: Failed kernel.percpu.cpu.sys "
 				"ExtendFetchGroup: %s\n",
 		    pmProgname, pmErrStr(sts));
 	    exit(1);
 	}
-	/* FIXME check to make sure metric same number of indoms as predicate */
     }
 }
 
@@ -132,7 +143,8 @@ get_sample(void)
 		    ++k;
 		if (k<num_metric[i] && metric_inst[i][k]==hotproc_inst[j]){
 		    /* FIXME have a match, do whatever */
-		    printf("%f(%d) ", metric[i][k].d, metric_inst[i][k]);
+		    printf("%s(%d) ", pmAtomStr(&metric[i][k], metric_desc[i].type),
+			   metric_inst[i][k]);
 		}
 	    }
 	    printf("\n");
