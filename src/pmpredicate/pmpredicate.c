@@ -68,8 +68,7 @@ init_sample(void)
 					    predicate_name, NULL,
 					    predicate_inst, NULL, predicate, PM_TYPE_DOUBLE,
 					    NULL, indom_maxnum, &num_predicate, NULL)) < 0) {
-	    fprintf(stderr, "%s: Failed %s "
-		    "ExtendFetchGroup: %s\n",
+	    fprintf(stderr, "%s: Failed %s ExtendFetchGroup: %s\n",
 		    pmProgname, predicate_name, pmErrStr(sts));
 	    exit(1);
 	}
@@ -91,9 +90,8 @@ init_sample(void)
 				metric_name[i], NULL,
 				metric_inst[i], NULL, metric[i], metric_desc[i].type,
 				NULL, indom_maxnum, &num_metric[i], NULL)) < 0) {
-	    fprintf(stderr, "%s: Failed kernel.percpu.cpu.sys "
-				"ExtendFetchGroup: %s\n",
-		    pmProgname, pmErrStr(sts));
+	    fprintf(stderr, "%s: Failed %s ExtendFetchGroup: %s\n",
+		    pmProgname, metric_name[i], pmErrStr(sts));
 	    exit(1);
 	}
     }
