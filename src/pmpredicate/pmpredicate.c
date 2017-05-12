@@ -50,9 +50,8 @@ static int		metric_inst[MAX_METRICS][indom_maxnum];
 static pmAtomValue	metric[MAX_METRICS][indom_maxnum];
 static unsigned		num_metric[MAX_METRICS];
 
-static int		hotproc_inst[MAX_METRICS][indom_maxnum];
-static pmAtomValue	hotproc[MAX_METRICS][indom_maxnum];
-static unsigned		num_hotproc[MAX_METRICS];
+static int		hotproc_inst[indom_maxnum];
+static int		num_hotproc;
 
 static void
 init_sample(void)
@@ -93,8 +92,7 @@ static void
 get_sample(void)
 {
     int			sts;
-    int			i, j;
-    int			last_empty;
+    int			i, j, k;
 
     /*
      * Fetch the current metrics; fill many info.* fields.  Since we
@@ -107,35 +105,40 @@ get_sample(void)
 	exit(1);
     }
 
-    /* Do predicate filtering on each metric. */
-    if (predicate_name) {
-	for (i=0; metric_name[i] && i<MAX_METRICS; ++i){
-	    last_empty=0;
-	    for (j=0; j<num_predicate; ++j){
-		/* filter out any elements without true predicates */
-		if (predicate[j].d>0) {
-		    hotproc_inst[i][last_empty] = metric_inst[i][j];
-		    hotproc[i][last_empty] = metric[i][j];
-		    ++last_empty;
-		}
-	    }
-	    num_hotproc[i] = last_empty;
+    /* Get a list of indoms that predicate true on */
+    num_hotproc = 0;
+    for (i=0; i<num_predicate; ++i){
+	if (predicate[i].d>0) {
+	    hotproc_inst[num_hotproc] = predicate_inst[i];
+	    ++num_hotproc;
 	}
     }
 
-    /* FIXME The following is only for diagnostic purposes.
-       It will be replaced by MMV/JSON code to feed data back into the pmcd */
-    printf("predicate: %s ", predicate_name);
+    /* FIXME The following is only for diagnostic purposes. */
+    printf("\n\npredicate: %s ", predicate_name);
     for(i=0; i<num_predicate; ++i) {
-	printf("%f ", predicate[i].d);
+	printf("%f(%d) ", predicate[i].d, predicate_inst[i]);
     }
     printf("\n");
-    for(i=0; i<metric_count; ++i) {
-	printf("metric[%2d]: %s ", i, metric_name[i]);
-	for(j=0; j<num_hotproc[i]; ++j)
-	    printf("%f ", hotproc[i][j].d);
-	printf("\n");
+
+    /* Do predicate filtering on each metric. */
+    if (predicate_name) {
+	for (i=0; metric_name[i] && i<MAX_METRICS; ++i){
+	    printf("\nmetric[%2d]: %s ", i, metric_name[i]);
+	    k = 0;
+	    for (j=0; k<num_metric[i] && j<num_hotproc ; ++j){
+		/* Scan for matching instance number, They could be in different positions */
+		while (k<num_metric[i] && metric_inst[i][k]<hotproc_inst[j])
+		    ++k;
+		if (k<num_metric[i] && metric_inst[i][k]==hotproc_inst[j]){
+		    /* FIXME have a match, do whatever */
+		    printf("%f(%d) ", metric[i][k].d, metric_inst[i][k]);
+		}
+	    }
+	    printf("\n");
+	}
     }
+
 }
 
 int
