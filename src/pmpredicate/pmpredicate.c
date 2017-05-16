@@ -18,12 +18,14 @@
 #include "pmapi.h"
 #include "impl.h"
 #include <assert.h>
+#include <stdlib.h>
 
 #define MAX_METRICS 10
 
 static char *predicate_name = NULL;
 static int metric_count=0;
 static char *metric_name[MAX_METRICS];
+static int top;
 
 pmLongOptions longopts[] = {
     PMAPI_GENERAL_OPTIONS,
@@ -31,12 +33,13 @@ pmLongOptions longopts[] = {
     { "pause", 0, 'P', 0, "pause between updates for archive replay" },
     { "filter", 1, 'f', "PREDICATE", "predicate to filter ony" },
     { "metric", 1, 'm', "METRIC", "metrics to collect" },
+    { "rank", 1, 'r', "TOP", "limit results to <TOP> highest matches" },
     PMAPI_OPTIONS_END
 };
 
 pmOptions opts = {
     .flags = PM_OPTFLAG_STDOUT_TZ,
-    .short_options = PMAPI_OPTIONS "Pf:m:",
+    .short_options = PMAPI_OPTIONS "Pf:m:r:",
     .long_options = longopts,
 };
 
@@ -52,8 +55,46 @@ static unsigned		num_metric[MAX_METRICS];
 static unsigned int	metric_pmid[MAX_METRICS];
 static pmDesc		metric_desc[MAX_METRICS];
 
-static int		hotproc_inst[indom_maxnum];
+typedef struct {
+    int inst;
+    double predicate;
+} hotproc_t;
+
+static hotproc_t	hotproc[indom_maxnum];
 static int		num_hotproc;
+
+/* Sort in largest to smallest predicater */
+static int compare_predicate(const void *a, const void *b)
+{
+    return (int) (((hotproc_t *)b)->predicate - ((hotproc_t *)a)->predicate);
+}
+
+/* Sort in smallest to largest instance */
+static int compare_inst(const void *a, const void *b)
+{
+    return (int) (((hotproc_t *)a)->inst - ((hotproc_t *)b)->inst);
+}
+
+void cull()
+{
+    int i;
+
+    /* Cull to top matches */
+    if (top>0 && top<num_hotproc) {
+	/* sort based on predicate values */
+	qsort(hotproc, num_hotproc, sizeof(hotproc_t), compare_predicate);
+	/* return top ranked value to inst order */
+	num_hotproc = top;
+	qsort(hotproc, num_hotproc,sizeof(hotproc_t), compare_inst);
+
+	/* FIXME The following is only for diagnostic purposes. */
+	printf("\ntop npredicate: %s ", predicate_name);
+	for(i=0; i<num_hotproc; ++i) {
+	    printf("%f(%d) ", hotproc[i].predicate, hotproc[i].inst);
+	}
+	printf("\n");
+    }
+}
 
 static void
 init_sample(void)
@@ -118,7 +159,8 @@ get_sample(void)
     num_hotproc = 0;
     for (i=0; i<num_predicate; ++i){
 	if (predicate[i].d>0) {
-	    hotproc_inst[num_hotproc] = predicate_inst[i];
+	    hotproc[num_hotproc].inst = predicate_inst[i];
+	    hotproc[num_hotproc].predicate = predicate[i].d;
 	    ++num_hotproc;
 	}
     }
@@ -130,6 +172,8 @@ get_sample(void)
     }
     printf("\n");
 
+    cull();
+
     /* Do predicate filtering on each metric. */
     if (predicate_name) {
 	for (i=0; metric_name[i] && i<MAX_METRICS; ++i){
@@ -137,9 +181,9 @@ get_sample(void)
 	    k = 0;
 	    for (j=0; k<num_metric[i] && j<num_hotproc ; ++j){
 		/* Scan for matching instance number, They could be in different positions */
-		while (k<num_metric[i] && metric_inst[i][k]<hotproc_inst[j])
+		while (k<num_metric[i] && metric_inst[i][k]<hotproc[j].inst)
 		    ++k;
-		if (k<num_metric[i] && metric_inst[i][k]==hotproc_inst[j]){
+		if (k<num_metric[i] && metric_inst[i][k]==hotproc[j].inst){
 		    /* FIXME have a match, do whatever */
 		    printf("%s(%d) ", pmAtomStr(&metric[i][k], metric_desc[i].type),
 			   metric_inst[i][k]);
@@ -176,6 +220,13 @@ main(int argc, char **argv)
 		++metric_count;
 	    } else {
 		opts.errors++;
+	    }
+	    break;
+	case 'r':
+	    top = atoi(opts.optarg);
+	    if (!(top>0)) {
+		fprintf(stderr, "--top option needs a postive value\n");
+		exit(1);
 	    }
 	    break;
 	default:
