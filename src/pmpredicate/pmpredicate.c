@@ -63,13 +63,13 @@ typedef struct {
 static hotproc_t	hotproc[indom_maxnum];
 static int		num_hotproc;
 
-/* Sort in largest to smallest predicater */
+/* Used by qsort to sort from largest to smallest predicate */
 static int compare_predicate(const void *a, const void *b)
 {
     return (int) (((hotproc_t *)b)->predicate - ((hotproc_t *)a)->predicate);
 }
 
-/* Sort in smallest to largest instance */
+/* Used for qsort to sort from smallest to largest instance */
 static int compare_inst(const void *a, const void *b)
 {
     return (int) (((hotproc_t *)a)->inst - ((hotproc_t *)b)->inst);
@@ -81,10 +81,10 @@ void cull()
 
     /* Cull to top matches */
     if (top>0 && top<num_hotproc) {
-	/* sort based on predicate values */
+	/* Move values with highest predicate values to array start */
 	qsort(hotproc, num_hotproc, sizeof(hotproc_t), compare_predicate);
-	/* return top ranked value to inst order */
 	num_hotproc = top;
+	/* Return culled values to inst order */
 	qsort(hotproc, num_hotproc,sizeof(hotproc_t), compare_inst);
 
 	/* FIXME The following is only for diagnostic purposes. */
