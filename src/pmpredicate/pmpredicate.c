@@ -95,14 +95,14 @@ void write_metadata()
     meta_fd = fopen("metadata.json", "w+");
     if (meta_fd==NULL) goto fail;
 
-    fprintf(meta_fd, "{\n\t\"prefix\" : \"%s\",\n", "prefix");
-    fprintf(meta_fd, "\t\"metrics\" : [\n\t\t{\n");
-    fprintf(meta_fd, "\t\t\t\"name\" : \"%s\",\n", "metrics");
-    fprintf(meta_fd, "\t\t\t\"pointer\" : \"/%s\",\n", "hotprocdata");
-    fprintf(meta_fd, "\t\t\t\"type\" : \"array\",\n");
-    fprintf(meta_fd, "\t\t\t\"description\" : \"%s\",\n", "FIXME");
-    fprintf(meta_fd, "\t\t\t\"index\" : \"/%s\",\n", "inst");
-    fprintf(meta_fd, "\t\t\t\"metrics\" : [\n");
+    fprintf(meta_fd, "{\n\t\"prefix\": \"%s\",\n", "prefix");
+    fprintf(meta_fd, "\t\"metrics\": [\n\t\t{\n");
+    fprintf(meta_fd, "\t\t\t\"name\": \"%s\",\n", "metrics");
+    fprintf(meta_fd, "\t\t\t\"pointer\": \"/%s\",\n", "hotprocdata");
+    fprintf(meta_fd, "\t\t\t\"type\": \"array\",\n");
+    fprintf(meta_fd, "\t\t\t\"description\": \"%s\",\n", "FIXME");
+    fprintf(meta_fd, "\t\t\t\"index\": \"/%s\",\n", "inst");
+    fprintf(meta_fd, "\t\t\t\"metrics\": [\n");
 
     for (i=0; i<metric_count; ++i) {
 	fprintf(meta_fd, "\t\t\t{\n");
