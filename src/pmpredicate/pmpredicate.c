@@ -87,6 +87,46 @@ void cull()
     }
 }
 
+void write_metadata()
+{
+    FILE *meta_fd = stdout;
+    int i;
+
+    meta_fd = fopen("metadata.json", "w+");
+    if (meta_fd==NULL) goto fail;
+
+    fprintf(meta_fd, "{\n\t\"prefix\" : \"%s\",\n", "prefix");
+    fprintf(meta_fd, "\t\"metrics\" : [\n\t\t{\n");
+    fprintf(meta_fd, "\t\t\t\"name\" : \"%s\",\n", "metrics");
+    fprintf(meta_fd, "\t\t\t\"pointer\" : \"/%s\",\n", "hotprocdata");
+    fprintf(meta_fd, "\t\t\t\"type\" : \"array\",\n");
+    fprintf(meta_fd, "\t\t\t\"description\" : \"%s\",\n", "FIXME");
+    fprintf(meta_fd, "\t\t\t\"index\" : \"/%s\",\n", "inst");
+    fprintf(meta_fd, "\t\t\t\"metrics\" : [\n");
+
+    for (i=0; i<metric_count; ++i) {
+	fprintf(meta_fd, "\t\t\t{\n");
+	fprintf(meta_fd, "\t\t\t\t\"name\": \"%s\",\n", metric_name[i]);
+	fprintf(meta_fd, "\t\t\t\t\"pointer\": \"/%s\",\n", metric_name[i]);
+	fprintf(meta_fd, "\t\t\t\t\"type\": \"%s\",\n", pmTypeStr(metric_desc[i].type));
+	fprintf(meta_fd, "\t\t\t\t\"description\": \"%s\",\n", "FIXME");
+	fprintf(meta_fd, "\t\t\t}");
+	if (i<metric_count - 1) fprintf(meta_fd, ",");
+	fprintf(meta_fd, "\n");
+    }
+    fprintf(meta_fd, "\t\t\t]\n");
+    fprintf(meta_fd, "\t\t}\n\t]\n}\n");
+
+    fclose(meta_fd);
+
+    return;
+
+ fail:
+    printf("unable to open metadata.json file\n");
+    exit(1);
+    return;
+}
+
 static void
 init_sample(void)
 {
@@ -127,6 +167,8 @@ init_sample(void)
 	    exit(1);
 	}
     }
+
+    write_metadata();
 }
 
 static void
