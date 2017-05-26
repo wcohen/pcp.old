@@ -77,8 +77,6 @@ static int compare_inst(const void *a, const void *b)
 
 void cull()
 {
-    int i;
-
     /* Cull to top matches */
     if (top>0 && top<num_hotproc) {
 	/* Move values with highest predicate values to array start */
@@ -86,13 +84,6 @@ void cull()
 	num_hotproc = top;
 	/* Return culled values to inst order */
 	qsort(hotproc, num_hotproc,sizeof(hotproc_t), compare_inst);
-
-	/* FIXME The following is only for diagnostic purposes. */
-	printf("\ntop npredicate: %s ", predicate_name);
-	for(i=0; i<num_hotproc; ++i) {
-	    printf("%f(%d) ", hotproc[i].predicate, hotproc[i].inst);
-	}
-	printf("\n");
     }
 }
 
@@ -164,15 +155,14 @@ get_sample(void)
 	    ++num_hotproc;
 	}
     }
+    cull();
 
     /* FIXME The following is only for diagnostic purposes. */
     printf("\n\npredicate: %s ", predicate_name);
-    for(i=0; i<num_predicate; ++i) {
-	printf("%f(%d) ", predicate[i].d, predicate_inst[i]);
+    for(i=0; i<num_hotproc; ++i) {
+	printf("%f(%d) ", hotproc[i].predicate, hotproc[i].inst);
     }
     printf("\n");
-
-    cull();
 
     /* Do predicate filtering on each metric. */
     if (predicate_name) {
