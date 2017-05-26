@@ -133,7 +133,8 @@ static void
 get_sample(void)
 {
     int			sts;
-    int			i, j, k;
+    int			i, j;
+    FILE *data_fd = stdout;
 
     /*
      * Fetch the current metrics; fill many info.* fields.  Since we
@@ -166,21 +167,30 @@ get_sample(void)
 
     /* Do predicate filtering on each metric. */
     if (predicate_name) {
-	for (i=0; metric_name[i] && i<MAX_METRICS; ++i){
-	    printf("\nmetric[%2d]: %s ", i, metric_name[i]);
-	    k = 0;
-	    for (j=0; k<num_metric[i] && j<num_hotproc ; ++j){
+	int p[MAX_METRICS];
+
+	/* FIXME write following to data.json */
+	fprintf(data_fd, "{\n\t\"%s\":[\n", "hotprocdata");
+
+	for(i=0; i<MAX_METRICS;++i) p[i] = 0;
+	for (j=0; j<num_hotproc; j++){
+	    /* FIXME write out instance info */
+	    fprintf(data_fd, "\t{\n\t\t\"inst\": %d", hotproc[j].inst);
+	    for (i=0; metric_name[i] && i<MAX_METRICS; ++i){
 		/* Scan for matching instance number, They could be in different positions */
-		while (k<num_metric[i] && metric_inst[i][k]<hotproc[j].inst)
-		    ++k;
-		if (k<num_metric[i] && metric_inst[i][k]==hotproc[j].inst){
+		while (p[i]<num_metric[i] && metric_inst[i][p[i]]<hotproc[j].inst)
+		    ++p[i];
+		if (p[i]<num_metric[i] && metric_inst[i][p[i]]==hotproc[j].inst){
 		    /* FIXME have a match, do whatever */
-		    printf("%s(%d) ", pmAtomStr(&metric[i][k], metric_desc[i].type),
-			   metric_inst[i][k]);
+		    fprintf(data_fd, ",\n\t\t\"%s\": %s",
+			    metric_name[i], pmAtomStr(&metric[i][p[i]], metric_desc[i].type));
 		}
 	    }
-	    printf("\n");
+	    fprintf(data_fd, "\n\t}");
+	    if (j < num_hotproc-1) fprintf(data_fd, ",");
+	    fprintf(data_fd, "\n");
 	}
+	fprintf(data_fd, "\t]\n}\n");
     }
 
 }
