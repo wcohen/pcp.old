@@ -176,7 +176,7 @@ get_sample(void)
 {
     int			sts;
     int			i, j;
-    FILE *data_fd = stdout;
+    FILE *data_fd;
 
     /*
      * Fetch the current metrics; fill many info.* fields.  Since we
@@ -207,6 +207,9 @@ get_sample(void)
     }
     printf("\n");
 
+    data_fd = fopen("data.json", "w+");
+    if (data_fd==NULL) goto fail;
+
     /* Do predicate filtering on each metric. */
     if (predicate_name) {
 	int p[MAX_METRICS];
@@ -235,6 +238,14 @@ get_sample(void)
 	fprintf(data_fd, "\t]\n}\n");
     }
 
+    fclose(data_fd);
+
+    return;
+
+ fail:
+    printf("unable to open data.json file\n");
+    exit(1);
+    return;
 }
 
 int
