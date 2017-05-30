@@ -109,7 +109,7 @@ void write_metadata()
 	fprintf(meta_fd, "\t\t\t\t\"name\": \"%s\",\n", metric_name[i]);
 	fprintf(meta_fd, "\t\t\t\t\"pointer\": \"/%s\",\n", metric_name[i]);
 	fprintf(meta_fd, "\t\t\t\t\"type\": \"%s\",\n", pmTypeStr(metric_desc[i].type));
-	fprintf(meta_fd, "\t\t\t\t\"description\": \"%s\",\n", "FIXME");
+	fprintf(meta_fd, "\t\t\t\t\"description\": \"%s\"\n", "FIXME");
 	fprintf(meta_fd, "\t\t\t}");
 	if (i<metric_count - 1) fprintf(meta_fd, ",");
 	fprintf(meta_fd, "\n");
