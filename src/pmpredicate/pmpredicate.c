@@ -208,12 +208,12 @@ get_sample(void)
 	int p[MAX_METRICS];
 
 	/* FIXME write following to data.json */
-	fprintf(data_fd, "{\n\t\"%s\":[\n", "hotprocdata");
+	fprintf(data_fd, "{\n\t\"%s\": [\n", "hotprocdata");
 
 	for(i=0; i<MAX_METRICS;++i) p[i] = 0;
 	for (j=0; j<num_hotproc; j++){
 	    /* FIXME write out instance info */
-	    fprintf(data_fd, "\t{\n\t\t\"inst\": %d", hotproc[j].inst);
+	    fprintf(data_fd, "\t{\n\t\t\"inst\": \"%d\"", hotproc[j].inst);
 	    for (i=0; metric_name[i] && i<metric_count; ++i){
 		/* Scan for matching instance number, They could be in different positions */
 		while (p[i]<num_metric[i] && metric_inst[i][p[i]]<hotproc[j].inst)
