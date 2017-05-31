@@ -200,13 +200,6 @@ get_sample(void)
     }
     cull();
 
-    /* FIXME The following is only for diagnostic purposes. */
-    printf("\n\npredicate: %s ", predicate_name);
-    for(i=0; i<num_hotproc; ++i) {
-	printf("%f(%d) ", hotproc[i].predicate, hotproc[i].inst);
-    }
-    printf("\n");
-
     data_fd = fopen("data.json", "w+");
     if (data_fd==NULL) goto fail;
 
