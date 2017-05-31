@@ -87,6 +87,29 @@ void cull()
     }
 }
 
+const char *json_type(int type)
+{
+    switch(type){
+    case PM_TYPE_32:
+    case PM_TYPE_U32:
+    case PM_TYPE_64:
+    case PM_TYPE_U64:
+	return "integer";
+    case PM_TYPE_FLOAT:
+    case PM_TYPE_DOUBLE:
+	return "float";
+    case PM_TYPE_STRING:
+	return "string";
+    case PM_TYPE_AGGREGATE:
+    case PM_TYPE_AGGREGATE_STATIC:
+    case PM_TYPE_EVENT:
+    case PM_TYPE_HIGHRES_EVENT:
+    case PM_TYPE_UNKNOWN:
+    default:
+	return "unknown";
+    }
+}
+
 void write_metadata()
 {
     FILE *meta_fd = stdout;
@@ -108,7 +131,7 @@ void write_metadata()
 	fprintf(meta_fd, "\t\t\t{\n");
 	fprintf(meta_fd, "\t\t\t\t\"name\": \"%s\",\n", metric_name[i]);
 	fprintf(meta_fd, "\t\t\t\t\"pointer\": \"/%s\",\n", metric_name[i]);
-	fprintf(meta_fd, "\t\t\t\t\"type\": \"%s\",\n", pmTypeStr(metric_desc[i].type));
+	fprintf(meta_fd, "\t\t\t\t\"type\": \"%s\",\n", json_type(metric_desc[i].type));
 	fprintf(meta_fd, "\t\t\t\t\"description\": \"%s\"\n", "FIXME");
 	fprintf(meta_fd, "\t\t\t}");
 	if (i<metric_count - 1) fprintf(meta_fd, ",");
