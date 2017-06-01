@@ -25,6 +25,7 @@
 static char *predicate_name = NULL;
 static int metric_count=0;
 static char *metric_name[MAX_METRICS];
+static char *metric_mangled_name[MAX_METRICS];
 static int top;
 
 pmLongOptions longopts[] = {
@@ -129,7 +130,7 @@ void write_metadata()
 
     for (i=0; i<metric_count; ++i) {
 	fprintf(meta_fd, "\t\t\t{\n");
-	fprintf(meta_fd, "\t\t\t\t\"name\": \"%s\",\n", metric_name[i]);
+	fprintf(meta_fd, "\t\t\t\t\"name\": \"%s\",\n", metric_mangled_name[i]);
 	fprintf(meta_fd, "\t\t\t\t\"pointer\": \"/%s\",\n", metric_name[i]);
 	fprintf(meta_fd, "\t\t\t\t\"type\": \"%s\",\n", json_type(metric_desc[i].type));
 	fprintf(meta_fd, "\t\t\t\t\"description\": \"%s\"\n", "FIXME");
@@ -264,6 +265,19 @@ get_sample(void)
     return;
 }
 
+/* PCP does not allow '.' in metric names. Covert them to '.' */
+static char *mangle(char *name)
+{
+    char *s = strdup(name);
+    char *p = s;
+
+    while(*p) {
+	if (*p == '.') *p = '_';
+	++p;
+    }
+    return s;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -286,6 +300,7 @@ main(int argc, char **argv)
 	case 'm':
 	    if (metric_count<MAX_METRICS) {
 		metric_name[metric_count] = opts.optarg;
+		metric_mangled_name[metric_count] = mangle(opts.optarg);
 		++metric_count;
 	    } else {
 		opts.errors++;
