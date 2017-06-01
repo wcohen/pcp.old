@@ -22,6 +22,9 @@
 
 #define MAX_METRICS 10
 
+static char *metadata_json_name = "metadata.json";
+static char *data_json_name = "data.json";
+static char *data_json_name_tmp = "data.json.tmp";
 static char *predicate_name = NULL;
 static int metric_count=0;
 static char *metric_name[MAX_METRICS];
@@ -116,7 +119,7 @@ void write_metadata()
     FILE *meta_fd = stdout;
     int i;
 
-    meta_fd = fopen("metadata.json", "w+");
+    meta_fd = fopen(metadata_json_name, "w+");
     if (meta_fd==NULL) goto fail;
 
     fprintf(meta_fd, "{\n\t\"prefix\": \"%s\",\n", "prefix");
@@ -224,7 +227,7 @@ get_sample(void)
     }
     cull();
 
-    data_fd = fopen("data.json", "w+");
+    data_fd = fopen(data_json_name, "w+");
     if (data_fd==NULL) goto fail;
 
     /* Do predicate filtering on each metric. */
@@ -256,6 +259,8 @@ get_sample(void)
     }
 
     fclose(data_fd);
+
+    rename(data_json_name_tmp, data_json_name);
 
     return;
 
