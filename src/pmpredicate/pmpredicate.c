@@ -58,6 +58,7 @@ static pmAtomValue	metric[MAX_METRICS][indom_maxnum];
 static unsigned		num_metric[MAX_METRICS];
 static unsigned int	metric_pmid[MAX_METRICS];
 static pmDesc		metric_desc[MAX_METRICS];
+static char		*metric_desc_text[MAX_METRICS];
 
 typedef struct {
     int inst;
@@ -135,8 +136,13 @@ void write_metadata()
 	fprintf(meta_fd, "\t\t\t{\n");
 	fprintf(meta_fd, "\t\t\t\t\"name\": \"%s\",\n", metric_mangled_name[i]);
 	fprintf(meta_fd, "\t\t\t\t\"pointer\": \"/%s\",\n", metric_name[i]);
-	fprintf(meta_fd, "\t\t\t\t\"type\": \"%s\",\n", json_type(metric_desc[i].type));
-	fprintf(meta_fd, "\t\t\t\t\"description\": \"%s\"\n", "FIXME");
+	if (strlen(pmSemStr(metric_desc[i].sem)))
+	    fprintf(meta_fd, "\t\t\t\t\"semantics\": \"%s\",\n", pmSemStr(metric_desc[i].sem));
+	if (strlen(pmUnitsStr(&metric_desc[i].units)))
+	    fprintf(meta_fd, "\t\t\t\t\"units\": \"%s\",\n", pmUnitsStr(&metric_desc[i].units));
+	if (metric_desc_text[i])
+	    fprintf(meta_fd, "\t\t\t\t\"description\": \"%s\",\n", metric_desc_text[i]);
+	fprintf(meta_fd, "\t\t\t\t\"type\": \"%s\"\n", json_type(metric_desc[i].type));
 	fprintf(meta_fd, "\t\t\t}");
 	if (i<metric_count - 1) fprintf(meta_fd, ",");
 	fprintf(meta_fd, "\n");
@@ -191,6 +197,11 @@ init_sample(void)
 				NULL, indom_maxnum, &num_metric[i], NULL)) < 0) {
 	    fprintf(stderr, "%s: Failed %s ExtendFetchGroup: %s\n",
 		    pmProgname, metric_name[i], pmErrStr(sts));
+	    exit(1);
+	}
+	if ((sts = pmLookupText(metric_pmid[i], PM_TEXT_ONELINE, &metric_desc_text[i]))) {
+	    fprintf(stderr, "%s: Failed to get Text description for %s\n",
+		    pmProgname, pmErrStr(sts));
 	    exit(1);
 	}
     }
