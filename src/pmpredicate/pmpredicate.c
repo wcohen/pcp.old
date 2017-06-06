@@ -45,6 +45,8 @@ pmOptions opts = {
     .flags = PM_OPTFLAG_STDOUT_TZ,
     .short_options = PMAPI_OPTIONS "Pf:m:r:",
     .long_options = longopts,
+    .interval = {.tv_sec = 0, .tv_usec = 0}, /*Default: 5 second  between samples */
+    .samples = -1, /* Default: No limit on the number of samples */
 };
 
 
@@ -299,7 +301,7 @@ main(int argc, char **argv)
 {
     int			c;
     int			sts;
-    int			samples;
+    int			forever;
     int			pauseFlag = 0;
     char		*source;
 
@@ -381,18 +383,13 @@ main(int argc, char **argv)
 	}
     }
 
-    init_sample();
-
-    /* set a default sampling interval if none has been requested */
-    if (opts.interval.tv_sec == 0 && opts.interval.tv_usec == 0)
-	opts.interval.tv_sec = 5;
-
     /* set sampling loop termination via the command line options */
-    samples = opts.samples ? opts.samples : -1;
+    forever = (opts.samples == -1);
 
+    init_sample();
     get_sample();
 
-    while (samples == -1 || samples-- > 0) {
+    while (forever || opts.samples-- > 0) {
 	if (opts.context != PM_CONTEXT_ARCHIVE || pauseFlag)
 	    __pmtimevalSleep(opts.interval);
 	get_sample();
