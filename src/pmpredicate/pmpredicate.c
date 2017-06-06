@@ -22,6 +22,15 @@
 
 #define MAX_METRICS 10
 
+#ifdef _WIN32
+#define PATH_SEPARATOR   '\\'
+#define PATH_SEPARATOR_STRING  "\\"
+#else
+#define PATH_SEPARATOR   '/'
+#define PATH_SEPARATOR_STRING   "/"
+#endif
+
+static char *directory = NULL;
 static char *metadata_json_name = "metadata.json";
 static char *data_json_name = "data.json";
 static char *data_json_name_tmp = "data.json.tmp";
@@ -38,12 +47,13 @@ pmLongOptions longopts[] = {
     { "filter", 1, 'f', "PREDICATE", "predicate to filter ony" },
     { "metric", 1, 'm', "METRIC", "metrics to collect" },
     { "rank", 1, 'r', "TOP", "limit results to <TOP> highest matches" },
+    { "directory", 1, 'd', "DIR", "Where to write metadata.json and data.json files" },
     PMAPI_OPTIONS_END
 };
 
 pmOptions opts = {
     .flags = PM_OPTFLAG_STDOUT_TZ,
-    .short_options = PMAPI_OPTIONS "Pf:m:r:",
+    .short_options = PMAPI_OPTIONS "Pf:m:r:d:",
     .long_options = longopts,
     .interval = {.tv_sec = 5, .tv_usec = 0}, /*Default: 5 second  between samples */
     .samples = -1, /* Default: No limit on the number of samples */
@@ -296,6 +306,24 @@ static char *mangle(char *name)
     return s;
 }
 
+static char *dir_plus_file(char *dir, char *file)
+{
+    char result[MAXPATHLEN];
+
+    result[0] = '\0';
+    if (dir) {
+	strncat(result, dir, MAXPATHLEN-1);
+	/* ensure there is a path separator at end */
+	if (rindex(dir, PATH_SEPARATOR) != (dir + strlen(dir)-1)){
+	    strncat(result, PATH_SEPARATOR_STRING, MAXPATHLEN-1);
+	}
+    }
+    if (file) {
+	strncat(result, file, MAXPATHLEN-1);
+    }
+    return strdup(result);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -329,6 +357,17 @@ main(int argc, char **argv)
 	    if (!(top>0)) {
 		fprintf(stderr, "--top option needs a postive value\n");
 		exit(1);
+	    }
+	    break;
+	case 'd':
+	    if (directory == NULL) {
+		directory = opts.optarg;
+		/* FIXME ensure the directory is there or create if not */
+		metadata_json_name = dir_plus_file(directory, metadata_json_name);
+		data_json_name = dir_plus_file(directory, data_json_name);
+	    } else {
+		fprintf(stderr, "--directory option can only used once\n");
+		opts.errors++;
 	    }
 	    break;
 	default:
