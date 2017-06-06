@@ -45,7 +45,7 @@ pmOptions opts = {
     .flags = PM_OPTFLAG_STDOUT_TZ,
     .short_options = PMAPI_OPTIONS "Pf:m:r:",
     .long_options = longopts,
-    .interval = {.tv_sec = 0, .tv_usec = 0}, /*Default: 5 second  between samples */
+    .interval = {.tv_sec = 5, .tv_usec = 0}, /*Default: 5 second  between samples */
     .samples = -1, /* Default: No limit on the number of samples */
 };
 
