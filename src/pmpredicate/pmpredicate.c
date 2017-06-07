@@ -204,7 +204,7 @@ init_sample(void)
 	    exit(1);
 	}
 	if ((sts = pmExtendFetchGroup_indom(pmfg,
-				metric_name[i], NULL,
+				metric_name[i], "instant",
 				metric_inst[i], NULL, metric[i], metric_desc[i].type,
 				NULL, indom_maxnum, &num_metric[i], NULL)) < 0) {
 	    fprintf(stderr, "%s: Failed %s ExtendFetchGroup: %s\n",
