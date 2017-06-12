@@ -31,6 +31,7 @@
 #endif
 
 static char *directory = NULL;
+static char *json_prefix = "prefix";
 static char *metadata_json_name = "metadata.json";
 static char *data_json_name = "data.json";
 static char *data_json_name_tmp = "data.json.tmp";
@@ -44,6 +45,7 @@ pmLongOptions longopts[] = {
     PMAPI_GENERAL_OPTIONS,
     PMAPI_OPTIONS_HEADER("Reporting options"),
     { "pause", 0, 'P', 0, "pause between updates for archive replay" },
+    { "json_prefix", 1, 'j', "PREFIX", "JSON prefix for the filtered metrics (default \"prefix\")" },
     { "filter", 1, 'f', "PREDICATE", "predicate to filter ony" },
     { "metric", 1, 'm', "METRIC", "metrics to collect" },
     { "rank", 1, 'r', "TOP", "limit results to <TOP> highest matches" },
@@ -53,7 +55,7 @@ pmLongOptions longopts[] = {
 
 pmOptions opts = {
     .flags = PM_OPTFLAG_STDOUT_TZ,
-    .short_options = PMAPI_OPTIONS "Pf:m:r:d:",
+    .short_options = PMAPI_OPTIONS "Pj:f:m:r:d:",
     .long_options = longopts,
     .interval = {.tv_sec = 5, .tv_usec = 0}, /*Default: 5 second  between samples */
     .samples = -1, /* Default: No limit on the number of samples */
@@ -135,7 +137,7 @@ void write_metadata()
     meta_fd = fopen(metadata_json_name, "w+");
     if (meta_fd==NULL) goto fail;
 
-    fprintf(meta_fd, "{\n\t\"prefix\": \"%s\",\n", "prefix");
+    fprintf(meta_fd, "{\n\t\"prefix\": \"%s\",\n", json_prefix);
     fprintf(meta_fd, "\t\"metrics\": [\n\t\t{\n");
     fprintf(meta_fd, "\t\t\t\"name\": \"%s\",\n", "metrics");
     fprintf(meta_fd, "\t\t\t\"pointer\": \"/%s\",\n", "hotprocdata");
@@ -339,6 +341,9 @@ main(int argc, char **argv)
 	switch (c) {
 	case 'P':
 	    pauseFlag++;
+	    break;
+	case 'j':
+	    json_prefix = opts.optarg;
 	    break;
 	case 'f':
 	    predicate_name = opts.optarg;
