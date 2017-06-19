@@ -47,15 +47,15 @@ pmLongOptions longopts[] = {
     { "pause", 0, 'P', 0, "pause between updates for archive replay" },
     { "json_prefix", 1, 'j', "PREFIX", "JSON prefix for the filtered metrics (default \"prefix\")" },
     { "filter", 1, 'f', "PREDICATE", "predicate to filter ony" },
-    { "metric", 1, 'm', "METRIC", "metrics to collect" },
     { "rank", 1, 'r', "TOP", "limit results to <TOP> highest matches" },
+    { "metric", 1, 'm', "METRIC", "metrics to collect" },
     { "directory", 1, 'd', "DIR", "Where to write metadata.json and data.json files" },
     PMAPI_OPTIONS_END
 };
 
 pmOptions opts = {
     .flags = PM_OPTFLAG_STDOUT_TZ,
-    .short_options = PMAPI_OPTIONS "Pj:f:m:r:d:",
+    .short_options = PMAPI_OPTIONS "Pj:f:r:m:d:",
     .long_options = longopts,
     .interval = {.tv_sec = 5, .tv_usec = 0}, /*Default: 5 second  between samples */
     .samples = -1, /* Default: No limit on the number of samples */
