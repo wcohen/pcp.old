@@ -90,6 +90,12 @@ static int compare_predicate(const void *a, const void *b)
     return (int) (((hotproc_t *)b)->predicate - ((hotproc_t *)a)->predicate);
 }
 
+/* Used for qsort to sort from smallest to largest instance */
+static int compare_inst(const void *a, const void *b)
+{
+    return (int) (((hotproc_t *)a)->inst - ((hotproc_t *)b)->inst);
+}
+
 void cull()
 {
     /* Cull to top matches */
@@ -97,6 +103,8 @@ void cull()
 	/* Move values with highest predicate values to array start */
 	qsort(hotproc, num_hotproc, sizeof(hotproc_t), compare_predicate);
 	num_hotproc = top;
+	/* Return culled values to inst order */
+	qsort(hotproc, num_hotproc,sizeof(hotproc_t), compare_inst);
     }
 }
 
