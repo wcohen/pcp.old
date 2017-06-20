@@ -19,6 +19,8 @@
 #include "impl.h"
 #include <assert.h>
 #include <stdlib.h>
+#include <libgen.h>
+#include <sys/stat.h>
 
 #define MAX_METRICS 10
 
@@ -318,6 +320,22 @@ static char *dir_plus_file(char *dir, char *file)
     return strdup(result);
 }
 
+static int mkdir_recurse(char *path, mode_t mode)
+{
+    char *path_dup = strdup(path);
+    char *new_dir = dirname(path_dup);
+    int retval = 0;
+
+    if (strlen(new_dir) > 1) {
+	retval = mkdir_recurse(new_dir, mode);
+    }
+    if (retval>=0 || errno==EEXIST){
+        retval = mkdir(path, mode);
+    }
+    free(path_dup);
+    return retval;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -359,7 +377,7 @@ main(int argc, char **argv)
 	case 'd':
 	    if (directory == NULL) {
 		directory = opts.optarg;
-		/* FIXME ensure the directory is there or create if not */
+		mkdir_recurse(directory, 0755);
 		metadata_json_name = dir_plus_file(directory, metadata_json_name);
 		data_json_name = dir_plus_file(directory, data_json_name);
 	    } else {
