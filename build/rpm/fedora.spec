@@ -1,5 +1,5 @@
 Name:    pcp
-Version: 3.11.9
+Version: 3.11.10
 Release: 1%{?dist}
 Summary: System-level performance monitoring and performance management
 License: GPLv2+ and LGPLv2.1+ and CC-BY
@@ -200,6 +200,7 @@ Obsoletes: pcp-gui-debuginfo
 %global _pmdasdir %{_localstatedir}/lib/pcp/pmdas
 %global _testsdir %{_localstatedir}/lib/pcp/testsuite
 %global _selinuxdir %{_localstatedir}/lib/pcp/selinux
+%global _logconfdir %{_localstatedir}/lib/pcp/config/pmlogconf
 %global _pixmapdir %{_datadir}/pcp-gui/pixmaps
 %global _booksdir %{_datadir}/doc/pcp-doc
 
@@ -226,15 +227,17 @@ Obsoletes: pcp-gui-debuginfo
 %endif
 %endif
 
-%if %{disable_infiniband}
-%global _with_ib --with-infiniband=no
+%if !%{disable_infiniband}
+%global _with_ib --with-infiniband=yes
 %endif
 
 %if !%{disable_papi}
 %global _with_papi --with-papi=yes
 %endif
 
-%if !%{disable_perfevent}
+%if %{disable_perfevent}
+%global _with_perfevent --with-perfevent=no
+%else
 %global _with_perfevent --with-perfevent=yes
 %endif
 
@@ -1746,6 +1749,18 @@ This meta-package contains the PCP performance monitoring dependencies.  This
 includes a large number of packages for analysing PCP metrics in various ways.
 # monitor
 
+%package zeroconf
+License: GPLv2+
+Group: Applications/System
+Summary: Performance Co-Pilot (PCP) Zeroconf Package
+URL: http://www.pcp.io
+Requires: pcp
+Requires: pcp-pmda-dm pcp-pmda-nfsclient
+%description zeroconf
+This package contains configuration tweaks and files to increase metrics
+gathering frequency, several extended pmlogger configurations, as well as
+automated pmie diagnosis, alerting and self-healing for the localhost.
+
 %if !%{disable_python2}
 #
 # python-pcp. This is the PCP library bindings for python.
@@ -1863,6 +1878,7 @@ Group: Applications/System
 Summary: Selinux policy package
 URL: http://www.pcp.io
 BuildRequires: selinux-policy-devel
+BuildRequires: selinux-policy-targeted
 %if 0%{?rhel} == 5
 BuildRequires: setools
 %else
@@ -2060,7 +2076,10 @@ ls -1 $RPM_BUILD_ROOT/%{_pixmapdir} |\
 cat base_bin.list base_exec.list |\
   grep -E "$PCP_GUI" >> pcp-gui.list
 %endif
-cat base_pmdas.list base_bin.list base_exec.list |\
+ls -1 $RPM_BUILD_ROOT/%{_logconfdir}/ |\
+    sed -e 's#^#'%{_logconfdir}'\/#' |\
+    grep -E -v 'zeroconf' >pcp-logconf.list
+cat base_pmdas.list base_bin.list base_exec.list pcp-logconf.list |\
   grep -E -v 'pmdaib|pmmgr|pmweb|pmsnap|2pcp|pmdas/systemd' |\
   grep -E -v "$PCP_GUI|pixmaps|pcp-doc|tutorials|selinux" |\
   grep -E -v %{_confdir} | grep -E -v %{_logsdir} > base.list
@@ -2432,6 +2451,35 @@ chown -R pcp:pcp %{_logsdir}/pmmgr 2>/dev/null
 %endif
 %endif
 
+%post zeroconf
+PCP_PMDAS_DIR=%{_pmdasdir}
+PCP_SYSCONFIG_DIR=%{_sysconfdir}/sysconfig
+# auto-install important PMDAs for RH Support
+for PMDA in dm nfsclient ; do
+    touch "$PCP_PMDAS_DIR/$PMDA/.NeedInstall"
+done
+# increase default pmlogger recording frequency
+sed -i 's/^\#\ PMLOGGER_INTERVAL.*/PMLOGGER_INTERVAL=10/g' "$PCP_SYSCONFIG_DIR/pmlogger"
+# auto-enable these usually optional pmie rules
+pmieconf -c enable dmthin
+%if 0%{?rhel}
+%if !%{disable_systemd}
+    systemctl restart pmcd >/dev/null 2>&1
+    systemctl restart pmlogger >/dev/null 2>&1
+    systemctl restart pmie >/dev/null 2>&1
+    systemctl enable pmcd >/dev/null 2>&1
+    systemctl enable pmlogger >/dev/null 2>&1
+    systemctl enable pmie >/dev/null 2>&1
+%else
+    /sbin/chkconfig --add pmcd >/dev/null 2>&1
+    /sbin/chkconfig --add pmlogger >/dev/null 2>&1
+    /sbin/chkconfig --add pmie >/dev/null 2>&1
+    /sbin/service pmcd condrestart
+    /sbin/service pmlogger condrestart
+    /sbin/service pmie condrestart
+%endif
+%endif #zeroconf
+
 %if !%{disable_selinux}
 %post selinux
 %{selinux_handle_policy "$1" "pcpupstream.pp"}
@@ -2588,7 +2636,6 @@ cd
 %{_localstatedir}/lib/pcp/config/pmieconf
 %dir %attr(0775,pcp,pcp) %{_localstatedir}/lib/pcp/config/pmlogger
 %{_localstatedir}/lib/pcp/config/pmlogger/*
-%{_localstatedir}/lib/pcp/config/pmlogconf
 %{_localstatedir}/lib/pcp/config/pmlogrewrite
 %dir %attr(0775,pcp,pcp) %{_localstatedir}/lib/pcp/config/pmda
 
@@ -2604,6 +2651,11 @@ cd
 
 %files collector
 #empty
+
+%files zeroconf
+%{_localstatedir}/lib/pcp/config/pmlogconf/zeroconf
+
+#additional pmlogger config files
 
 %files conf
 %dir %{_includedir}/pcp
@@ -2966,8 +3018,14 @@ cd
 %endif
 
 %changelog
+* Fri Jun 30 2017 Lukas Berk <lberk@redhat.com> - 3.11.11-1
+- Work-in-progress, see http://pcp.io/roadmap
+
 * Wed May 17 2017 Dave Brolley <brolley@redhat.com> - 3.11.10-1
-- Work-in-progress - see http://pcp.io/roadmap
+- python api: handle non-POSIXLY_CORRECT getopt cases (BZ 1289912)
+- Fix pmchart reaction to timezone changes from pmtime (BZ 968823)
+- Require Qt5 for Fedora.
+- Update to latest PCP Sources.
 
 * Fri Mar 31 2017 Nathan Scott <nathans@redhat.com> - 3.11.9-1
 - Fix pmchart chart legends toggling behaviour (BZ 1359961)

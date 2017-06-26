@@ -324,6 +324,7 @@ _pcp () {
       "(-S --start $exargs)"{-S+,--start}'[set start of time window]:timespec:' \
       "(-T --finish $exargs)"{-T+,--finish}'[set end of time window]:timespec:' \
       "(-v --verbose $exargs)"{-v,--verbose}'[verbose output]' \
+      "(-w --nowrap $exargs)"{-w,--nowrap}'[suppress counter wrap warnings]' \
       "(-Z --timezone -z --hostzone $exargs)"{-Z+,--timezone}'[set reporting timezone]:timezone:_time_zone' \
       "(-z --hostzone -Z --timezone $exargs)"{-z,--hostzone}'[use metrics source timezone]' \
       '1:archive:->archives' \
@@ -336,6 +337,7 @@ _pcp () {
       "(-c --config $exargs)"{-c+,--config}'[specify config file]:file:_files' \
       "(-C --check $exargs)"{-C,--check}'[check config only]' \
       "(-h --host -o --local-PMDA -K --spec-local $exargs)"{-h+,--host}'[specify metrics source host]:host:_hosts' \
+      "(-H --labelhost $exargs)"{-H+,--labelhost}'[specify hostname label]:label:' \
       "(-l --log $exargs)"{-l+,--log}'[specify log file]:file:_files' \
       "(-L --linger $exargs)"{-L,--linger}'[linger even if not logging]' \
       "(-m --note $exargs)"{-m+,--note}'[define map file note]:note:' \
@@ -412,6 +414,7 @@ _pcp () {
       "(-n --namespace $exargs)"{-n+,--namespace}'[specify alternative PMNS]:pmnsfile:_files' \
       "(-O --origin $exargs)"{-O+,--origin}'[set initial sample time origin]:timespec:' \
       "(-f --force $exargs)"{-f,--force}'[report all instances]' \
+      "(-F --faster $exargs)"{-F,--faster}'[assume metrics are PMNS leaf nodes]' \
       "(-I --external -v --values $exargs)"{-I,--external}'[list external instance names]' \
       "(-i --internal -v --values $exargs)"{-i,--internal}'[list internal instance numbers]' \
       "(-V --verbose $exargs)"{-V,--verbose}'[report PDU operations]' \
@@ -439,7 +442,9 @@ _pcp () {
       "(-p --timestamps $exargs)"{-p,--timestamps}'[print timestamps]' \
       "(-d --delay --container -h --host -L --local-PMDA -K --spec-local -u --no-interpol $exargs)"{-d,--delay}'[delay between updates in archive mode]' \
       "(-r --raw $exargs)"{-r,--raw}'[report raw values]' \
+      "(-I --ignore-incompat)"{-I,--ignore-incompat}'[ignore incompatible metrics]' \
       "($exargs)"\*{-i+,--instances}'[specify instances to report]:instances:->instances' \
+      "(-v --omit-flat)"{-v,--omit-flat}'[omit single-valued metrics with -i]' \
       "(-X --colxrow $exargs)"{-X+,--colxrow}'[swap stdout columns and rows using header label]:label:' \
       "(-w --width $exargs)"{-w+,--width}'[set default column width]:width:' \
       "(-P --precision $exargs)"{-P+,--precision}'[set floating point precision]:precision:' \

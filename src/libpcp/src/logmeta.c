@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 Red Hat.
+ * Copyright (c) 2013-2017 Red Hat.
  * Copyright (c) 1995-2002 Silicon Graphics, Inc.  All Rights Reserved.
  * 
  * This library is free software; you can redistribute it and/or modify it
@@ -73,25 +73,6 @@ sameindom(const __pmLogInDom *idp1, const __pmLogInDom *idp2)
 }
 
 /*
- * Free the given indom.
- * See the comment for the allocation of__pmLogInDom in impl.h
- */
-static void
-freeindom(__pmLogInDom *idp)
-{
-    if (idp->buf) {
-	free(idp->buf);
-	if (idp->allinbuf == 0)
-	    free(idp->namelist);
-    }
-    else {
-	free(idp->instlist);
-	free(idp->namelist);
-    }
-    free(idp);
-}
-
-/*
  * Add the given instance domain to the hashed instance domain.
  * Filter out duplicates.
  */
@@ -127,12 +108,10 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":1", PM_FAULT_ALLOC);
     if ((hp = __pmHashSearch((unsigned int)indom, &lcp->l_hashindom)) == NULL) {
 	idp->next = NULL;
 	sts = __pmHashAdd((unsigned int)indom, (void *)idp, &lcp->l_hashindom);
-	if (sts >= 0) {
-	    /* __pmHashAdd returns 1 for success, but we want zero. */
+	if (sts > 0) {
+	    /* __pmHashAdd returns 1 for success, but we want 0. */
 	    sts = 0;
 	}
-	else
-	    freeindom(idp); /* error */
 	return sts;
     }
 
@@ -146,6 +125,7 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":1", PM_FAULT_ALLOC);
      * must do it explicitly. Duplicates must be moved to the head of their
      * time slot.
      */
+    sts = 0;
     idp_prev = NULL;
     for (idp_cached = (__pmLogInDom *)hp->data; idp_cached; idp_cached = idp_cached->next) {
 	timecmp = __pmTimevalCmp(&idp_cached->stamp, &idp->stamp);
@@ -164,12 +144,12 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":1", PM_FAULT_ALLOC);
 	 * at the head of the time slot.
 	 */
 	if (timecmp == 0) {
-	    sts = 0;
+	    assert(sts == 0);
 	    idp_time = idp_prev; /* just before this time slot */
 	    do {
 		/* Have we found a duplicate? */
 		if (sameindom(idp_cached, idp)) {
-		    sts = 1; /* duplicate */
+		    sts = PMLOGPUTINDOM_DUP; /* duplicate */
 		    break;
 		}
 		/* Try the next one */
@@ -180,14 +160,18 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":1", PM_FAULT_ALLOC);
 		timecmp = __pmTimevalCmp(&idp_cached->stamp, &idp->stamp);
 	    } while (timecmp == 0);
 
-	    if (sts == 1) {
+	    if (sts == PMLOGPUTINDOM_DUP) {
 		/*
-		 * We found a duplicate.  Free the new one.
+		 * We found a duplicate. We can't free instlist, namelist and
+		 * indom_buf because we don't know where the storage
+		 * came from. Only the caller knows. The best we can do is to
+		 * indicate that we found a duplicate and let the caller manage
+		 * them. We do, however need to free idp.
 		 */
-		freeindom(idp);
+		free(idp);
 		if (idp_prev == idp_time) {
 		    /* The duplicate is already in the right place. */
-		    return 0; /* ok */
+		    return sts; /* ok -- duplicate */
 		}
 
 		/* Unlink the duplicate and set it up to be re-inserted. */
@@ -224,7 +208,7 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":1", PM_FAULT_ALLOC);
 	idp_prev->next = idp;
     }
 
-    return 0; /* ok */
+    return sts;
 }
 
 /*
@@ -523,6 +507,13 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":4", PM_FAULT_ALLOC);
 	    }
 	    if ((sts = addindom(lcp, indom, when, numinst, instlist, namelist, tbuf, allinbuf)) < 0)
 		goto end;
+	    /* If this indom was a duplicate, then we need to free tbuf and
+	       namelist, as appropriate. */
+	    if (sts == PMLOGPUTINDOM_DUP) {
+		free(tbuf);
+		if (namelist != NULL && !allinbuf)
+		    free(namelist);
+	    }
 	}
 	else
 	    fseek(f, (long)rlen, SEEK_CUR);
@@ -855,7 +846,6 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":6", PM_FAULT_ALLOC);
     free(out);
 
     sts = addindom(lcp, indom, tp, numinst, instlist, namelist, NULL, 0);
-
     return sts;
 }
 
@@ -877,11 +867,13 @@ pmLookupInDomArchive(pmInDom indom, const char *name)
 	    return PM_ERR_NOCONTEXT;
 	if (ctxp->c_type != PM_CONTEXT_ARCHIVE) {
 	    PM_UNLOCK(ctxp->c_lock);
+	    CHECK_C_LOCK;
 	    return PM_ERR_NOTARCHIVE;
 	}
 
 	if ((hp = __pmHashSearch((unsigned int)indom, &ctxp->c_archctl->ac_log->l_hashindom)) == NULL) {
 	    PM_UNLOCK(ctxp->c_lock);
+	    CHECK_C_LOCK;
 	    return PM_ERR_INDOM_LOG;
 	}
 
@@ -890,6 +882,7 @@ pmLookupInDomArchive(pmInDom indom, const char *name)
 	    for (j = 0; j < idp->numinst; j++) {
 		if (strcmp(name, idp->namelist[j]) == 0) {
 		    PM_UNLOCK(ctxp->c_lock);
+		    CHECK_C_LOCK;
 		    return idp->instlist[j];
 		}
 	    }
@@ -901,6 +894,7 @@ pmLookupInDomArchive(pmInDom indom, const char *name)
 		if (*p == ' ') {
 		    if (strncmp(name, idp->namelist[j], p - idp->namelist[j]) == 0) {
 			PM_UNLOCK(ctxp->c_lock);
+			CHECK_C_LOCK;
 			return idp->instlist[j];
 		    }
 		}
@@ -910,6 +904,7 @@ pmLookupInDomArchive(pmInDom indom, const char *name)
 	PM_UNLOCK(ctxp->c_lock);
     }
 
+    CHECK_C_LOCK;
     return n;
 }
 
@@ -931,11 +926,13 @@ pmNameInDomArchive(pmInDom indom, int inst, char **name)
 	    return PM_ERR_NOCONTEXT;
 	if (ctxp->c_type != PM_CONTEXT_ARCHIVE) {
 	    PM_UNLOCK(ctxp->c_lock);
+	    CHECK_C_LOCK;
 	    return PM_ERR_NOTARCHIVE;
 	}
 
 	if ((hp = __pmHashSearch((unsigned int)indom, &ctxp->c_archctl->ac_log->l_hashindom)) == NULL) {
 	    PM_UNLOCK(ctxp->c_lock);
+	    CHECK_C_LOCK;
 	    return PM_ERR_INDOM_LOG;
 	}
 
@@ -947,6 +944,7 @@ pmNameInDomArchive(pmInDom indom, int inst, char **name)
 		    else
 			n = 0;
 		    PM_UNLOCK(ctxp->c_lock);
+		    CHECK_C_LOCK;
 		    return n;
 		}
 	    }
@@ -955,6 +953,7 @@ pmNameInDomArchive(pmInDom indom, int inst, char **name)
 	PM_UNLOCK(ctxp->c_lock);
     }
 
+    CHECK_C_LOCK;
     return n;
 }
 
@@ -1004,14 +1003,19 @@ reset_ihash(void)
     	ihash[i].len = 0;
 }
 
+/*
+ * Internal variant of pmGetInDomArchive() ... ctxp is not NULL for
+ * internal callers where the current context is already locked, but
+ * NULL for callers from above the PMAPI or internal callers when the
+ * current context is not locked.
+ */
 int
-pmGetInDomArchive(pmInDom indom, int **instlist, char ***namelist)
+pmGetInDomArchive_ctx(__pmContext *ctxp, pmInDom indom, int **instlist, char ***namelist)
 {
     int			n;
     int			i;
     int			j;
     char		*p;
-    __pmContext		*ctxp;
     __pmHashNode		*hp;
     __pmLogInDom		*idp;
     int			numinst = 0;
@@ -1020,6 +1024,7 @@ pmGetInDomArchive(pmInDom indom, int **instlist, char ***namelist)
     char		**nlist = NULL;
     char		**olist;
     int			big_indom = 0;
+    int			need_unlock = 0;
 
     /* avoid ambiguity when no instances or errors */
     *instlist = NULL;
@@ -1027,76 +1032,97 @@ pmGetInDomArchive(pmInDom indom, int **instlist, char ***namelist)
     if (indom == PM_INDOM_NULL)
 	return PM_ERR_INDOM;
 
-    if ((n = pmWhichContext()) >= 0) {
+    if (ctxp == NULL) {
+	if ((n = pmWhichContext()) < 0) {
+	    return n;
+	}
 	ctxp = __pmHandleToPtr(n);
 	if (ctxp == NULL)
 	    return PM_ERR_NOCONTEXT;
-	if (ctxp->c_type != PM_CONTEXT_ARCHIVE) {
+	need_unlock = 1;
+    }
+    if (ctxp->c_type != PM_CONTEXT_ARCHIVE) {
+	if (need_unlock)
 	    PM_UNLOCK(ctxp->c_lock);
-	    return PM_ERR_NOTARCHIVE;
-	}
+	if (need_unlock) CHECK_C_LOCK;
+	return PM_ERR_NOTARCHIVE;
+    }
 
-	if ((hp = __pmHashSearch((unsigned int)indom, &ctxp->c_archctl->ac_log->l_hashindom)) == NULL) {
+    if ((hp = __pmHashSearch((unsigned int)indom, &ctxp->c_archctl->ac_log->l_hashindom)) == NULL) {
+	if (need_unlock)
 	    PM_UNLOCK(ctxp->c_lock);
-	    return PM_ERR_INDOM_LOG;
-	}
+	if (need_unlock) CHECK_C_LOCK;
+	return PM_ERR_INDOM_LOG;
+    }
 
-	for (idp = (__pmLogInDom *)hp->data; idp != NULL; idp = idp->next) {
-	    if (idp->numinst > HASH_THRESHOLD) {
-		big_indom = 1;
-		reset_ihash();
-		break;
+    for (idp = (__pmLogInDom *)hp->data; idp != NULL; idp = idp->next) {
+	if (idp->numinst > HASH_THRESHOLD) {
+	    big_indom = 1;
+	    reset_ihash();
+	    break;
+	}
+    }
+
+    for (idp = (__pmLogInDom *)hp->data; idp != NULL; idp = idp->next) {
+	for (j = 0; j < idp->numinst; j++) {
+	    if (big_indom) {
+		/* big indom - use a hash table */
+		i = find_add_ihash(idp->instlist[j]) ? 0 : numinst;
 	    }
-	}
-
-	for (idp = (__pmLogInDom *)hp->data; idp != NULL; idp = idp->next) {
-	    for (j = 0; j < idp->numinst; j++) {
-		if (big_indom) {
-		    /* big indom - use a hash table */
-		    i = find_add_ihash(idp->instlist[j]) ? 0 : numinst;
+	    else {
+		/* small indom - linear search */
+		for (i = 0; i < numinst; i++) {
+		    if (idp->instlist[j] == ilist[i])
+			break;
 		}
-		else {
-		    /* small indom - linear search */
-		    for (i = 0; i < numinst; i++) {
-			if (idp->instlist[j] == ilist[i])
-			    break;
-		    }
-		}
+	    }
 
-		if (i < numinst)
-		    continue;
+	    if (i < numinst)
+		continue;
 
-		numinst++;
+	    numinst++;
 PM_FAULT_POINT("libpcp/" __FILE__ ":7", PM_FAULT_ALLOC);
-		if ((ilist = (int *)realloc(ilist, numinst*sizeof(ilist[0]))) == NULL) {
-		    __pmNoMem("pmGetInDomArchive: ilist", numinst*sizeof(ilist[0]), PM_FATAL_ERR);
-		}
-PM_FAULT_POINT("libpcp/" __FILE__ ":8", PM_FAULT_ALLOC);
-		if ((nlist = (char **)realloc(nlist, numinst*sizeof(nlist[0]))) == NULL) {
-		    __pmNoMem("pmGetInDomArchive: nlist", numinst*sizeof(nlist[0]), PM_FATAL_ERR);
-		}
-		ilist[numinst-1] = idp->instlist[j];
-		nlist[numinst-1] = idp->namelist[j];
-		strsize += strlen(idp->namelist[j])+1;
+	    if ((ilist = (int *)realloc(ilist, numinst*sizeof(ilist[0]))) == NULL) {
+		__pmNoMem("pmGetInDomArchive: ilist", numinst*sizeof(ilist[0]), PM_FATAL_ERR);
 	    }
+PM_FAULT_POINT("libpcp/" __FILE__ ":8", PM_FAULT_ALLOC);
+	    if ((nlist = (char **)realloc(nlist, numinst*sizeof(nlist[0]))) == NULL) {
+		__pmNoMem("pmGetInDomArchive: nlist", numinst*sizeof(nlist[0]), PM_FATAL_ERR);
+	    }
+	    ilist[numinst-1] = idp->instlist[j];
+	    nlist[numinst-1] = idp->namelist[j];
+	    strsize += strlen(idp->namelist[j])+1;
 	}
+    }
 PM_FAULT_POINT("libpcp/" __FILE__ ":9", PM_FAULT_ALLOC);
-	if ((olist = (char **)malloc(numinst*sizeof(olist[0]) + strsize)) == NULL) {
-	    __pmNoMem("pmGetInDomArchive: olist", numinst*sizeof(olist[0]) + strsize, PM_FATAL_ERR);
-	}
-	p = (char *)olist;
-	p += numinst * sizeof(olist[0]);
-	for (i = 0; i < numinst; i++) {
-	    olist[i] = p;
-	    strcpy(p, nlist[i]);
-	    p += strlen(nlist[i]) + 1;
-	}
-	free(nlist);
-	*instlist = ilist;
-	*namelist = olist;
-	n = numinst;
+    if ((olist = (char **)malloc(numinst*sizeof(olist[0]) + strsize)) == NULL) {
+	__pmNoMem("pmGetInDomArchive: olist", numinst*sizeof(olist[0]) + strsize, PM_FATAL_ERR);
+    }
+    p = (char *)olist;
+    p += numinst * sizeof(olist[0]);
+    for (i = 0; i < numinst; i++) {
+	olist[i] = p;
+	strcpy(p, nlist[i]);
+	p += strlen(nlist[i]) + 1;
+    }
+    free(nlist);
+    *instlist = ilist;
+    *namelist = olist;
+    n = numinst;
+
+    if (need_unlock) {
 	PM_UNLOCK(ctxp->c_lock);
+	CHECK_C_LOCK;
     }
 
     return n;
+}
+
+int
+pmGetInDomArchive(pmInDom indom, int **instlist, char ***namelist)
+{
+    int	sts;
+    sts = pmGetInDomArchive_ctx(NULL, indom, instlist, namelist);
+    CHECK_C_LOCK;
+    return sts;
 }

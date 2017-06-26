@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2014 Red Hat.
  * Copyright (c) 1995-2003 Silicon Graphics, Inc.  All Rights Reserved.
+ * Copyright (c) 2017 Ken McDonell.  All Rights Reserved.
  * 
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -22,6 +23,7 @@
 
 char		sep;
 int		vflag;		/* verbose off by default */
+int		nowrap;		/* suppress wrap check */
 int		index_state = STATE_MISSING;
 int		meta_state = STATE_MISSING;
 int		log_state = STATE_MISSING;
@@ -39,6 +41,7 @@ static pmLongOptions longopts[] = {
     PMOPT_START,
     PMOPT_FINISH,
     { "verbose", 0, 'v', 0, "verbose output" },
+    { "nowrap", 0, 'w', 0, "suppress counter wrap warnings" },
     PMOPT_TIMEZONE,
     PMOPT_HOSTZONE,
     PMOPT_HELP,
@@ -47,7 +50,7 @@ static pmLongOptions longopts[] = {
 
 static pmOptions opts = {
     .flags = PM_OPTFLAG_DONE | PM_OPTFLAG_BOUNDARIES | PM_OPTFLAG_STDOUT_TZ,
-    .short_options = "D:ln:S:T:zvZ:?",
+    .short_options = "D:ln:S:T:zvwZ:?",
     .long_options = longopts,
     .short_usage = "[options] archive",
 };
@@ -162,6 +165,9 @@ main(int argc, char *argv[])
 	case 'v':	/* bump verbosity */
 	    vflag++;
 	    break;
+	case 'w':	/* no wrap checks */
+	    nowrap = 1;
+	    break;
 	}
     }
 
@@ -268,14 +274,6 @@ main(int argc, char *argv[])
     if (lflag)
 	dumpLabel();
 
-    /*
-     * Note: ctxp->c_lock remains locked throughout ... __pmHandleToPtr()
-     *       is only called once, and a single context is used throughout
-     *       ... so there is no PM_UNLOCK(ctxp->c_lock) anywhere in the
-     *       pmchecklog code.
-     *       This works because ctxp->c_lock is a recursive lock and
-     *       pmchecklog is single-threaded.
-     */
     if ((n = pmWhichContext()) >= 0) {
 	if ((ctxp = __pmHandleToPtr(n)) == NULL) {
 	    fprintf(stderr, "%s: botch: __pmHandleToPtr(%d) returns NULL!\n", pmProgname, n);
@@ -286,6 +284,14 @@ main(int argc, char *argv[])
 	fprintf(stderr, "%s: botch: %s!\n", pmProgname, pmErrStr(PM_ERR_NOCONTEXT));
 	exit(EXIT_FAILURE);
     }
+    /*
+     * Note: This application is single threaded, and once we have ctxp
+     *	     the associated __pmContext will not move and will only be
+     *	     accessed or modified synchronously either here or in libpcp.
+     *	     We unlock the context so that it can be locked as required
+     *	     within libpcp.
+     */
+    PM_UNLOCK(ctxp->c_lock);
 
     if (strcmp(archdirname, ".") == 0)
 	/* skip ./ prefix */

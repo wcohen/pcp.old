@@ -700,6 +700,7 @@ Group: Applications/System
 Summary: Selinux policy package
 URL: http://www.pcp.io
 BuildRequires: selinux-policy-devel
+BuildRequires: selinux-policy-targeted
 %if 0%{?fedora} >= 19 || 0%{?rhel} >= 6 || 0%{?suse_version} >= 1200
 BuildRequires: setools-console
 %else
@@ -1450,6 +1451,30 @@ target.
 #end pcp-pmda-lio
 %endif
 
+%if "@pmda_prometheus@" == "true"
+#
+# pcp-pmda-prometheus
+#
+%package pmda-prometheus
+License: GPLv2+
+Group: Applications/System
+Summary: Performance Co-Pilot (PCP) metrics from Prometheus endpoints
+URL: http://www.pcp.io
+Requires: pcp-libs = @package_version@
+%if "@enable_python3@" == "true"
+Requires: python3-pcp = @package_version@
+Requires: python3-requests
+%else
+Requires: python-pcp = @package_version@
+Requires: python-requests
+%endif
+
+%description pmda-prometheus
+This package contains the PCP Performance Metrics Domain Agent (PMDA) for
+extracting statistics from programs instrumented as Prometheus endpoints.
+#end pcp-pmda-prometheus
+%endif
+
 %if "@pmda_json@" == "true"
 #
 # pcp-pmda-json
@@ -1766,6 +1791,9 @@ Requires: pcp-pmda-libvirt
 %if "@pmda_lio@" == "true"
 Requires: pcp-pmda-lio
 %endif
+%if "@pmda_prometheus@" == "true"
+Requires: pcp-pmda-prometheus
+%endif
 %if "@pmda_rpm@" == "true"
 Requires: pcp-pmda-rpm
 %endif
@@ -1826,6 +1854,18 @@ Requires: pcp-gui
 This meta-package contains the PCP performance monitoring dependencies.  This
 includes a large number of packages for analysing PCP metrics in various ways.
 # monitor
+
+%package zeroconf
+License: GPLv2+
+Group: Applications/System
+Summary: Performance Co-Pilot (PCP) Zeroconf Package
+URL: http://www.pcp.io
+Requires: pcp
+Requires: pcp-pmda-dm pcp-pmda-nfsclient
+%description zeroconf
+This package contains configuration tweaks and files to increase metrics
+gathering frequency, several extended pmlogger configurations, as well as
+automated pmie diagnosis, alerting and self-healing for the localhost.
 
 %prep
 %setup -q
@@ -2046,6 +2086,9 @@ awk '{print $NF}' $DIST_MANIFEST | egrep -e 'pmdas/libvirt' > pmda_libvirt_files
 %if "@pmda_lio@" == "true"
 awk '{print $NF}' $DIST_MANIFEST | egrep -e 'pmdas/lio' > pmda_lio_files
 %endif
+%if "@pmda_prometheus@" == "true"
+awk '{print $NF}' $DIST_MANIFEST | egrep -e 'pmdas/prometheus' > pmda_prometheus_files
+%endif
 %if "@have_python@" == "true"
 awk '{print $NF}' $DIST_MANIFEST | egrep -e 'pmdas/gluster' > pmda_gluster_files
 awk '{print $NF}' $DIST_MANIFEST | egrep -e 'pmdas/zswap' > pmda_zswap_files
@@ -2075,6 +2118,7 @@ awk '{print $NF}' $DIST_MANIFEST | egrep -e 'pmdas/shping' > pmda_shping_files
 awk '{print $NF}' $DIST_MANIFEST | egrep -e 'pmdas/summary' > pmda_summary_files
 awk '{print $NF}' $DIST_MANIFEST | egrep -e 'pmdas/trace' > pmda_trace_files
 awk '{print $NF}' $DIST_MANIFEST | egrep -e 'pmdas/weblog' > pmda_weblog_files
+awk '{print $NF}' $DIST_MANIFEST | egrep -e 'zeroconf' > zeroconf_files
 
 touch gui_files webapi_files manager_files pmda_infiniband_files pmda_papi_files \
       pmda_perfevent_files pmda_bonding_files pmda_dbping_files \
@@ -2089,7 +2133,8 @@ touch gui_files webapi_files manager_files pmda_infiniband_files pmda_papi_files
       pmda_lmsensors_files pmda_logger_files \
       pmda_mailq_files pmda_mounts_files pmda_nvidia_files pmda_roomtemp_files \
       pmda_rpm_files pmda_sendmail_files pmda_shping_files pmda_summary_files \
-      pmda_trace_files pmda_weblog_files pmda_dm_files pmda_systemd_files
+      pmda_trace_files pmda_weblog_files pmda_dm_files pmda_systemd_files \
+      zeroconf_files
 
 %if "@have_python@" == "true"
 touch pmda_gluster_files pmda_zswap_files pmda_unbound_files \
@@ -2103,6 +2148,9 @@ touch pmda_libvirt_files
 %endif
 %if "@pmda_lio@" == "true"
 touch pmda_lio_files
+%endif
+%if "@pmda_prometheus@" == "true"
+touch pmda_prometheus_files
 %endif
 %if "@pmda_snmp@" == "true"
 touch pmda_snmp_files
@@ -2222,6 +2270,9 @@ BEGIN {
 %if "@pmda_lio@" == "true"
     while( getline < "pmda_lio_files") pmda_lio[$0]=1;
 %endif
+%if "@pmda_prometheus@" == "true"
+    while( getline < "pmda_prometheus_files") pmda_prometheus[$0]=1;
+%endif
     while( getline < "pmda_apache_files") pmda_apache[$0]=1;
     while( getline < "pmda_bash_files") pmda_bash[$0]=1;
     while( getline < "pmda_cifs_files") pmda_cifs[$0]=1;
@@ -2250,6 +2301,7 @@ BEGIN {
     while( getline < "selinux_files") selinux[$0]=1;
 %endif
     while( getline < "conf_files") conf[nconf++]=$0;
+    while( getline < "zeroconf_files") zeroconf_files[$0]=1;
 }
 {
     if (cfg[$NF]) f="cfg_files.rpm";
@@ -2339,6 +2391,9 @@ BEGIN {
 %if "@pmda_lio@" == "true"
     else if (pmda_lio[$NF]) f="pmda_lio_files.rpm";
 %endif
+%if "@pmda_prometheus@" == "true"
+    else if (pmda_prometheus[$NF]) f="pmda_prometheus_files.rpm";
+%endif
     else if (pmda_apache[$NF]) f="pmda_apache_files.rpm";
     else if (pmda_bash[$NF]) f="pmda_bash_files.rpm";
     else if (pmda_cifs[$NF]) f="pmda_cifs_files.rpm";
@@ -2363,6 +2418,7 @@ BEGIN {
     else if (import_mrtg2pcp[$NF]) f="import_mrtg2pcp_files.rpm";
     else if (import_ganglia2pcp[$NF]) f="import_ganglia2pcp_files.rpm";
     else if (import_collectl2pcp[$NF]) f="import_collectl2pcp_files.rpm";
+    else if (zeroconf_files[$NF]) f="zeroconf.rpm";
     else f="base_files.rpm"
 }
 $1 == "d" {
@@ -2530,6 +2586,34 @@ chown -R pcp:pcp "$PCP_LOG_DIR/pmmgr" 2>/dev/null
     /sbin/service pmlogger condrestart
 %endif
 
+%post zeroconf
+PCP_PMDAS_DIR=@pcp_pmdas_dir@
+PCP_SYSCONFIG_DIR=@pcp_sysconfig_dir@
+# auto-install important PMDAs for RH Support
+for PMDA in dm nfsclient ; do
+    touch "$PCP_PMDAS_DIR/$PMDA/.NeedInstall"
+done
+# increase default pmlogger recording frequency
+sed -i 's/^\#\ PMLOGGER_INTERVAL.*/PMLOGGER_INTERVAL=10/g' "$PCP_SYSCONFIG_DIR/pmlogger"
+# auto-enable these usually optional pmie rules
+pmieconf -c enable dmthin
+
+%if "@enable_systemd@" == "true"
+    systemctl restart pmcd >/dev/null 2>&1
+    systemctl restart pmlogger >/dev/null 2>&1
+    systemctl restart pmie >/dev/null 2>&1
+    systemctl enable pmcd >/dev/null 2>&1
+    systemctl enable pmlogger >/dev/null 2>&1
+    systemctl enable pmie >/dev/null 2>&1
+%else
+    /sbin/chkconfig --add pmcd >/dev/null 2>&1
+    /sbin/chkconfig --add pmlogger >/dev/null 2>&1
+    /sbin/chkconfig --add pmie >/dev/null 2>&1
+    /sbin/service pmcd condrestart
+    /sbin/service pmlogger condrestart
+    /sbin/service pmie condrestart
+%endif #zeroconf
+
 %if "@enable_selinux@" == "true"
 %post selinux
 %{selinux_handle_policy "$1" "pcpupstream.pp"}
@@ -2581,6 +2665,11 @@ chown -R pcp:pcp "$PCP_LOG_DIR/pmmgr" 2>/dev/null
 %preun pmda-lio
 %{pmda_remove "$1" "lio"}
 %endif #preun pmda-lio
+
+%if "@pmda_prometheus@" == "true"
+%preun pmda-prometheus
+%{pmda_remove "$1" "prometheus"}
+%endif #preun pmda-prometheus
 
 %if "@pmda_nginx@" == "true"
 %preun pmda-nginx
@@ -3051,6 +3140,10 @@ cd
 %files pmda-lio -f pmda_lio_files.rpm
 %endif
 
+%if "@pmda_prometheus@" == "true"
+%files pmda-prometheus -f pmda_prometheus_files.rpm
+%endif
+
 %files pmda-apache -f pmda_apache_files.rpm
 
 %files pmda-bash -f pmda_bash_files.rpm
@@ -3126,3 +3219,6 @@ cd
 %files collector
 
 %files monitor
+
+%files zeroconf -f zeroconf.rpm
+

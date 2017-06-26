@@ -71,6 +71,7 @@ pcp.spec: pcp.spec.in
 	    -e's|@pmda_systemd@|$(PMDA_SYSTEMD)|g' \
 	    -e's|@pmda_infiniband@|$(PMDA_INFINIBAND)|g' \
 	    -e's|@pmda_perfevent@|$(PMDA_PERFEVENT)|g' \
+	    -e's|@pmda_prometheus@|$(PMDA_PROMETHEUS)|g' \
 	    -e's|@pmda_libvirt@|$(PMDA_LIBVIRT)|g' \
 	    -e's|@pmda_lio@|$(PMDA_LIO)|g' \
 	    -e's|@pmda_json@|$(PMDA_JSON)|g' \
@@ -99,6 +100,7 @@ pcp.spec: pcp.spec.in
 	    -e's|@have_python@|$(HAVE_PYTHON)|g' \
 	    -e's|@have_webapps@|$(HAVE_WEBAPPS)|g' \
 	    -e"s|@build_root@|$${DIST_ROOT}|g" \
+	    -e's|@pcp_sysconfig_dir@|$(PCP_SYSCONFIG_DIR)|g' \
 	    -e's|@pcp_sysconf_dir@|$(PCP_SYSCONF_DIR)|g' \
 	    -e's|@pcp_share_dir@|$(PCP_SHARE_DIR)|g' \
 	    -e's|@pcp_log_dir@|$(PCP_LOG_DIR)|g' \
