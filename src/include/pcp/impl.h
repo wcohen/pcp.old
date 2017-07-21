@@ -245,8 +245,6 @@ typedef struct __pmnsTree {
     __pmnsNode		*root;  /* root of tree structure */
     __pmnsNode		**htab; /* hash table of nodes keyed on pmid */
     int			htabsize;     /* number of nodes in the table */
-    char		*symbol;     /* store all names contiguously */
-    int			contiguous;   /* is data stored contiguously ? */
     int			mark_state;   /* the total mark value for trimming */
 } __pmnsTree;
 
@@ -300,7 +298,7 @@ PCP_DATA extern int pmDebug;
 #define DBG_TRACE_LOCK		(1<<19) /* lock tracing */
 #define DBG_TRACE_INTERP	(1<<20)	/* interpolate mode for archives */
 #define DBG_TRACE_CONFIG	(1<<21) /* configuration parameters */
-#define DBG_TRACE_LOOP		(1<<22) /* pmLoop tracing */
+#define DBG_TRACE_PMAPI		(1<<22) /* PMAPI call tracing */
 #define DBG_TRACE_FAULT		(1<<23) /* fault injection tracing */
 #define DBG_TRACE_AUTH		(1<<24) /* authentication tracing */
 #define DBG_TRACE_DISCOVERY	(1<<25) /* service discovery tracing */
@@ -1543,8 +1541,8 @@ PCP_CALL extern int __pmRegisterAnon(const char *, int);
 PCP_CALL extern void __pmInitLocks(void);
 PCP_CALL extern int __pmLock(void *, const char *, int);
 PCP_CALL extern int __pmUnlock(void *, const char *, int);
-#ifdef BUILD_WITH_LOCK_ASSERTS
 PCP_CALL extern int __pmIsLocked(void *);
+#ifdef BUILD_WITH_LOCK_ASSERTS
 PCP_CALL extern void __pmCheckIsUnlocked(void *, char *, int);
 #endif /* BUILD_WITH_LOCK_ASSERTS */
 
@@ -1563,6 +1561,7 @@ PCP_CALL extern int __pmMultiThreaded(int);
 #define PM_MULTIPLE_THREADS(x)	__pmMultiThreaded(x)
 #define PM_LOCK(lock)		__pmLock(&(lock), __FILE__, __LINE__)
 #define PM_UNLOCK(lock)		__pmUnlock(&(lock), __FILE__, __LINE__)
+#define PM_IS_LOCKED(lock) 	__pmIsLocked(&(lock))
 
 #ifdef HAVE_PTHREAD_MUTEX_T
 /* the big libpcp lock */
