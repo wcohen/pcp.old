@@ -76,6 +76,7 @@ OTHER_SUBDIRS = \
 	pmlogcheck \
 	pmmgr \
 	pmpost \
+	pmpredicate \
 	pmproxy \
 	pmquery \
 	pmrep \

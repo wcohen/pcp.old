@@ -31,7 +31,7 @@ install:	$(TARGETS)
 	$(INSTALL) -m 755 $(CMDTARGET) $(PCP_BIN_DIR)/$(CMDTARGET)
 	$(INSTALL) -m 755 -d $(DEMODIR)
 	$(INSTALL) -m 644 GNUmakefile.install $(DEMODIR)/Makefile
-	$(INSTALL) -m 644 $(CFILES) $(DEMODIR)
+	$(INSTALL) -m 644 $(CFILES) $(DEMODIR)/$(CFILES)
 
 pmpredicate$(EXECSUFFIX):  pmpredicate.o
 	rm -f $@
