@@ -118,7 +118,7 @@ const char *json_type(int type)
 	return "integer";
     case PM_TYPE_FLOAT:
     case PM_TYPE_DOUBLE:
-	return "float";
+	return "double";
     case PM_TYPE_STRING:
 	return "string";
     case PM_TYPE_AGGREGATE:
