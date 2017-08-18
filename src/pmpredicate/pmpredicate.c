@@ -205,7 +205,7 @@ init_sample(void)
 	if ((sts = pmLookupDesc(metric_pmid[i], &metric_desc[i]))) {
 	    fprintf(stderr, "%s: Failed to find pmDesc for %s\n",
 		    pmProgname, pmErrStr(sts));
-	    exit(1);
+	    /* some metrics are missing descriptions so just warn about it */
 	}
 	if ((sts = pmExtendFetchGroup_indom(pmfg,
 				metric_name[i], "instant",
@@ -218,7 +218,7 @@ init_sample(void)
 	if ((sts = pmLookupText(metric_pmid[i], PM_TEXT_ONELINE, &metric_desc_text[i]))) {
 	    fprintf(stderr, "%s: Failed to get Text description for %s\n",
 		    pmProgname, pmErrStr(sts));
-	    exit(1);
+	    /* some metrics are missing descriptions so just warn about it */
 	}
     }
 
