@@ -1888,7 +1888,7 @@ Group: Applications/System
 Summary: Visualization tools for the Performance Co-Pilot toolkit
 URL: http://www.pcp.io
 Requires: pcp = %{version}-%{release} pcp-libs = %{version}-%{release}
-BuildRequires: inkscape
+BuildRequires: hicolor-icon-theme
 
 %description gui
 Visualization tools for the Performance Co-Pilot toolkit.
@@ -2713,7 +2713,7 @@ cd
 %{_localstatedir}/lib/pcp/config/pmlogrewrite
 %dir %attr(0775,pcp,pcp) %{_localstatedir}/lib/pcp/config/pmda
 
-%{_datadir}/bash-completion/completions/pcp
+%{_datadir}/bash-completion/completions/*
 %{_datadir}/zsh/site-functions/_pcp
 
 %if !%{disable_sdt}
