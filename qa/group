@@ -1388,4 +1388,5 @@ zsh
 1331 verify local
 1354 pmval archive local
 1388 pmwebapi local
+2001 pmpredicate pmda.json local python
 4751 libpcp threads valgrind local
