@@ -254,7 +254,7 @@ get_sample(void)
     }
     cull();
 
-    data_fd = fopen(data_json_name, "w+");
+    data_fd = fopen(data_json_name_tmp, "w+");
     if (data_fd==NULL) goto fail;
 
     /* Do predicate filtering on each metric. */
