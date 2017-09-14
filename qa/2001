@@ -33,6 +33,22 @@ $python -c "import jsonpointer" >/dev/null 2>&1
 $python -c "import six" >/dev/null 2>&1
 [ $? -eq 0 ] || _notrun "python six module not installed"
 
+_filter()
+{
+    sed \
+	-e '/^\[[0-9]* bytes]/d' \
+	-e "/pmcd\.pmlogger\./s/\[$logger_pid/\[LOGGER_PID/g" \
+	-e "/pmcd\.pmlogger\./s/\"$logger_pid\"/\"LOGGER_PID\"/g" \
+	-e '/pmcd\.pmlogger\.port/s/value .*/value PORT/' \
+	-e '/pmcd\.pmlogger\.host/s/value ".*/value "HOST"/' \
+	-e '/pmcd\.pmlogger\.archive/s/value ".*/value "PATH"/' \
+	-e "/\"$logger_pid\"/s/$logger_pid/LOGGER_PID/g" \
+    | $PCP_AWK_PROG '
+$1 == "TIMESTAMP" && NF == 4	{ print "TIMESTAMP       0       OFFSET       OFFSET"; next }
+				{ print }' \
+    | src/hex2nbo
+}
+
 pmdajson_remove()
 {
     echo
@@ -80,11 +96,21 @@ _cleanup()
 	    $sudo mv ${pmda_saved_config_dir}/* ${pmda_config_dir}/
 	    $sudo rm -rf ${pmda_saved_config_dir}
 	fi
-	if [ -z "$pmpred_cpu_pid" ]; then
+	if [ -n "$pmpred_cpu_pid" ]; then
 	    kill -TERM $pmpred_cpu_pid
 	fi
-	if [ -z "$pmpred_disk_pid" ]; then
+	if [ -n "$pmpred_disk_pid" ]; then
 	    kill -TERM $pmpred_disk_pid
+	fi
+	if [ -n "$disk_load_pid" ]; then
+	    echo killing $disk_load_pid
+	    $sudo kill -TERM $disk_load_pid
+	fi
+	if [ -n "$cpu_load_pid" ]; then
+	    kill -TERM $cpu_load_pid
+	fi
+	if [ -n "$loger_pid" ]; then
+	    kill -TERM $logger_pid
 	fi
     fi
     $sudo rm -rf $tmp $tmp.*
@@ -132,17 +158,31 @@ $sudo cp ${tmp}/config.json ${pmda_config}
 # real QA test starts here
 
 # Start pmpredicate to find hot disk with disk.dev.avactive.
-pmpredicate -r 1 -j hot_disk -f disk.dev.avactive -m disk.dev.aveq  -m disk.dev.total_rawactive -m disk.dev.blktotal -m disk.dev.total_bytes -d ${tmp}/${seq}disk &
+pmpredicate -t 1 -r 1 -j hot_disk -f disk.dev.avactive -m disk.dev.avactive -m disk.dev.aveq  -m disk.dev.total_rawactive -m disk.dev.blktotal -m disk.dev.total_bytes -d ${tmp}/${seq}disk &
 pmpred_disk_pid=$!
 
 # Start pmpredicate to find hot processor running application code.
-pmpredicate -r 8 -j hot_cpu -f kernel.percpu.cpu.user -m kernel.percpu.cpu.user -m kernel.percpu.cpu.sys -d ${tmp}/${seq}cpu &
+pmpredicate -t 1 -r 1 -j hot_cpu -f kernel.percpu.cpu.user -m kernel.percpu.cpu.user -m kernel.percpu.cpu.sys -d ${tmp}/${seq}cpu &
 pmpred_cpu_pid=$!
 
+# select a disk and start reading stuff to generate load on disk
+dev=/dev/`pmprobe -I disk.dev.read |awk -F \" '{print $2}'`
+($sudo dd if=$dev of=/dev/null) &
+disk_load_pid=$!
+echo $disk_load_pid
+
+# generate a load on a processor
+sh -c 'while :; do true; done' &
+cpu_load_pid=$!
+
+sleep 10
 pmdajson_install
 
 # there may be a race if the pmda has a bit of a slow start ... pause
-sleep 0.25
+sleep 10
+
+# Check to see if the metrics are there.
+pminfo json
 
 # pmcd should have been started by the Install process - check
 if pminfo -v json > $tmp.info 2> $tmp.err
@@ -154,16 +194,23 @@ else
 fi
 cat $tmp.info $tmp.err
 
+# start up pmlogger
+cat > $tmp.config << EOF
+mandatory on 1 sec {
+	json.hot_cpu.metrics.kernel_percpu_cpu_user
+	json.hot_cpu.metrics.kernel_percpu_cpu_sys
+	json.hot_disk.metrics.disk_dev_total_rawactive
+	json.hot_disk.metrics.disk_dev_aveq
+	json.hot_disk.metrics.disk_dev_total_bytes
+	json.hot_disk.metrics.disk_dev_blktotal
+}
+EOF
 
-# Check to see if the metrics are there.
-pminfo json
+pmlogger -c $tmp.config -l $tmp.log -s 3 $tmp &
+logger_pid=$!
 
-# Check to see if the metrics have values.
-#FIXME
-# The pcp caching of instance name is confused by pmpredicate changing set of metric instances.
-# can end up with pmval spitting out:
-#
-# pmval: pmFetch: Unknown or illegal instance identifier
+_filter_pmlogger_log <$tmp.log
+pmdumplog -a $tmp | _filter_pmdumplog | _filter
 
 # all done
 pmdajson_remove
