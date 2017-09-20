@@ -7,6 +7,7 @@
 
 seq=`basename $0`
 echo "QA output created by $seq"
+orig_dir=`pwd`
 
 # get standard environment, filters and checks
 . ./common.product
@@ -18,11 +19,15 @@ python_path=`which $python`
 pmda_path="$PCP_PMDAS_DIR/json"
 pmda_script="${pmda_path}/pmdajson.python"
 pmda_config="${pmda_path}/config.json"
-ceph_script="${pmda_path}/generate_ceph_metadata"
 qa_dir=`pwd`
 json_qa_dir="${qa_dir}/json"
 pmda_config_dir="${PCP_VAR_DIR}/config/pmda"
 pmda_saved_config_dir="${pmda_config_dir}/pmdajson.$seq"
+
+jsondata="${tmp}/data"
+pmlogger="${tmp}/pmlogger"
+pmlogger_conf="${pmlogger}.conf"
+pmlogger_log="${pmlogger}.log"
 
 # test for-some-thing || _notrun No support for some-thing
 test -f "$pmda_script" || _notrun "pmdajson not installed"
@@ -36,13 +41,21 @@ $python -c "import six" >/dev/null 2>&1
 _filter()
 {
     sed \
+        -e '/Performance metrics from host /s/ host .*/ host .../' \
+	-e '/commencing/d' \
+	-e '/ending/d' \
 	-e '/^\[[0-9]* bytes]/d' \
-	-e "/pmcd\.pmlogger\./s/\[$logger_pid/\[LOGGER_PID/g" \
-	-e "/pmcd\.pmlogger\./s/\"$logger_pid\"/\"LOGGER_PID\"/g" \
-	-e '/pmcd\.pmlogger\.port/s/value .*/value PORT/' \
-	-e '/pmcd\.pmlogger\.host/s/value ".*/value "HOST"/' \
-	-e '/pmcd\.pmlogger\.archive/s/value ".*/value "PATH"/' \
+	-e '/inst /{
+s/inst \[[0-9]* or \"[0-9]*\"]/inst \[INTEGER or "INTEGER"]/
+}' \
+	-e '/value /{
+s/value [0-9][0-9]*/value INTEGER/
+}' \
+	-e '/[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/s/[^ ]*/TIMESTAMP/' \
 	-e "/\"$logger_pid\"/s/$logger_pid/LOGGER_PID/g" \
+	-e '/pmcd.pmlogger.port/s/value .*/value PORT/' \
+	-e '/pmcd.pmlogger.host/s/value ".*/value "HOST"/' \
+	-e '/pmcd.pmlogger.archive/s/value ".*/value "PATH"/' \
     | $PCP_AWK_PROG '
 $1 == "TIMESTAMP" && NF == 4	{ print "TIMESTAMP       0       OFFSET       OFFSET"; next }
 				{ print }' \
@@ -53,8 +66,10 @@ pmdajson_remove()
 {
     echo
     echo "=== remove json agent ==="
+    cd $PCP_PMDAS_DIR/json
     $sudo ./Remove >$tmp.out 2>&1
     _filter_pmda_remove <$tmp.out
+    cd ${orig_dir}
 }
 
 pmdajson_install()
@@ -77,6 +92,7 @@ pmdajson_install()
                                         if ($10 >= 0 && $10 <= 80) $10 = "Y"
                                       }
                                       { print }'
+    cd ${orig_dir}
 }
 
 _cleanup()
@@ -102,8 +118,8 @@ _cleanup()
 	if [ -n "$pmpred_disk_pid" ]; then
 	    kill -TERM $pmpred_disk_pid
 	fi
-	if [ -n "$disk_load_pid" ]; then
-	    echo killing $disk_load_pid
+	if [ -e ${tmp}/dd.pid ]; then
+	    disk_load_pid=`cat ${tmp}/dd.pid`
 	    $sudo kill -TERM $disk_load_pid
 	fi
 	if [ -n "$cpu_load_pid" ]; then
@@ -148,7 +164,7 @@ fi
 cat > ${tmp}/config.json << EOF
 {
     "directory_list" : [
-	"${tmp}"
+	"${jsondata}"
     ]
 }
 EOF
@@ -158,18 +174,23 @@ $sudo cp ${tmp}/config.json ${pmda_config}
 # real QA test starts here
 
 # Start pmpredicate to find hot disk with disk.dev.avactive.
-pmpredicate -t 1 -r 1 -j hot_disk -f disk.dev.avactive -m disk.dev.avactive -m disk.dev.aveq  -m disk.dev.total_rawactive -m disk.dev.blktotal -m disk.dev.total_bytes -d ${tmp}/${seq}disk &
+pmpredicate -t 1 -r 1 -j hot_disk -f disk.dev.avactive -m disk.dev.avactive -m disk.dev.aveq  -m disk.dev.total_rawactive -m disk.dev.blktotal -m disk.dev.total_bytes -d ${jsondata}/${seq}disk &
 pmpred_disk_pid=$!
 
 # Start pmpredicate to find hot processor running application code.
-pmpredicate -t 1 -r 1 -j hot_cpu -f kernel.percpu.cpu.user -m kernel.percpu.cpu.user -m kernel.percpu.cpu.sys -d ${tmp}/${seq}cpu &
+pmpredicate -t 1 -r 1 -j hot_cpu -f kernel.percpu.cpu.user -m kernel.percpu.cpu.user -m kernel.percpu.cpu.sys -d ${jsondata}/${seq}cpu &
 pmpred_cpu_pid=$!
 
 # select a disk and start reading stuff to generate load on disk
 dev=/dev/`pmprobe -I disk.dev.read |awk -F \" '{print $2}'`
-($sudo dd if=$dev of=/dev/null) &
-disk_load_pid=$!
-echo $disk_load_pid
+disk_load_script=${tmp}/disk_load
+cat > ${disk_load_script} <<EOF
+#!/bin/sh
+dd if=$dev of=/dev/null &
+echo \$! > ${tmp}/dd.pid
+EOF
+chmod +x ${disk_load_script}
+$sudo "${disk_load_script}"
 
 # generate a load on a processor
 sh -c 'while :; do true; done' &
@@ -195,7 +216,7 @@ fi
 cat $tmp.info $tmp.err
 
 # start up pmlogger
-cat > $tmp.config << EOF
+cat > ${pmlogger_conf} << EOF
 mandatory on 1 sec {
 	json.hot_cpu.metrics.kernel_percpu_cpu_user
 	json.hot_cpu.metrics.kernel_percpu_cpu_sys
@@ -206,11 +227,12 @@ mandatory on 1 sec {
 }
 EOF
 
-pmlogger -c $tmp.config -l $tmp.log -s 3 $tmp &
-logger_pid=$!
+pmlogger -c ${pmlogger_conf} -l ${pmlogger_log} -s 10 ${pmlogger}
 
-_filter_pmlogger_log <$tmp.log
-pmdumplog -a $tmp | _filter_pmdumplog | _filter
+cd ${orig_dir}
+
+_filter_pmlogger_log < ${pmlogger_log}
+pmdumplog -dm ${pmlogger} | _filter
 
 # all done
 pmdajson_remove
