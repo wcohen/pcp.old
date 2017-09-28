@@ -388,6 +388,7 @@ main(int argc, char **argv)
 		mkdir_recurse(directory, 0755);
 		metadata_json_name = dir_plus_file(directory, metadata_json_name);
 		data_json_name = dir_plus_file(directory, data_json_name);
+		data_json_name_tmp = dir_plus_file(directory, data_json_name_tmp);
 	    } else {
 		fprintf(stderr, "--directory option can only used once\n");
 		opts.errors++;
