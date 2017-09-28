@@ -172,14 +172,20 @@ $sudo cp ${tmp}/config.json ${pmda_config}
 
 
 # real QA test starts here
+mkdir -p ${jsondata}
+pmdajson_install
 
 # Start pmpredicate to find hot disk with disk.dev.avactive.
 pmpredicate -t 1 -r 1 -j hot_disk -f disk.dev.avactive -m disk.dev.avactive -m disk.dev.aveq  -m disk.dev.total_rawactive -m disk.dev.blktotal -m disk.dev.total_bytes -d ${jsondata}/${seq}disk &
 pmpred_disk_pid=$!
 
+sleep 2
+
 # Start pmpredicate to find hot processor running application code.
 pmpredicate -t 1 -r 1 -j hot_cpu -f kernel.percpu.cpu.user -m kernel.percpu.cpu.user -m kernel.percpu.cpu.sys -d ${jsondata}/${seq}cpu &
 pmpred_cpu_pid=$!
+
+sleep 2
 
 # select a disk and start reading stuff to generate load on disk
 dev=/dev/`pmprobe -I disk.dev.read |awk -F \" '{print $2}'`
@@ -196,11 +202,8 @@ $sudo "${disk_load_script}"
 sh -c 'while :; do true; done' &
 cpu_load_pid=$!
 
-sleep 10
-pmdajson_install
-
-# there may be a race if the pmda has a bit of a slow start ... pause
-sleep 10
+# Wait to make sure there is some load and the metrics exist
+sleep 5
 
 # Check to see if the metrics are there.
 pminfo json
@@ -227,7 +230,7 @@ mandatory on 1 sec {
 }
 EOF
 
-pmlogger -c ${pmlogger_conf} -l ${pmlogger_log} -s 10 ${pmlogger}
+pmlogger -c ${pmlogger_conf} -l ${pmlogger_log} -s 2 ${pmlogger}
 
 cd ${orig_dir}
 
