@@ -17,9 +17,11 @@
 
 #include "pmapi.h"
 #include "impl.h"
+#include <unistd.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <libgen.h>
+#include <time.h>
 #include <sys/stat.h>
 
 #define MAX_METRICS 10
@@ -32,6 +34,7 @@
 #define PATH_SEPARATOR_STRING   "/"
 #endif
 
+static int backup=0;
 static char *directory = NULL;
 static char *json_prefix = "prefix";
 static char *metadata_json_name = "metadata.json";
@@ -47,6 +50,7 @@ pmLongOptions longopts[] = {
     PMAPI_GENERAL_OPTIONS,
     PMAPI_OPTIONS_HEADER("Reporting options"),
     { "pause", 0, 'P', 0, "pause between updates for archive replay" },
+    { "backup", 0, 'b', 0, "save backup copies of the data.json files for debugging purposes" },
     { "json_prefix", 1, 'j', "PREFIX", "JSON prefix for the filtered metrics (default \"prefix\")" },
     { "filter", 1, 'f', "PREDICATE", "predicate to filter ony" },
     { "rank", 1, 'r', "TOP", "limit results to <TOP> highest matches" },
@@ -57,7 +61,7 @@ pmLongOptions longopts[] = {
 
 pmOptions opts = {
     .flags = PM_OPTFLAG_STDOUT_TZ,
-    .short_options = PMAPI_OPTIONS "Pj:f:r:m:d:",
+    .short_options = PMAPI_OPTIONS "Pbj:f:r:m:d:",
     .long_options = longopts,
     .interval = {.tv_sec = 5, .tv_usec = 0}, /*Default: 5 second  between samples */
     .samples = -1, /* Default: No limit on the number of samples */
@@ -226,6 +230,27 @@ init_sample(void)
 }
 
 static void
+backup_file(void)
+{
+    time_t rawtime;
+    struct tm *loctime;
+    char *backup_name=malloc(strlen(data_json_name)+16);
+
+    /* create a new name for backup */
+    if(backup_name == NULL) {
+	printf("unable to allocate space for backup data.json file name\n");
+	exit(1);
+	return;
+    }
+    time(&rawtime);
+    loctime = localtime(&rawtime);
+    sprintf(backup_name, "%s-%02d:%02d:%02d", data_json_name, loctime->tm_hour,
+	    loctime->tm_min, loctime->tm_sec);
+    link(data_json_name, backup_name);
+    free(backup_name);
+}
+
+static void
 get_sample(void)
 {
     int			sts;
@@ -288,6 +313,10 @@ get_sample(void)
     fclose(data_fd);
 
     rename(data_json_name_tmp, data_json_name);
+
+    if (backup) {
+	backup_file();
+    }
 
     return;
 
@@ -357,6 +386,9 @@ main(int argc, char **argv)
 
     while ((c = pmGetOptions(argc, argv, &opts)) != EOF) {
 	switch (c) {
+	case 'b':
+	    backup++;
+	    break;
 	case 'P':
 	    pauseFlag++;
 	    break;
