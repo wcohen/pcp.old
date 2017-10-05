@@ -71,6 +71,7 @@ pmOptions opts = {
 static pmFG		pmfg;
 enum { indom_maxnum = 1024 };
 static int		predicate_inst[indom_maxnum];
+static char		*predicate_inst_name[indom_maxnum];
 static pmAtomValue 	predicate[indom_maxnum];
 static unsigned		num_predicate;
 static int		metric_inst[MAX_METRICS][indom_maxnum];
@@ -191,7 +192,8 @@ init_sample(void)
 	/* FIXME be more flexible on the units/conversions */
 	if ((sts = pmExtendFetchGroup_indom(pmfg,
 					    predicate_name, NULL,
-					    predicate_inst, NULL, predicate, PM_TYPE_DOUBLE,
+					    predicate_inst, predicate_inst_name,
+					    predicate, PM_TYPE_DOUBLE,
 					    NULL, indom_maxnum, &num_predicate, NULL)) < 0) {
 	    fprintf(stderr, "%s: Failed %s ExtendFetchGroup: %s\n",
 		    pmProgname, predicate_name, pmErrStr(sts));
@@ -292,7 +294,7 @@ get_sample(void)
 	for(i=0; i<MAX_METRICS;++i) p[i] = 0;
 	for (j=0; j<num_hotproc; j++){
 	    /* FIXME write out instance info */
-	    fprintf(data_fd, "\t{\n\t\t\"inst\": \"%d\"", hotproc[j].inst);
+	    fprintf(data_fd, "\t{\n\t\t\"inst\": \"%s\"", predicate_inst_name[j]);
 	    for (i=0; metric_name[i] && i<metric_count; ++i){
 		/* Scan for matching instance number, They could be in different positions */
 		while (p[i]<num_metric[i] && metric_inst[i][p[i]]<hotproc[j].inst)
