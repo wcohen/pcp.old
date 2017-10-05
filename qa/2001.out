@@ -60,23 +60,23 @@ PMID: 137.2.1 (json.hot_disk.metrics.disk_dev_aveq)
     Data Type: 64-bit int  InDom: 137.4 0x22400004
     Semantics: counter  Units: millisec
 
-TIMESTAMP  2.3.3 (pmcd.pmlogger.host): inst [INTEGER or "INTEGER"] value "HOST"
-              2.3.0 (pmcd.pmlogger.port): inst [INTEGER or "INTEGER"] value PORT
-              2.3.2 (pmcd.pmlogger.archive): inst [INTEGER or "INTEGER"] value "PATH"
+TIMESTAMP  2.3.3 (pmcd.pmlogger.host): inst [INTEGER or STRING] value "HOST"
+              2.3.0 (pmcd.pmlogger.port): inst [INTEGER or STRING] value PORT
+              2.3.2 (pmcd.pmlogger.archive): inst [INTEGER or STRING] value "PATH"
 
-TIMESTAMP  137.2.4 (json.hot_disk.metrics.disk_dev_total_bytes): inst [INTEGER or "INTEGER"] value INTEGER
-              137.2.3 (json.hot_disk.metrics.disk_dev_blktotal): inst [INTEGER or "INTEGER"] value INTEGER
-              137.2.2 (json.hot_disk.metrics.disk_dev_total_rawactive): inst [INTEGER or "INTEGER"] value INTEGER
-              137.2.1 (json.hot_disk.metrics.disk_dev_aveq): inst [INTEGER or "INTEGER"] value INTEGER
-              137.1.1 (json.hot_cpu.metrics.kernel_percpu_cpu_sys): inst [INTEGER or "INTEGER"] value INTEGER
-              137.1.0 (json.hot_cpu.metrics.kernel_percpu_cpu_user): inst [INTEGER or "INTEGER"] value INTEGER
+TIMESTAMP  137.2.4 (json.hot_disk.metrics.disk_dev_total_bytes): inst [INTEGER or STRING] value INTEGER
+              137.2.3 (json.hot_disk.metrics.disk_dev_blktotal): inst [INTEGER or STRING] value INTEGER
+              137.2.2 (json.hot_disk.metrics.disk_dev_total_rawactive): inst [INTEGER or STRING] value INTEGER
+              137.2.1 (json.hot_disk.metrics.disk_dev_aveq): inst [INTEGER or STRING] value INTEGER
+              137.1.1 (json.hot_cpu.metrics.kernel_percpu_cpu_sys): inst [INTEGER or STRING] value INTEGER
+              137.1.0 (json.hot_cpu.metrics.kernel_percpu_cpu_user): inst [INTEGER or STRING] value INTEGER
 
-TIMESTAMP  137.2.4 (json.hot_disk.metrics.disk_dev_total_bytes): inst [INTEGER or "INTEGER"] value INTEGER
-              137.2.3 (json.hot_disk.metrics.disk_dev_blktotal): inst [INTEGER or "INTEGER"] value INTEGER
-              137.2.2 (json.hot_disk.metrics.disk_dev_total_rawactive): inst [INTEGER or "INTEGER"] value INTEGER
-              137.2.1 (json.hot_disk.metrics.disk_dev_aveq): inst [INTEGER or "INTEGER"] value INTEGER
-              137.1.1 (json.hot_cpu.metrics.kernel_percpu_cpu_sys): inst [INTEGER or "INTEGER"] value INTEGER
-              137.1.0 (json.hot_cpu.metrics.kernel_percpu_cpu_user): inst [INTEGER or "INTEGER"] value INTEGER
+TIMESTAMP  137.2.4 (json.hot_disk.metrics.disk_dev_total_bytes): inst [INTEGER or STRING] value INTEGER
+              137.2.3 (json.hot_disk.metrics.disk_dev_blktotal): inst [INTEGER or STRING] value INTEGER
+              137.2.2 (json.hot_disk.metrics.disk_dev_total_rawactive): inst [INTEGER or STRING] value INTEGER
+              137.2.1 (json.hot_disk.metrics.disk_dev_aveq): inst [INTEGER or STRING] value INTEGER
+              137.1.1 (json.hot_cpu.metrics.kernel_percpu_cpu_sys): inst [INTEGER or STRING] value INTEGER
+              137.1.0 (json.hot_cpu.metrics.kernel_percpu_cpu_user): inst [INTEGER or STRING] value INTEGER
 
 === remove json agent ===
 Culling the Performance Metrics Name Space ...

@@ -46,7 +46,7 @@ _filter()
 	-e '/ending/d' \
 	-e '/^\[[0-9]* bytes]/d' \
 	-e '/inst /{
-s/inst \[[0-9]* or \"[0-9]*\"]/inst \[INTEGER or "INTEGER"]/
+s/inst \[[0-9]* or \"[^\"]*\"]/inst \[INTEGER or STRING]/
 }' \
 	-e '/value /{
 s/value [0-9][0-9]*/value INTEGER/
