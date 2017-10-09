@@ -13,14 +13,14 @@ Terminate PMDA if already installed ...
 [...install files, make output...]
 Updating the PMCD control file, and notifying PMCD ...
 Check json metrics have appeared ... 2 metrics and Y values
-json.hot_cpu.metrics.kernel_percpu_cpu_user
+json.debug
 json.hot_cpu.metrics.kernel_percpu_cpu_sys
-json.hot_disk.metrics.disk_dev_total_bytes
+json.hot_cpu.metrics.kernel_percpu_cpu_user
 json.hot_disk.metrics.disk_dev_avactive
 json.hot_disk.metrics.disk_dev_aveq
 json.hot_disk.metrics.disk_dev_blktotal
+json.hot_disk.metrics.disk_dev_total_bytes
 json.hot_disk.metrics.disk_dev_total_rawactive
-json.debug
 json.nsources
 Log for pmlogger on HOST started DATE
 

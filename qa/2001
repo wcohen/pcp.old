@@ -206,7 +206,8 @@ cpu_load_pid=$!
 sleep 5
 
 # Check to see if the metrics are there.
-pminfo json
+# sort to ensure consistent order of metrics
+pminfo json |sort
 
 # pmcd should have been started by the Install process - check
 if pminfo -v json > $tmp.info 2> $tmp.err
