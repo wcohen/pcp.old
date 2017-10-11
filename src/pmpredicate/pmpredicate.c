@@ -56,12 +56,13 @@ pmLongOptions longopts[] = {
     { "rank", 1, 'r', "TOP", "limit results to <TOP> highest matches" },
     { "metric", 1, 'm', "METRIC", "metrics to collect" },
     { "directory", 1, 'd', "DIR", "Where to write metadata.json and data.json files" },
+    { "username",	1, 'U', "USER",	"run the command using the named user account" },
     PMAPI_OPTIONS_END
 };
 
 pmOptions opts = {
     .flags = PM_OPTFLAG_STDOUT_TZ,
-    .short_options = PMAPI_OPTIONS "Pbj:f:r:m:d:",
+    .short_options = PMAPI_OPTIONS "Pbj:f:r:m:d:U:",
     .long_options = longopts,
     .interval = {.tv_sec = 5, .tv_usec = 0}, /*Default: 5 second  between samples */
     .samples = -1, /* Default: No limit on the number of samples */
@@ -427,6 +428,9 @@ main(int argc, char **argv)
 		fprintf(stderr, "--directory option can only used once\n");
 		opts.errors++;
 	    }
+	    break;
+	case 'U':
+	    __pmSetProcessIdentity(opts.optarg);
 	    break;
 	default:
 	    opts.errors++;
