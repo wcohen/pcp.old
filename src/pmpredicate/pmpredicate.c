@@ -41,7 +41,7 @@ static char *metadata_json_name = "metadata.json";
 static char *data_json_name = "data.json";
 static char *data_json_name_tmp = "data.json.tmp";
 static char *predicate_name = NULL;
-static int metric_count=0;
+static unsigned int metric_count = 0;
 static char *metric_name[MAX_METRICS];
 static char *metric_mangled_name[MAX_METRICS];
 static int top;
@@ -436,6 +436,11 @@ main(int argc, char **argv)
 	    opts.errors++;
 	    break;
 	}
+    }
+
+    if (metric_count == 0) {
+	pmprintf("%s: need to select metrics\n", pmProgname);
+	opts.errors++;
     }
 
     if (pauseFlag && opts.context != PM_CONTEXT_ARCHIVE) {
