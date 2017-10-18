@@ -72,6 +72,8 @@ pmOptions opts = {
 static pmFG		pmfg;
 enum { indom_maxnum = 1024 };
 static int		predicate_inst[indom_maxnum];
+static unsigned int	predicate_pmid;
+static pmDesc		predicate_desc;
 static char		*predicate_inst_name[indom_maxnum];
 static pmAtomValue 	predicate[indom_maxnum];
 static unsigned		num_predicate;
@@ -187,9 +189,20 @@ init_sample(void)
 {
     int			sts;
     int i;
+    int errors = 0;
 
     /* set up predicate fetch if there is a predicate */
     if (predicate_name) {
+	if ((sts = pmLookupName(1, &predicate_name, &predicate_pmid) < 0)) {
+	    fprintf(stderr, "%s: Failed to find pmid for the predicate: %s\n",
+		    pmProgname, pmErrStr(sts));
+	    exit(1);
+	}
+	if ((sts = pmLookupDesc(predicate_pmid, &predicate_desc))) {
+	    fprintf(stderr, "%s: Failed to find pmDesc for %s\n",
+		    pmProgname, pmErrStr(sts));
+	    exit(1);
+	}
 	/* FIXME be more flexible on the units/conversions */
 	if ((sts = pmExtendFetchGroup_indom(pmfg,
 					    predicate_name, NULL,
@@ -214,13 +227,19 @@ init_sample(void)
 		    pmProgname, pmErrStr(sts));
 	    /* some metrics are missing descriptions so just warn about it */
 	}
+	/* should have the same instance domain */
+	if (predicate_name && predicate_desc.indom != metric_desc[i].indom) {
+	    fprintf(stderr, "%s: predicate %s and metric %s have different instance domains\n",
+		    pmProgname, predicate_name, metric_name[i]);
+	    errors++;
+	}
 	if ((sts = pmExtendFetchGroup_indom(pmfg,
 				metric_name[i], "instant",
 				metric_inst[i], NULL, metric[i], metric_desc[i].type,
 				NULL, indom_maxnum, &num_metric[i], NULL)) < 0) {
 	    fprintf(stderr, "%s: Failed %s ExtendFetchGroup: %s\n",
 		    pmProgname, metric_name[i], pmErrStr(sts));
-	    exit(1);
+	    errors++;
 	}
 	if ((sts = pmLookupText(metric_pmid[i], PM_TEXT_ONELINE, &metric_desc_text[i]))) {
 	    fprintf(stderr, "%s: Failed to get Text description for %s\n",
@@ -228,6 +247,9 @@ init_sample(void)
 	    /* some metrics are missing descriptions so just warn about it */
 	}
     }
+
+    if (errors)
+	exit(1);
 
     write_metadata();
 }
