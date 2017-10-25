@@ -35,6 +35,7 @@
 #endif
 
 static int backup=0;
+static int clean_default=0;
 static char *directory = NULL;
 static char *json_prefix = "prefix";
 static char *metadata_json_name = "metadata.json";
@@ -398,6 +399,30 @@ static int mkdir_recurse(char *path, mode_t mode)
     return retval;
 }
 
+/* Avoid cluttering up default location */
+static void clean_files()
+{
+    if (clean_default) {
+	remove(metadata_json_name);
+	remove(data_json_name);
+	remove(data_json_name_tmp);
+	remove(directory);
+    }
+}
+
+static void sig_handler(int signo)
+{
+    if (signo == SIGINT)
+	clean_files();
+    exit(0);
+}
+
+static void setup_cleanup()
+{
+    if (signal(SIGINT, sig_handler) == SIG_ERR)
+	fprintf(stderr, "unable to setup handling of SIGING\n");
+}
+
 int
 main(int argc, char **argv)
 {
@@ -442,10 +467,6 @@ main(int argc, char **argv)
 	case 'd':
 	    if (directory == NULL) {
 		directory = opts.optarg;
-		mkdir_recurse(directory, 0755);
-		metadata_json_name = dir_plus_file(directory, metadata_json_name);
-		data_json_name = dir_plus_file(directory, data_json_name);
-		data_json_name_tmp = dir_plus_file(directory, data_json_name_tmp);
 	    } else {
 		fprintf(stderr, "--directory option can only used once\n");
 		opts.errors++;
@@ -459,6 +480,22 @@ main(int argc, char **argv)
 	    break;
 	}
     }
+
+    /* By default put in PCP_TMP_DIR/json/pid */
+    if (directory == NULL) {
+	clean_default = 1;
+	char *json_dir = dir_plus_file(pmGetConfig("PCP_TMP_DIR"), "json");
+	char pid_str[32];
+	snprintf(pid_str, 32, "%d", getpid());
+	directory = dir_plus_file(json_dir, pid_str);
+	free(json_dir);
+    }
+    mkdir_recurse(directory, 0755);
+    metadata_json_name = dir_plus_file(directory, metadata_json_name);
+    data_json_name = dir_plus_file(directory, data_json_name);
+    data_json_name_tmp = dir_plus_file(directory, data_json_name_tmp);
+
+    setup_cleanup();
 
     if (metric_count == 0) {
 	pmprintf("%s: need to select metrics\n", pmProgname);
