@@ -88,6 +88,7 @@ static char		*metric_desc_text[MAX_METRICS];
 typedef struct {
     int inst;
     double predicate;
+    char *inst_name;
 } hotproc_t;
 
 static hotproc_t	hotproc[indom_maxnum];
@@ -300,6 +301,7 @@ get_sample(void)
 	if (predicate[i].d>0) {
 	    hotproc[num_hotproc].inst = predicate_inst[i];
 	    hotproc[num_hotproc].predicate = predicate[i].d;
+	    hotproc[num_hotproc].inst_name = predicate_inst_name[i];
 	    ++num_hotproc;
 	}
     }
@@ -318,7 +320,7 @@ get_sample(void)
 	for(i=0; i<MAX_METRICS;++i) p[i] = 0;
 	for (j=0; j<num_hotproc; j++){
 	    /* FIXME write out instance info */
-	    fprintf(data_fd, "\t{\n\t\t\"inst\": \"%s\"", predicate_inst_name[j]);
+	    fprintf(data_fd, "\t{\n\t\t\"inst\": \"%s\"", hotproc[j].inst_name);
 	    for (i=0; metric_name[i] && i<metric_count; ++i){
 		/* Scan for matching instance number, They could be in different positions */
 		while (p[i]<num_metric[i] && metric_inst[i][p[i]]<hotproc[j].inst)
