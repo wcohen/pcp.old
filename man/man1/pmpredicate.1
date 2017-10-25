@@ -135,9 +135,12 @@ There must be at least one metric specified.
 .TP
 .TP
 \f3\-d\f1 \f2directory\f1
-By default the pmpredicate program writes the JSON files in the
-directory the program is started in.  A different directory to write
-the results can be specified with this option.
+By default
+.B pmpredicate
+creates a directory with the PID number in 
+.IR $PCP_TMP_DIR/json
+and writes the JSON files in the created directory.
+A different directory to write the results can be specified with this option.
 .PP
 The output from
 .B pmpredicate
