@@ -48,22 +48,24 @@ static char *metric_mangled_name[MAX_METRICS];
 static int top;
 
 pmLongOptions longopts[] = {
-    PMAPI_GENERAL_OPTIONS,
-    PMAPI_OPTIONS_HEADER("Reporting options"),
-    { "pause", 0, 'P', 0, "pause between updates for archive replay" },
-    { "backup", 0, 'b', 0, "save backup copies of the data.json files for debugging purposes" },
+    PMAPI_OPTIONS_HEADER("General options"),
+    PMOPT_HELP,
+    PMOPT_INTERVAL,
     { "json_prefix", 1, 'j', "PREFIX", "JSON prefix for the filtered metrics (default \"prefix\")" },
     { "filter", 1, 'f', "PREDICATE", "predicate to filter ony" },
     { "rank", 1, 'r', "TOP", "limit results to <TOP> highest matches" },
     { "metric", 1, 'm', "METRIC", "metrics to collect" },
     { "directory", 1, 'd', "DIR", "Where to write metadata.json and data.json files" },
     { "username",	1, 'U', "USER",	"run the command using the named user account" },
+    PMOPT_SAMPLES,
+    PMAPI_OPTIONS_HEADER("Debugging options"),
+    { "backup", 0, 'b', 0, "save backup copies of the data.json files for debugging purposes" },
     PMAPI_OPTIONS_END
 };
 
 pmOptions opts = {
     .flags = PM_OPTFLAG_STDOUT_TZ,
-    .short_options = PMAPI_OPTIONS "Pbj:f:r:m:d:U:",
+    .short_options = "?t:j:f:r:m:d:U:s:b",
     .long_options = longopts,
     .interval = {.tv_sec = 5, .tv_usec = 0}, /*Default: 5 second  between samples */
     .samples = -1, /* Default: No limit on the number of samples */
@@ -431,7 +433,6 @@ main(int argc, char **argv)
     int			c;
     int			sts;
     int			forever;
-    int			pauseFlag = 0;
     char		*source;
 
     setlinebuf(stdout);
@@ -440,9 +441,6 @@ main(int argc, char **argv)
 	switch (c) {
 	case 'b':
 	    backup++;
-	    break;
-	case 'P':
-	    pauseFlag++;
 	    break;
 	case 'j':
 	    json_prefix = opts.optarg;
@@ -499,13 +497,13 @@ main(int argc, char **argv)
 
     setup_cleanup();
 
-    if (metric_count == 0) {
-	pmprintf("%s: need to select metrics\n", pmGetProgname());
+    if (predicate_name == NULL) {
+	pmprintf("%s: need a filtering predicate\n", pmGetProgname());
 	opts.errors++;
     }
 
-    if (pauseFlag && opts.context != PM_CONTEXT_ARCHIVE) {
-	pmprintf("%s: pause can only be used with archives\n", pmGetProgname());
+    if (metric_count == 0) {
+	pmprintf("%s: need to select metrics\n", pmGetProgname());
 	opts.errors++;
     }
 
@@ -557,8 +555,7 @@ main(int argc, char **argv)
     get_sample();
 
     while (forever || opts.samples-- > 0) {
-	if (opts.context != PM_CONTEXT_ARCHIVE || pauseFlag)
-	    __pmtimevalSleep(opts.interval);
+	__pmtimevalSleep(opts.interval);
 	get_sample();
     }
     exit(0);

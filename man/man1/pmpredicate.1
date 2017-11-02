@@ -21,20 +21,16 @@
 .\" arguments use .I or \f2
 .SH SYNOPSIS
 \f3pmpredicate\f1
-[\f3\-a\f1 \f2archive\f1]
-[\f3\-h\f1 \f2host\f1]
-[\f3\-n\f1 \f2pmnsfile\f1]
-[\f3\-P\f1]
-[\f3\-S\f1 \f2numsec\f1]
-[\f3\-s\f1 \f2samples\f1]
 [\f3\-t\f1 \f2interval\f1]
-[\f3\-Z\f1 \f2timezone\f1]
-[\f3\-z\f1]
-[\f3\-j\f1 \f2json_prefixe\f1]
-[\f3\-f\f1 \f2predicate\f1]
+[\f3\-j\f1 \f2json_prefix\f1]
+\f3\-f\f1 \f2predicate\f1
 [\f3\-r\f1 \f2rank\f1]
 [\f3\-m\f1 \f2metric\f1]
 [\f3\-d\f1 \f2directory\f1]
+[\f3\-u\f1 \f2user\f1]
+[\f3\-s\f1 \f2samples\f1]
+[\f3\-b\f1]
+[\f3\-?\f1]
 .SH DESCRIPTION
 .B pmpredicate
 is a simple client that reads a set of metrics which it filters
@@ -44,62 +40,7 @@ optionally to some maximum number of instances with the highest
 predicate values.  The results are stored JSON files useable by
 .BR PMDADJSON(1) .
 .PP
-Normally
-.B pmpredicate
-operates on the distributed Performance Metrics Name Space (PMNS),
-however if the
-.B \-n
-option is specified an alternative local PMNS is loaded from the file
-.IR pmnsfile .
-.PP
-Unless directed to another host by the
-.B \-h
-option, or to an archive by the
-.B \-a
-option,
-.B pmpredicate
-will contact the Performance Metrics Collector Daemon (PMCD)
-on the local host to obtain the required information.
-The argument to
-.B \-a
-is a comma-separated list of names, each
-of which may be the base name of an archive or the name of a directory containing
-one or more archives.
-The
-.B \-a
-and
-.B \-h
-options are mutually exclusive.
-.PP
 Other options control the specific information to be reported.
-.TP
-\f3\-P\f1
-The default behavior for replaying a set of archives, is to replay at
-full speed.  The
-.B \-P
-option may be used in conjunction with a set of archives, to request that
-the prevailing real-time delay be applied between samples (see
-.BR \-t )
-to effect a pause.
-.TP
-\f3\-S\f1 \f2numsec\f1
-The
-.B \-S
-option may be used in conjunction with a set of archives to request that
-data collections start at the time
-.I numsec
-seconds from the start of the set of archives.
-.TP
-\f3\-s\f1 \f2samples\f1
-The argument
-.I samples
-defines the number of samples to be retrieved and reported.
-If samples is 0 or
-.B \-s
-is not specified,
-.B pmpredicate
-will sample and report continuously (in real time mode)
-or until the end of the set of PCP archives (in archive mode).
 .TP
 \f3\-t\f1 \f2interval\f1
 The default update \f2interval\f1 may be set to something other than the
@@ -133,7 +74,6 @@ values.
 Each metric to filter with pmpredicate is specified with this option.
 There must be at least one metric specified.
 .TP
-.TP
 \f3\-d\f1 \f2directory\f1
 By default
 .B pmpredicate
@@ -141,6 +81,28 @@ creates a directory with the PID number in
 .IR $PCP_TMP_DIR/json
 and writes the JSON files in the created directory.
 A different directory to write the results can be specified with this option.
+.TP
+\f3\-s\f1 \f2samples\f1
+The argument
+.I samples
+defines the number of samples to be collected before
+the
+.B pmpredicate
+exits.
+If samples is 0 or
+.B \-s
+is not specified,
+.B pmpredicate
+will sample and report continuously.
+.TP
+\f3\-b\f1
+For diagnostic purposes the different data.json files can be saved to help debug issues with
+.B pmpredicate.
+.TP
+\f3\-?\f1
+Show
+.B pmpredicate
+invocation help and exit.
 .PP
 The output from
 .B pmpredicate
