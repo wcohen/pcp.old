@@ -24,14 +24,14 @@ static char *reportexit(int status)
 	return buf;
     if (WIFEXITED(status)) {
 	if (WIFSIGNALED(status))
-	    snprintf(buf, sizeof(buf), " exit %d, signal %d", WEXITSTATUS(status), WTERMSIG(status));
+	    pmsprintf(buf, sizeof(buf), " exit %d, signal %d", WEXITSTATUS(status), WTERMSIG(status));
 
 	else
-	    snprintf(buf, sizeof(buf), " exit %d", WEXITSTATUS(status));
+	    pmsprintf(buf, sizeof(buf), " exit %d", WEXITSTATUS(status));
     }
     else {
 	if (WIFSIGNALED(status))
-	    snprintf(buf, sizeof(buf), " signal %d", WTERMSIG(status));
+	    pmsprintf(buf, sizeof(buf), " signal %d", WTERMSIG(status));
     }
     return buf;
 }
@@ -49,20 +49,18 @@ main(int argc, char **argv)
     extern int		errno;
 
     /* trim cmd name of leading directory components */
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "D:?")) != EOF) {
 	switch (c) {
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case '?':
@@ -81,8 +79,8 @@ main(int argc, char **argv)
 "Usage: %s [options] folio creator replay host [...]\n\
 \n\
 Options:\n\
-  -D flags    set debug flags\n",
-                pmProgname);
+  -D debugspec    set PCP debugging options\n",
+                pmGetProgname());
         exit(1);
     }
 

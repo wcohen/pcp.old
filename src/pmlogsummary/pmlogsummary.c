@@ -146,7 +146,7 @@ pmiderr(pmID pmid, const char *msg, ...)
 	char	**names;
 
 	numnames = pmNameAll(pmid, &names);
-	fprintf(stderr, "%s: ", pmProgname);
+	fprintf(stderr, "%s: ", pmGetProgname());
 	__pmPrintMetricNames(stderr, numnames, names, " or ");
 	fprintf(stderr, "(%s) - ", pmIDStr(pmid));
 	va_start(arg, msg);
@@ -188,7 +188,7 @@ printlabel(void)
 
     if ((sts = pmGetArchiveLabel(&label)) < 0) {
 	fprintf(stderr, "%s: Cannot get archive label record: %s\n",
-		pmProgname, pmErrStr(sts));
+		pmGetProgname(), pmErrStr(sts));
 	exit(1);
     }
 
@@ -259,7 +259,7 @@ printsummary(const char *name)
     /* cast away const, pmLookupName should never modify name */
     if ((sts = pmLookupName(1, (char **)&name, &pmid)) < 0) {
 	fprintf(stderr, "%s: failed to lookup metric name (pmid=%s): %s\n",
-		pmProgname, name, pmErrStr(sts));
+		pmGetProgname(), name, pmErrStr(sts));
 	return;
     }
 
@@ -414,7 +414,7 @@ newHashInst(pmValue *vp,
 
     if ((sts = pmExtractValue(valfmt, vp, avedata->desc.type, &av, PM_TYPE_DOUBLE)) < 0) {
 	pmiderr(avedata->desc.pmid, "failed to extract value: %s\n", pmErrStr(sts));
-	fprintf(stderr, "%s: possibly corrupt archive?\n", pmProgname);
+	fprintf(stderr, "%s: possibly corrupt archive?\n", pmGetProgname());
 	exit(1);
     }
     size = (pos+1) * sizeof(instData *);
@@ -462,8 +462,7 @@ newHashInst(pmValue *vp,
     instdata->firsttime = *timestamp;
     instdata->lasttime = *timestamp;
     avedata->listsize++;
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL0) {
+    if (pmDebugOptions.appl0) {
 	int	numnames;
 	char	**names;
 	numnames = pmNameAll(avedata->desc.pmid, &names);
@@ -472,7 +471,6 @@ newHashInst(pmValue *vp,
 		instdata->min, instdata->max);
 	if (numnames > 0) free(names);
     }
-#endif
 }
 
 static void
@@ -528,8 +526,7 @@ findbin(pmID pmid, double val, double min, double max)
 	bound = next;
     }
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL0) {
+    if (pmDebugOptions.appl0) {
 	int	numnames;
 	char	**names;
 	numnames = pmNameAll(pmid, &names);
@@ -540,7 +537,6 @@ findbin(pmID pmid, double val, double min, double max)
 	if (numnames > 0) free(names);
 	if (index >= nbins) exit(1);
     }
-#endif
     return index;
 }
 
@@ -558,12 +554,10 @@ markrecord(pmResult *result)
     double		val;
     struct timeval	timediff;
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL0) {
+    if (pmDebugOptions.appl0) {
 	printstamp(&result->timestamp, '\n');
 	printf(" - mark record\n\n");
     }
-#endif
     for (i = 0; i < hashlist.hsize; i++) {
 	for (hptr = hashlist.hash[i]; hptr != NULL; hptr = hptr->next) {
 	    avedata = (aveData *)hptr->data;
@@ -759,7 +753,7 @@ calcaverage(pmResult *result)
 	    avedata = (aveData*) malloc(sizeof(aveData));
 	    newHashItem(vsp, &desc, avedata, &result->timestamp);
 	    if (__pmHashAdd(avedata->desc.pmid, (void*)avedata, &hashlist) < 0) {
-		pmiderr(avedata->desc.pmid, "failed %s hash table insertion\n", pmProgname);
+		pmiderr(avedata->desc.pmid, "failed %s hash table insertion\n", pmGetProgname());
 		/* free memory allocated above on insert failure */
 		for (j = 0; j < vsp->numval; j++)
 		    if (avedata->instlist[j]) free(avedata->instlist[j]);
@@ -819,8 +813,7 @@ calcaverage(pmResult *result)
 			val = av.d;
 		    else
 			val = unwrap(av.d, instdata->lastval, avedata->desc.type);
-#ifdef PCP_DEBUG
-		    if (pmDebug & DBG_TRACE_APPL0) {
+		    if (pmDebugOptions.appl0) {
 			int	numnames;
 			char	**names;
 			numnames = pmNameAll(avedata->desc.pmid, &names);
@@ -829,12 +822,10 @@ calcaverage(pmResult *result)
 				val, instdata->count+1);
 			if (numnames > 0) free(names);
 		    }
-#endif
 		    if (instdata->marked || val < instdata->lastval) {
 			/* either previous record was a "mark", or this is not */
 			/* the first one, and counter not monotonic increasing */
-#ifdef PCP_DEBUG
-			if (pmDebug & DBG_TRACE_APPL1) {
+			if (pmDebugOptions.appl1) {
 			    int	numnames;
 			    char	**names;
 			    numnames = pmNameAll(avedata->desc.pmid, &names);
@@ -842,7 +833,6 @@ calcaverage(pmResult *result)
 			    fprintf(stderr, " counter wrapped or <mark>\n");
 			    if (numnames > 0) free(names);
 			}
-#endif
 			wrap = 1;
 			instdata->marked = 0;
 			tadd(&instdata->firsttime, &result->timestamp);
@@ -864,8 +854,7 @@ calcaverage(pmResult *result)
 			    instdata->sum = (val - instdata->lastval);
 			}
 			else {
-#ifdef PCP_DEBUG
-			    if (pmDebug & DBG_TRACE_APPL2) {
+			    if (pmDebugOptions.appl2) {
 				int	numnames;
 				char	**names;
 				char	*istr = NULL;
@@ -893,7 +882,6 @@ calcaverage(pmResult *result)
 				if (numnames > 0) free(names);
 				if (istr) free(istr);
 			    }
-#endif
 			    if (rate < instdata->min) {
 				instdata->min = rate;
 				instdata->mintime = result->timestamp;
@@ -929,8 +917,7 @@ calcaverage(pmResult *result)
 		}
 		if (!wrap) {
 		    instdata->count++;
-#ifdef PCP_DEBUG
-		    if ((pmDebug & DBG_TRACE_APPL1) &&
+		    if (pmDebugOptions.appl1 &&
 			(avedata->desc.sem != PM_SEM_COUNTER || instdata->count > 0)) {
 			int	numnames;
 			char	**names;
@@ -966,7 +953,6 @@ calcaverage(pmResult *result)
 			}
 			if (numnames > 0) free(names);
 		    }
-#endif
 		}
 		instdata->lastval = av.d;
 		instdata->lasttime = result->timestamp;
@@ -1012,7 +998,7 @@ main(int argc, char *argv[])
 	    sts = (int)strtol(opts.optarg, &endnum, 10);
 	    if (*endnum != '\0' || sts < 0) {
 		pmprintf("%s: -B requires positive numeric argument\n",
-			pmProgname);
+			pmGetProgname());
 		opts.errors++;
 	    }
 	    else
@@ -1058,7 +1044,7 @@ main(int argc, char *argv[])
 	case 'p':	/* number of digits after decimal point */
 	    precision = (unsigned int)strtol(opts.optarg, &endnum, 10);
 	    if (*endnum != '\0') {
-		pmprintf("%s: -p requires numeric argument\n", pmProgname);
+		pmprintf("%s: -p requires numeric argument\n", pmGetProgname());
 		opts.errors++;
 	    }
 	    break;
@@ -1107,7 +1093,7 @@ main(int argc, char *argv[])
 
     if ((sts = c = pmNewContext(PM_CONTEXT_ARCHIVE, archive)) < 0) {
 	fprintf(stderr, "%s: Cannot open archive \"%s\": %s\n",
-		pmProgname, archive, pmErrStr(sts));
+		pmGetProgname(), archive, pmErrStr(sts));
 	exit(1);
     }
 
@@ -1117,7 +1103,7 @@ main(int argc, char *argv[])
     }
     
     if ((sts = pmSetMode(PM_MODE_FORW, &opts.start, 0)) < 0) {
-	fprintf(stderr, "%s: pmSetMode failed: %s\n", pmProgname, pmErrStr(sts));
+	fprintf(stderr, "%s: pmSetMode failed: %s\n", pmGetProgname(), pmErrStr(sts));
 	exit(1);
     }
 
@@ -1154,13 +1140,11 @@ main(int argc, char *argv[])
 	}
 
 	if (trip == 0 && nbins > 0) {	/* distribute values into bins */
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL0)
+	    if (pmDebugOptions.appl0)
 		fprintf(stderr, "resetting for second iteration\n");
-#endif
 	    if ((sts = pmSetMode(PM_MODE_FORW, &opts.start, 0)) < 0) {
 		fprintf(stderr, "%s: pmSetMode reset failed: %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
 		exit(1);
 	    }
 	}
@@ -1169,7 +1153,7 @@ main(int argc, char *argv[])
     }
 
     if (sts != PM_ERR_EOL) {
-	fprintf(stderr, "%s: fetch failed: %s\n", pmProgname, pmErrStr(sts));
+	fprintf(stderr, "%s: fetch failed: %s\n", pmGetProgname(), pmErrStr(sts));
 	exitstatus = 1;
     }
 
@@ -1178,7 +1162,7 @@ main(int argc, char *argv[])
 
     if (opts.optind >= argc) {	/* print all results */
 	if ((sts = pmTraversePMNS("", printsummary)) < 0) {
-	    fprintf(stderr, "%s: PMNS traversal failed: %s\n", pmProgname, pmErrStr(sts));
+	    fprintf(stderr, "%s: PMNS traversal failed: %s\n", pmGetProgname(), pmErrStr(sts));
 	    exit(1);
 	}
     }
@@ -1193,7 +1177,7 @@ main(int argc, char *argv[])
 	    }
 	    if ((sts = pmTraversePMNS(msp->metric, printsummary)) < 0)
 		fprintf(stderr, "%s: PMNS traversal failed for %s: %s\n",
-			pmProgname, msp->metric, pmErrStr(sts));
+			pmGetProgname(), msp->metric, pmErrStr(sts));
 	    pmFreeMetricSpec(msp);
 	}
     }

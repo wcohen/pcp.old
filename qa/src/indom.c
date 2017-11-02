@@ -105,14 +105,14 @@ main(int argc, char **argv)
     double	delta = 1.0;
     char	*endnum;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "a:c:D:fh:i:l:n:s:t:VzZ:?")) != EOF) {
 	switch (c) {
 
 	case 'a':	/* archive name */
 	    if (type != 0) {
-		fprintf(stderr, "%s: at most one of -a and/or -h allowed\n", pmProgname);
+		fprintf(stderr, "%s: at most one of -a and/or -h allowed\n", pmGetProgname());
 		errflag++;
 	    }
 	    type = PM_CONTEXT_ARCHIVE;
@@ -121,25 +121,21 @@ main(int argc, char **argv)
 
 	case 'c':	/* configfile */
 	    if (configfile != (char *)0) {
-		fprintf(stderr, "%s: at most one -c option allowed\n", pmProgname);
+		fprintf(stderr, "%s: at most one -c option allowed\n", pmGetProgname());
 		errflag++;
 	    }
 	    configfile = optarg;
 	    break;	
 
-#ifdef PCP_DEBUG
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
-#endif
 
 	case 'f':	/* force */
 	    force++; 
@@ -147,7 +143,7 @@ main(int argc, char **argv)
 
 	case 'h':	/* contact PMCD on this hostname */
 	    if (type != 0) {
-		fprintf(stderr, "%s: at most one of -a and/or -h allowed\n", pmProgname);
+		fprintf(stderr, "%s: at most one of -a and/or -h allowed\n", pmGetProgname());
 		errflag++;
 	    }
 	    host = optarg;
@@ -157,7 +153,7 @@ main(int argc, char **argv)
 	case 'i':	/* instance */
 	    inst = (int)strtol(optarg, &endnum, 10);
 	    if (*endnum != '\0' || inst < 0) {
-		fprintf(stderr, "%s: -i requires numeric argument\n", pmProgname);
+		fprintf(stderr, "%s: -i requires numeric argument\n", pmGetProgname());
 		errflag++;
 	    }
 	    break;
@@ -173,7 +169,7 @@ main(int argc, char **argv)
 	case 's':	/* sample count */
 	    samples = (int)strtol(optarg, &endnum, 10);
 	    if (*endnum != '\0' || samples < 0) {
-		fprintf(stderr, "%s: -s requires numeric argument\n", pmProgname);
+		fprintf(stderr, "%s: -s requires numeric argument\n", pmGetProgname());
 		errflag++;
 	    }
 	    break;
@@ -181,7 +177,7 @@ main(int argc, char **argv)
 	case 't':	/* delta seconds (double) */
 	    delta = strtod(optarg, &endnum);
 	    if (*endnum != '\0' || delta <= 0.0) {
-		fprintf(stderr, "%s: -t requires floating point argument\n", pmProgname);
+		fprintf(stderr, "%s: -t requires floating point argument\n", pmGetProgname());
 		errflag++;
 	    }
 	    break;
@@ -192,7 +188,7 @@ main(int argc, char **argv)
 
 	case 'z':	/* timezone from host */
 	    if (tz != (char *)0) {
-		fprintf(stderr, "%s: at most one of -Z and/or -z allowed\n", pmProgname);
+		fprintf(stderr, "%s: at most one of -Z and/or -z allowed\n", pmGetProgname());
 		errflag++;
 	    }
 	    zflag++;
@@ -200,7 +196,7 @@ main(int argc, char **argv)
 
 	case 'Z':	/* $TZ timezone */
 	    if (zflag) {
-		fprintf(stderr, "%s: at most one of -Z and/or -z allowed\n", pmProgname);
+		fprintf(stderr, "%s: at most one of -Z and/or -z allowed\n", pmGetProgname());
 		errflag++;
 	    }
 	    tz = optarg;
@@ -214,7 +210,7 @@ main(int argc, char **argv)
     }
 
     if (zflag && type == 0) {
-	fprintf(stderr, "%s: -z requires an explicit -a or -h option\n", pmProgname);
+	fprintf(stderr, "%s: -z requires an explicit -a or -h option\n", pmGetProgname());
 	errflag++;
     }
 
@@ -225,7 +221,7 @@ main(int argc, char **argv)
 Options\n\
   -a   archive	  metrics source is an archive log\n\
   -c   configfile file to load configuration from\n\
-  -D   debug	  standard PCP debug flag\n\
+  -D   debugspec  standard PCP debugging options\n\
   -f		  force .. \n\
   -h   host	  metrics source is PMCD on host\n\
   -l   logfile	  redirect diagnostics and trace output\n\
@@ -235,20 +231,20 @@ Options\n\
   -V 	          verbose/diagnostic output\n\
   -z              set reporting timezone to local time for host from -a or -h\n\
   -Z   timezone   set reporting timezone\n",
-		pmProgname);
+		pmGetProgname());
 	exit(1);
     }
 
     if (logfile != (char *)0) {
-	__pmOpenLog(pmProgname, logfile, stderr, &sts);
+	__pmOpenLog(pmGetProgname(), logfile, stderr, &sts);
 	if (sts < 0) {
-	    fprintf(stderr, "%s: Could not open logfile \"%s\"\n", pmProgname, logfile);
+	    fprintf(stderr, "%s: Could not open logfile \"%s\"\n", pmGetProgname(), logfile);
 	}
     }
 
     if (namespace != PM_NS_DEFAULT) {
 	if ((sts = pmLoadASCIINameSpace(namespace, 1)) < 0) {
-	    fprintf(stderr, "%s: Cannot load namespace from \"%s\": %s\n", pmProgname, namespace, pmErrStr(sts));
+	    fprintf(stderr, "%s: Cannot load namespace from \"%s\": %s\n", pmGetProgname(), namespace, pmErrStr(sts));
 	    exit(1);
 	}
     }
@@ -261,17 +257,17 @@ Options\n\
     if ((sts = pmNewContext(type, host)) < 0) {
 	if (type == PM_CONTEXT_HOST)
 	    fprintf(stderr, "%s: Cannot connect to PMCD on host \"%s\": %s\n",
-		pmProgname, host, pmErrStr(sts));
+		pmGetProgname(), host, pmErrStr(sts));
 	else
 	    fprintf(stderr, "%s: Cannot open archive \"%s\": %s\n",
-		pmProgname, host, pmErrStr(sts));
+		pmGetProgname(), host, pmErrStr(sts));
 	exit(1);
     }
 
     if (type == PM_CONTEXT_ARCHIVE) {
 	if ((sts = pmGetArchiveLabel(&label)) < 0) {
 	    fprintf(stderr, "%s: Cannot get archive label record: %s\n",
-		pmProgname, pmErrStr(sts));
+		pmGetProgname(), pmErrStr(sts));
 	    exit(1);
 	}
     }
@@ -279,7 +275,7 @@ Options\n\
     if (zflag) {
 	if ((tzh = pmNewContextZone()) < 0) {
 	    fprintf(stderr, "%s: Cannot set context timezone: %s\n",
-		pmProgname, pmErrStr(tzh));
+		pmGetProgname(), pmErrStr(tzh));
 	    exit(1);
 	}
 	if (type == PM_CONTEXT_ARCHIVE)
@@ -291,7 +287,7 @@ Options\n\
     else if (tz != (char *)0) {
 	if ((tzh = pmNewZone(tz)) < 0) {
 	    fprintf(stderr, "%s: Cannot set timezone to \"%s\": %s\n",
-		pmProgname, tz, pmErrStr(tzh));
+		pmGetProgname(), tz, pmErrStr(tzh));
 	    exit(1);
 	}
 	printf("Note: timezone set to \"TZ=%s\"\n\n", tz);

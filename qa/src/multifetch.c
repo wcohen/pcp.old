@@ -31,7 +31,7 @@ main(int argc, char **argv)
     pmResult	*resp;
     char	*endnum;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "a:D:h:l:n:s:t:T:?")) != EOF) {
 	switch (c) {
@@ -47,15 +47,13 @@ main(int argc, char **argv)
 
 #ifdef DEBUG
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 #endif
 
@@ -105,7 +103,7 @@ main(int argc, char **argv)
 \n\
 Options\n\
   -a   archive	  metrics source is an archive log\n\
-  -D   debug	  standard PCP debug flag\n\
+  -D   debugspec  standard PCP debugging options\n\
   -h   host	  metrics source is PMCD on host\n\
   -l   logfile	  redirect diagnostics and trace output\n\
   -n   namespace  use an alternative PMNS\n\
@@ -118,7 +116,7 @@ Options\n\
     if (logfile != (char *)0) {
 	__pmOpenLog(cmd, logfile, stderr, &sts);
 	if (sts < 0) {
-	    fprintf(stderr, "%s: Could not open logfile\n", pmProgname);
+	    fprintf(stderr, "%s: Could not open logfile\n", pmGetProgname());
 	}
     }
 

@@ -22,7 +22,7 @@
 QedApp::QedApp(int &argc, char **argv) : QApplication(argc, argv)
 {
     // TODO: rewrite with pmOptions
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
     my.argc = argc;
     my.argv = argv;
     my.pmnsfile = NULL;
@@ -36,7 +36,7 @@ QedApp::QedApp(int &argc, char **argv) : QApplication(argc, argv)
     my.port = -1;
 
     QCoreApplication::setOrganizationName("PCP");
-    QCoreApplication::setApplicationName(pmProgname);
+    QCoreApplication::setApplicationName(pmGetProgname());
     QCoreApplication::setApplicationVersion(pmGetConfig("PCP_VERSION"));
     QString confirm = pmGetConfig("PCP_BIN_DIR");
     confirm.prepend("PCP_XCONFIRM_PROG=");
@@ -81,13 +81,12 @@ int QedApp::getopts(const char *options)
 	    break;
 
 	case 'D':
-	    sts = __pmParseDebug(optarg);
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		pmprintf("%s: unrecognized debug flag specification (%s)\n",
-			pmProgname, optarg);
+		pmprintf("%s: unrecognized debug options specification (%s)\n",
+			pmGetProgname(), optarg);
 		errflg++;
-	    } else
-		pmDebug |= sts;
+	    }
 	    break;
 
 	case 'h':
@@ -109,7 +108,7 @@ int QedApp::getopts(const char *options)
 	case 'p':		/* existing pmtime port */
 	    my.port = (int)strtol(optarg, &endnum, 10);
 	    if (*endnum != '\0' || c < 0) {
-		pmprintf("%s: -p requires a numeric argument\n", pmProgname);
+		pmprintf("%s: -p requires a numeric argument\n", pmGetProgname());
 		errflg++;
 	    }
 	    break;
@@ -120,7 +119,7 @@ int QedApp::getopts(const char *options)
 
 	case 't':		/* sampling interval */
 	    if (pmParseInterval(optarg, &my.delta, &msg) < 0) {
-		pmprintf("%s: cannot parse interval\n%s", pmProgname, msg);
+		pmprintf("%s: cannot parse interval\n%s", pmGetProgname(), msg);
 		free(msg);
 		errflg++;
 	    }
@@ -131,13 +130,15 @@ int QedApp::getopts(const char *options)
 	    break;
 
 	case 'V':		/* version */
-	    printf("%s %s\n", pmProgname, pmGetConfig("PCP_VERSION"));
+	    printf("%s %s\n", pmGetProgname(), pmGetConfig("PCP_VERSION"));
 	    exit(0);
+	    /*NOTREACHED*/
+	    break;
 
 	case 'z':		/* timezone from host */
 	    if (my.tz != NULL) {
 		pmprintf("%s: at most one of -Z and/or -z allowed\n",
-			pmProgname);
+			pmGetProgname());
 		errflg++;
 	    }
 	    my.zflag++;
@@ -146,7 +147,7 @@ int QedApp::getopts(const char *options)
 	case 'Z':		/* $TZ timezone */
 	    if (my.zflag) {
 		pmprintf("%s: at most one of -Z and/or -z allowed\n",
-			pmProgname);
+			pmGetProgname());
 		errflg++;
 	    }
 	    my.tz = optarg;
@@ -210,9 +211,9 @@ char *QedApp::timeHiResString(double time)
     time_t secs = (time_t)time;
     struct tm t;
 
-    sprintf(m, "%.3f", time - floor(time));
+    pmsprintf(m, sizeof(m), "%.3f", time - floor(time));
     pmLocaltime(&secs, &t);
-    sprintf(s, "%02d:%02d:%02d.%s", t.tm_hour, t.tm_min, t.tm_sec, m+2);
+    pmsprintf(s, sizeof(s), "%02d:%02d:%02d.%s", t.tm_hour, t.tm_min, t.tm_sec, m+2);
     s[strlen(s)-1] = '\0';
     return s;
 }
@@ -238,8 +239,8 @@ QPixmap QedApp::cached(const QString &image)
     return pm;
 }
 
-// call startconsole() after command line args processed so pmDebug
-// has a chance to be set
+// call startconsole() after command line args processed so debugging
+// options have a chance to be set
 //
 void QedApp::startconsole(void)
 {

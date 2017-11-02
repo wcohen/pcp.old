@@ -15,24 +15,20 @@ main(int argc, char **argv)
     int		errflag = 0;
     int		a, b, c;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((ch = getopt(argc, argv, "D:?")) != EOF) {
 	switch (ch) {
 
-#ifdef PCP_DEBUG
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
-#endif
 
 	case '?':
 	default:
@@ -42,13 +38,13 @@ main(int argc, char **argv)
     }
 
     if (errflag || optind != argc-2) {
-	fprintf(stderr, "Usage: %s archive1 archive2\n", pmProgname);
+	fprintf(stderr, "Usage: %s archive1 archive2\n", pmGetProgname());
 	exit(1);
     }
 
     a = pmNewContext(PM_CONTEXT_ARCHIVE, argv[optind]);
     if (a < 0) {
-	fprintf(stderr, "%s: first pmNewContext(..., %s): %s\n", pmProgname, argv[optind], pmErrStr(a));
+	fprintf(stderr, "%s: first pmNewContext(..., %s): %s\n", pmGetProgname(), argv[optind], pmErrStr(a));
 	exit(1);
     }
 
@@ -56,13 +52,13 @@ main(int argc, char **argv)
 
     b = pmNewContext(PM_CONTEXT_HOST, "localhost");
     if (b < 0) {
-	fprintf(stderr, "%s: pmNewContext(..., localhost): %s\n", pmProgname, pmErrStr(b));
+	fprintf(stderr, "%s: pmNewContext(..., localhost): %s\n", pmGetProgname(), pmErrStr(b));
 	exit(1);
     }
 
     c = pmNewContext(PM_CONTEXT_ARCHIVE, argv[optind+1]);
     if (c < 0) {
-	fprintf(stderr, "%s: second pmNewContext(..., %s): %s\n", pmProgname, argv[optind+1], pmErrStr(c));
+	fprintf(stderr, "%s: second pmNewContext(..., %s): %s\n", pmGetProgname(), argv[optind+1], pmErrStr(c));
 	exit(1);
     }
 

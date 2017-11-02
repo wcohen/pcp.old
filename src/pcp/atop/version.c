@@ -19,9 +19,9 @@ getstrvers(void)
 {
 	static char vers[64];
 
-	snprintf(vers, sizeof vers,
+	pmsprintf(vers, sizeof vers,
 		"%s version: %s <pcp@groups.io>",
-		pmProgname, PCP_VERSION);
+		pmGetProgname(), PCP_VERSION);
 
 	return vers;
 }

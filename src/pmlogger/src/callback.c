@@ -196,11 +196,14 @@ setavail(pmResult *resp)
 	    else {
 		/* allocate new instance if required */
 		int	need = (k + 1) * sizeof(insthist_t);
+		insthist_t	*tmp_instlist;
 
-		php->ph_instlist = (insthist_t *)realloc(php->ph_instlist, need);
-		if (php->ph_instlist == (insthist_t *)0) {
+		tmp_instlist = (insthist_t *)realloc(php->ph_instlist, need);
+		if (tmp_instlist == NULL) {
 		    __pmNoMem("setavail: inst list realloc", need, PM_FATAL_ERR);
+		    /* NOTREACHED */
 		}
+		php->ph_instlist = tmp_instlist;
 		ihp = &php->ph_instlist[k];
 		ihp->ih_inst = inst;
 		ihp->ih_flags = 0;
@@ -217,17 +220,15 @@ setavail(pmResult *resp)
  * Note that the tp argument is used to return the timestamp of the indom.
  * It is a merger of __pmLogGetIndom and searchindom.
  */
-int
+static int
 __localLogGetInDom(__pmLogCtl *lcp, pmInDom indom, __pmTimeval *tp, int **instlist, char ***namelist)
 {
     __pmHashNode	*hp;
     __pmLogInDom	*idp;
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_LOGMETA)
+    if (pmDebugOptions.logmeta)
 	fprintf(stderr, "__localLogGetInDom( ..., %s)\n",
 	    pmInDomStr(indom));
-#endif
 
     if ((hp = __pmHashSearch((unsigned int)indom, &lcp->l_hashindom)) == NULL)
 	return 0;
@@ -294,6 +295,126 @@ check_inst(pmValueSet *vsp, int hint, pmResult *lrp)
     return 0;
 }
 
+static int
+manageLabels(pmDesc *desc, const __pmTimeval *tp, int only_instances)
+{
+    int		i = 0;
+    int		len;
+    int		sts = 0;
+    unsigned int type;
+    unsigned int ident = PM_IN_NULL;
+    pmLabelSet	*label;
+    unsigned int label_types[] = {
+	PM_LABEL_CONTEXT, PM_LABEL_DOMAIN, PM_LABEL_INDOM,
+	PM_LABEL_CLUSTER, PM_LABEL_ITEM, PM_LABEL_INSTANCES
+    };
+    const unsigned int	ntypes = sizeof(label_types) / sizeof(label_types[0]);
+
+    if (only_instances)
+	i = ntypes - 1;
+
+    for (; i < ntypes; i++) {
+	type = label_types[i];
+
+	if (type == PM_LABEL_INDOM || type == PM_LABEL_INSTANCES) {
+	    if (desc->indom == PM_INDOM_NULL)
+		continue;
+	    ident = desc->indom;
+	}
+	else if (type == PM_LABEL_DOMAIN)
+	    ident = pmid_domain(desc->pmid);
+	else if (type == PM_LABEL_CLUSTER)
+	    ident = pmid_build(pmid_domain(ident), pmid_cluster(ident), 0);
+	else if (type == PM_LABEL_ITEM)
+	    ident = desc->pmid;
+	else
+	    ident = PM_IN_NULL;
+
+	/* Lookup returns >= 0 when the key exists */
+	if (__pmLogLookupLabel(&logctl, type, ident, &label, tp) >= 0)
+	    continue;
+
+	if (type == PM_LABEL_CONTEXT)
+	    len = pmGetContextLabels(&label);
+	else if (type == PM_LABEL_DOMAIN)
+	    len = pmGetDomainLabels(ident, &label);
+	else if (type == PM_LABEL_CLUSTER)
+	    len = pmGetClusterLabels(ident, &label);
+	else if (type == PM_LABEL_INDOM)
+	    len = pmGetInDomLabels(ident, &label);
+	else if (type == PM_LABEL_ITEM)
+	    len = pmGetItemLabels(ident, &label);
+	else if (type == PM_LABEL_INSTANCES)
+	    len = pmGetInstancesLabels(ident, &label);
+	else
+	    len = 0;
+
+	if (len > 0) {
+	    sts = __pmLogPutLabel(&logctl, type, ident, len, label, tp);
+	    if (sts < 0) {
+		return sts;
+	    }
+	}
+    }
+    return sts;
+}
+
+static int
+manageText(pmDesc *desc)
+{
+    int		i;
+    int		j;
+    int		sts;
+    int		level;
+    int		indom;
+    unsigned int types;
+    unsigned int ident;
+    char	*text;
+    unsigned int text_types[] = { PM_TEXT_ONELINE, PM_TEXT_HELP };
+    unsigned int ident_types[] = { PM_TEXT_PMID, PM_TEXT_INDOM };
+    const unsigned int	ntypes = sizeof(text_types) / sizeof(text_types[0]);
+    const unsigned int	nidents = sizeof(ident_types) / sizeof(ident_types[0]);
+
+    for (i = 0; i < ntypes; i++) {
+	for (j = 0; j < nidents; j++) {
+	    types = text_types[i] | ident_types[j];
+	    level = text_types[i] | PM_TEXT_DIRECT;
+	    indom = ident_types[j] & PM_TEXT_INDOM;
+	    ident = indom ? desc->indom : desc->pmid;
+
+	    if (indom && desc->indom == PM_INDOM_NULL)
+		continue;
+
+	    /* Lookup returns >= 0 when the key exists */
+	    if (__pmLogLookupText(&logctl, ident, types, &text) >= 0)
+		continue;
+
+	    if (indom)
+		sts = pmLookupInDomText(ident, level, &text);
+	    else
+		sts = pmLookupText(ident, level, &text);
+
+	    /*
+	     * Only cache indoms help texts (final parameter) - there
+	     * are far fewer (less memory used), and we only need to
+	     * make sure we log them once, not PMID help text which
+	     * is guarded by the pmDesc logging-once logic.
+	     */
+	    if (sts == 0) {
+		if (text[0] == '\0')
+		    free(text);
+		else {
+		    sts = __pmLogPutText(&logctl, ident, types, text, indom);
+		    free(text);
+		    if (sts < 0)
+			break;
+		}
+	    }
+	}
+    }
+    return sts;
+}
+
 /*
  * Lookup the first cache index associated with a given PMID in a given task.
  */
@@ -322,6 +443,7 @@ lookupTaskCacheNames(pmID pmid, char ***namesptr)
     int		str_len = 0;
     char	*data;
     char	**names;
+    char	**tmp_names;
     task_t	*tp;
 
     /*
@@ -358,7 +480,12 @@ lookupTaskCacheNames(pmID pmid, char ***namesptr)
 		int	old_str_len = str_len;
 		str_len += strlen(tp->t_namelist[i]) + 1;
 		numnames++;
-		names = (char **)realloc(names, numnames * sizeof(names[0]) + str_len);
+		tmp_names = (char **)realloc(names, numnames * sizeof(names[0]) + str_len);
+		if (tmp_names == NULL) {
+		    __pmNoMem("lookupTaskCacheNames: names realloc", numnames * sizeof(names[0]) + str_len, PM_FATAL_ERR);
+		    /* NOTREACHED */
+		}
+		names = tmp_names;
 		data = (char *)names + ((numnames-1) * sizeof(names[0]));
 		/* relocate strings */
 		memmove(data+sizeof(names[0]), data, old_str_len);
@@ -426,15 +553,13 @@ do_work(task_t *tp)
     __pmTimeval		resp_tval;
     unsigned long	peek_offset;
 
-#ifdef PCP_DEBUG
-    if ((pmDebug & DBG_TRACE_APPL2) && (pmDebug & DBG_TRACE_DESPERATE)) {
+    if ((pmDebugOptions.appl2) && (pmDebugOptions.desperate)) {
 	struct timeval	now;
 
 	__pmtimevalNow(&now);
 	__pmPrintStamp(stderr, &now);
 	fprintf(stderr, " do_work(tp=%p): afid=%d parse_done=%d exit_samples=%d\n", tp, tp->t_afid, parse_done, exit_samples);
     }
-#endif
 
     if (!parse_done)
 	/* ignore callbacks until all of the config file has been parsed */
@@ -517,18 +642,14 @@ do_work(task_t *tp)
 	    }
 	    if (sts != -ETIMEDOUT) {
 		/* optionally report and disconnect() the first time thru */
-#ifdef PCP_DEBUG
-		if (pmDebug & DBG_TRACE_APPL2)
+		if (pmDebugOptions.appl2)
 		    fprintf(stderr, "callback: disconnecting because myFetch failed: %s\n", pmErrStr(sts));
-#endif
 		disconnect(sts);
 	    }
 	    continue;
 	}
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL2)
+	if (pmDebugOptions.appl2)
 	    fprintf(stderr, "callback: fetch group %p (%d metrics)\n", fp, fp->f_numpmid);
-#endif
 
 	/*
 	 * hook to rewrite PDU buffer ...
@@ -554,10 +675,8 @@ do_work(task_t *tp)
 	peek_offset = __pmFtell(logctl.l_mfp);
 	peek_offset += ((__pmPDUHdr *)pb)->len - sizeof(__pmPDUHdr) + 2*sizeof(int);
 	if (peek_offset > 0x7fffffff) {
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL2)
+	    if (pmDebugOptions.appl2)
 		fprintf(stderr, "callback: new volume based on max size, currently %ld\n", __pmFtell(logctl.l_mfp));
-#endif
 	    (void)newvolume(VOL_SW_MAX);
 	}
 
@@ -624,6 +743,7 @@ do_work(task_t *tp)
 	needti = 0;
 	old_meta_offset = __pmFtell(logctl.l_mdfp);
 	assert(old_meta_offset >= 0);
+
 	for (i = 0; i < resp->numpmid; i++) {
 	    pmValueSet	*vsp = resp->vset[i];
 	    pmDesc	desc;
@@ -652,6 +772,8 @@ do_work(task_t *tp)
 		    fprintf(stderr, "__pmLogPutDesc: %s\n", pmErrStr(sts));
 		    exit(1);
 		}
+		manageLabels(&desc, &resp_tval, 0);
+		manageText(&desc);
 		if (IS_DERIVED_LOGGED(desc.pmid))
 		    /* derived metric, restore cluster field ... */
 		    desc.pmid = CLEAR_DERIVED_LOGGED(desc.pmid);
@@ -725,30 +847,25 @@ do_work(task_t *tp)
 			free(instlist);
 			free(namelist);
 		    }
+		    manageLabels(&desc, &tmp, 1);
 		    needti = 1;
-#ifdef PCP_DEBUG
-		    if (pmDebug & DBG_TRACE_APPL2)
+		    if (pmDebugOptions.appl2)
 			fprintf(stderr, "callback: indom (%s) changed\n", pmInDomStr(desc.indom));
-#endif
 		}
 	    }
 	}
 
 	if (__pmFtell(logctl.l_mfp) > flushsize) {
 	    needti = 1;
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL2)
+	    if (pmDebugOptions.appl2)
 		fprintf(stderr, "callback: file size (%d) reached flushsize (%d)\n", (int)__pmFtell(logctl.l_mfp), flushsize);
-#endif
 	}
 
 	if (last_log_offset == 0 || last_log_offset == sizeof(__pmLogLabel)+2*sizeof(int)) {
 	    /* first result in this volume */
 	    needti = 1;
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL2)
+	    if (pmDebugOptions.appl2)
 		fprintf(stderr, "callback: first result for this volume\n");
-#endif
 	}
 
 	if (needti) {
@@ -852,19 +969,15 @@ do_work(task_t *tp)
     if (vol_switch_samples > 0 &&
 	++vol_samples_counter == vol_switch_samples) {
         (void)newvolume(VOL_SW_COUNTER);
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL2)
+	if (pmDebugOptions.appl2)
 	    fprintf(stderr, "callback: new volume based on samples (%d)\n", vol_samples_counter);
-#endif
     }
 
     if (vol_switch_bytes > 0 &&
         (__pmFtell(logctl.l_mfp) >= vol_switch_bytes)) {
         (void)newvolume(VOL_SW_BYTES);
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL2)
+	if (pmDebugOptions.appl2)
 	    fprintf(stderr, "callback: new volume based on size (%d)\n", (int)__pmFtell(logctl.l_mfp));
-#endif
     }
 
 }

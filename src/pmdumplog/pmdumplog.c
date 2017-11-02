@@ -515,14 +515,14 @@ dumpTI(__pmContext *ctxp)
 	__pmPrintStamp(stdout, &tv);
 	printf("    %4d  %11d  %11d\n", tip->ti_vol, tip->ti_meta, tip->ti_log);
 	if (i == 0) {
-	    sprintf(path, "%s.meta", lcp->l_name);
+	    pmsprintf(path, sizeof(path), "%s.meta", lcp->l_name);
 	    if (stat(path, &sbuf) == 0)
 		meta_size = sbuf.st_size;
 	    else
 		meta_size = -1;
 	}
 	if (lastp == NULL || tip->ti_vol != lastp->ti_vol) { 
-	    sprintf(path, "%s.%d", lcp->l_name, tip->ti_vol);
+	    pmsprintf(path, sizeof(path), "%s.%d", lcp->l_name, tip->ti_vol);
 	    if (stat(path, &sbuf) == 0)
 		log_size = sbuf.st_size;
 	    else {
@@ -606,7 +606,7 @@ dumpLabel(int verbose)
 
     if (verbose) {
 	printf("Archive timezone: %s\n", label.ll_tz);
-	printf("PID for pmlogger: %" FMT_PID "\n", label.ll_pid);
+	printf("PID for pmlogger: %d\n", label.ll_pid);
     }
 }
 
@@ -666,7 +666,7 @@ dometric(const char *name)
     numpmid++;
     pmid = (pmID *)realloc(pmid, numpmid * sizeof(pmID));
     if ((sts = pmLookupName(1, (char **)&name, &pmid[numpmid-1])) < 0) {
-	fprintf(stderr, "%s: pmLookupName(%s): %s\n", pmProgname, name, pmErrStr(sts));
+	fprintf(stderr, "%s: pmLookupName(%s): %s\n", pmGetProgname(), name, pmErrStr(sts));
 	numpmid--;
     }
 }
@@ -726,7 +726,7 @@ main(int argc, char *argv[])
 	switch (c) {
 
 	case 'a':	/* dump everything */
-	    dflag = iflag = lflag = mflag = sflag = tflag = 1;
+	    dflag = iflag = Lflag = lflag = mflag = sflag = tflag = 1;
 	    break;
 
 	case 'd':	/* dump pmDesc structures */
@@ -790,7 +790,7 @@ main(int argc, char *argv[])
     if (vflag) {
 	FILE	*f;
 	if ((f = fopen(rawfile, "r")) == NULL) {
-	    fprintf(stderr, "%s: Cannot open \"%s\": %s\n", pmProgname, rawfile, osstrerror());
+	    fprintf(stderr, "%s: Cannot open \"%s\": %s\n", pmGetProgname(), rawfile, osstrerror());
 	    exit(1);
 	}
 	printf("Raw dump of physical archive file \"%s\" ...\n", rawfile);
@@ -810,13 +810,13 @@ main(int argc, char *argv[])
     /* For now, ensure that we have only a single archive. */
     if (!isSingleArchive(opts.archives[0])) {
 	fprintf(stderr, "%s: Multiple archives are not supported\n",
-		pmProgname);
+		pmGetProgname());
 	exit(1);
     }
 
     if ((sts = ctxid = pmNewContext(PM_CONTEXT_ARCHIVE, opts.archives[0])) < 0) {
 	fprintf(stderr, "%s: Cannot open archive \"%s\": %s\n",
-		pmProgname, opts.archives[0], pmErrStr(sts));
+		pmGetProgname(), opts.archives[0], pmErrStr(sts));
 	exit(1);
     }
     /* complete TZ and time window option (origin) setup */
@@ -837,11 +837,11 @@ main(int argc, char *argv[])
 		    numpmid--;
 		    if ((sts = pmTraversePMNS(argv[opts.optind], dometric)) < 0)
 			fprintf(stderr, "%s: pmTraversePMNS(%s): %s\n",
-				pmProgname, argv[opts.optind], pmErrStr(sts));
+				pmGetProgname(), argv[opts.optind], pmErrStr(sts));
 		}
 		else
 		    fprintf(stderr, "%s: pmLookupName(%s): %s\n",
-			    pmProgname, argv[opts.optind], pmErrStr(sts));
+			    pmGetProgname(), argv[opts.optind], pmErrStr(sts));
 		if (sts < 0)
 		    numpmid--;
 	    }
@@ -854,7 +854,7 @@ main(int argc, char *argv[])
 
     if ((sts = pmGetArchiveLabel(&label)) < 0) {
 	fprintf(stderr, "%s: Cannot get archive label record: %s\n",
-		pmProgname, pmErrStr(sts));
+		pmGetProgname(), pmErrStr(sts));
 	exit(1);
     }
 
@@ -864,7 +864,7 @@ main(int argc, char *argv[])
 	 */
 	skel_result = (pmResult *)malloc(sizeof(pmResult)+(numpmid-1)*sizeof(pmValueSet *));
 	if (skel_result == NULL) {
-	    fprintf(stderr, "%s: malloc(skel_result): %s\n", pmProgname, osstrerror());
+	    fprintf(stderr, "%s: malloc(skel_result): %s\n", pmGetProgname(), osstrerror());
 	    exit(1);
 
 	}
@@ -872,7 +872,7 @@ main(int argc, char *argv[])
 
     if ((ctxp = __pmHandleToPtr(ctxid)) == NULL) {
 	fprintf(stderr, "%s: botch: __pmHandleToPtr(%d) returns NULL!\n",
-		pmProgname, ctxid);
+		pmGetProgname(), ctxid);
 	exit(1);
     }
     /*
@@ -930,7 +930,7 @@ main(int argc, char *argv[])
 	    }
 	}
 	if (sts < 0) {
-	    fprintf(stderr, "%s: pmSetMode: %s\n", pmProgname, pmErrStr(sts));
+	    fprintf(stderr, "%s: pmSetMode: %s\n", pmGetProgname(), pmErrStr(sts));
 	    exit(1);
 	}
 	sts = 0;
@@ -1000,7 +1000,7 @@ main(int argc, char *argv[])
 	    pmFreeResult(raw_result);
 	}
 	if (sts != PM_ERR_EOL) {
-	    fprintf(stderr, "%s: pmFetch: %s\n", pmProgname, pmErrStr(sts));
+	    fprintf(stderr, "%s: pmFetch: %s\n", pmGetProgname(), pmErrStr(sts));
 	    exit(1);
 	}
     }

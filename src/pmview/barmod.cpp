@@ -22,9 +22,6 @@
 #include "modlist.h"
 #include "launch.h"
 
-#include <iostream>
-using namespace std;
-
 //
 // Use debug flag LIBPMDA to trace Bar refreshes
 //
@@ -115,7 +112,7 @@ BarMod::generate(SoNode *obj, float xSpace, float zSpace)
 	    const QmcMetric &metric = _metrics->metric(m);
 	    for (i = 0; i < metric.numValues(); i++, v++) {
 		BarBlock &block = _blocks[v];
-		sprintf(buf, "%c%d", theBarId, v);
+		pmsprintf(buf, sizeof(buf), "%c%d", theBarId, v);
 		block._sep = new SoSeparator;
 		block._sep->setName((SbName)buf);
 		_root->addChild(block._sep);
@@ -137,11 +134,9 @@ BarMod::generate(SoNode *obj, float xSpace, float zSpace)
 	_infoValue = numValues;
 	    
 	add();
-#ifdef PCP_DEBUG
-        if (pmDebug & DBG_TRACE_APPL2)
+        if (pmDebugOptions.appl2)
             cerr << "BarMod::generate: Added " << numValues << " in " << _cols
 		 << " cols and " << _rows << " rows." << endl;
-#endif
 
     }
 
@@ -228,10 +223,8 @@ BarMod::selectAll()
 
     theModList->selectAllId(_root, _blocks.size());
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL2)
+    if (pmDebugOptions.appl2)
 	cerr << "BarMod::selectAll" << endl;
-#endif
 
     for (i = 0; i < _blocks.size(); i++) {
 	if (_blocks[i]._selected == false) {
@@ -252,11 +245,9 @@ BarMod::select(SoPath *path)
 	_blocks[value]._selected = true;
 	_selectCount++;
 
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL2)
+	if (pmDebugOptions.appl2)
 	    cerr << "BarMod::select: value = " << value
 		 << ", count = " << _selectCount << endl;
-#endif
     }
     return _selectCount;
 }
@@ -271,19 +262,14 @@ BarMod::remove(SoPath *path)
 	_blocks[value]._selected = false;
 	_selectCount--;
 
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL2)
+	if (pmDebugOptions.appl2)
 	    cerr << "BarMod::remove: value = " << value
 		 << ", count = " << _selectCount << endl;
-#endif
-
     }
 
-#ifdef PCP_DEBUG
-    else if (pmDebug & DBG_TRACE_APPL2)
+    else if (pmDebugOptions.appl2)
 	cerr << "BarMod::remove: did not remove " << value 
 	     << ", count = " << _selectCount << endl;
-#endif
 
     return _selectCount;
 }
@@ -309,11 +295,9 @@ void BarMod::infoText(QString &str, bool selected) const
     }
 
     if (v >= _blocks.size()) {
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL2)
+	if (pmDebugOptions.appl2)
 	    cerr << "BarMod::infoText: infoText requested but nothing selected"
 		 << endl;
-#endif
 	str = "";
     }
     else {
@@ -489,10 +473,8 @@ BarMod::findBlock(SoPath *path, int &metric, int &inst,
 
     if (i >= 0) {
 
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL2) 
+	if (pmDebugOptions.appl2)
 	    cerr << "BarMod::findBlock: Bar id = " << str << endl;
-#endif
 
 	sscanf(str, "%c%d", &c, &value);
 	
@@ -522,12 +504,9 @@ BarMod::findBlock(SoPath *path, int &metric, int &inst,
 	metric = inst = 0;
     }
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL2) {
+    if (pmDebugOptions.appl2)
 	cerr << "BarMod::findBlock: metric = " << metric
 	     << ", inst = " << inst << ", value = " << value << endl;
-    }
-#endif
 
     return;
 }

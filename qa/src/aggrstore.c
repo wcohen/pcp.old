@@ -17,30 +17,26 @@ main(int argc, char **argv)
     int		sts;
     int		errflag = 0;
     char	*host = "localhost";
-    static char	*usage = "[-D N] [-h hostname] metric stringvalue";
+    static char	*usage = "[-D debugspec] [-h hostname] metric stringvalue";
     int			len;
     int			n;
     char		*namelist[1];
     pmID		pmidlist[1];
     pmResult		*res;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "D:h:")) != EOF) {
 	switch (c) {
 
-#ifdef PCP_DEBUG
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
-#endif
 
 	case 'h':	/* hostname for PMCD to contact */
 	    host = optarg;
@@ -54,13 +50,13 @@ main(int argc, char **argv)
     }
 
     if (errflag || optind != argc-2) {
-	printf("Usage: %s %s\n", pmProgname, usage);
+	printf("Usage: %s %s\n", pmGetProgname(), usage);
 	exit(1);
     }
 
     if ((sts = pmNewContext(type, host)) < 0) {
 	printf("%s: Cannot connect to PMCD on host \"%s\": %s\n",
-	    pmProgname, host, pmErrStr(sts));
+	    pmGetProgname(), host, pmErrStr(sts));
 	exit(1);
     }
 

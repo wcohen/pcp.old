@@ -20,6 +20,7 @@
 #include <pcp/impl.h>
 #include <inttypes.h>
 #include <sys/stat.h>
+#include <strings.h>
 
 int
 dump_indoms(void *addr, size_t size, int idx, long base, __uint64_t offset, __int32_t count)
@@ -555,7 +556,7 @@ flagstr(int flags)
 
     /* unrecognised bits */
     if (flags) {
-	sprintf(bits, "unknown=%x", flags);
+	pmsprintf(bits, sizeof(bits), "unknown=%x", flags);
 	strcat(buf, bits);
     } else {
 	/* remove any trailing comma-space */
@@ -676,7 +677,7 @@ main(int argc, char **argv)
     if (argc > 1)
 	strncpy(file, argv[1], MAXPATHLEN);
     else
-	snprintf(file, MAXPATHLEN, "%s%cmmv%ctest",
+	pmsprintf(file, MAXPATHLEN, "%s%cmmv%ctest",
 		pmGetConfig("PCP_TMP_DIR"),
 		__pmPathSeparator(), __pmPathSeparator());
     file[MAXPATHLEN-1] = '\0';

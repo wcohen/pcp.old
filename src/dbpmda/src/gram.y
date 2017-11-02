@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Red Hat.
+ * Copyright (c) 2013,2017 Red Hat.
  * Copyright (c) 1995 Silicon Graphics, Inc.  All Rights Reserved.
  * 
  * This program is free software; you can redistribute it and/or modify it
@@ -111,13 +111,15 @@ fix_dynamic_pmid(char *name, pmID *pmidp)
 	OPEN CLOSE DESC GETDESC FETCH INSTANCE PROFILE HELP 
 	WATCH DBG QUIT STATUS STORE INFO TIMER NAMESPACE WAIT
 	PMNS_NAME PMNS_PMID PMNS_CHILDREN PMNS_TRAVERSE ATTR
+	LABEL CONTEXT DOMAIN INDOM CLUSTER ITEM INSTANCES
 	DSO PIPE SOCK UNIX INET IPV6
-	ADD DEL ALL NONE INDOM ON OFF
+	ADD DEL ALL NONE ON OFF
 	PLUS EOL
 
 %type <y_num>
 	metric
 	indom
+	cluster
 	optdomain
 	debug
 	raw_pmid
@@ -292,19 +294,19 @@ stmt	: OPEN EOL				{
 		param.name = $2;
 		stmt_type = PMNS_PMID; YYACCEPT;
 	    }
-	| PMNS_CHILDREN EOL				{
+	| PMNS_CHILDREN EOL			{
 		param.number = PMNS_CHILDREN; param.pmid = HELP_USAGE;
 		stmt_type = HELP; YYACCEPT;
 	    }
-	| PMNS_CHILDREN NAME EOL			{
+	| PMNS_CHILDREN NAME EOL		{
 		param.name = $2;
 		stmt_type = PMNS_CHILDREN; YYACCEPT;
 	    }
-	| PMNS_TRAVERSE EOL				{
+	| PMNS_TRAVERSE EOL			{
 		param.number = PMNS_TRAVERSE; param.pmid = HELP_USAGE;
 		stmt_type = HELP; YYACCEPT;
 	    }
-	| PMNS_TRAVERSE NAME EOL			{
+	| PMNS_TRAVERSE NAME EOL		{
 		param.name = $2;
 		stmt_type = PMNS_TRAVERSE; YYACCEPT;
 	    }
@@ -316,20 +318,56 @@ stmt	: OPEN EOL				{
 		param.number = ATTR; param.pmid = HELP_USAGE;
 		stmt_type = HELP; YYACCEPT;
 	    }
-	| ATTR attribute EOL		{
+	| ATTR attribute EOL			{
 		param.number = $2;
 		param.name = NULL;
 		stmt_type = ATTR; YYACCEPT;
 	    }
-	| ATTR attribute STRING EOL	{
+	| ATTR attribute STRING EOL		{
 		param.number = $2;
 		param.name = $3;
 		stmt_type = ATTR; YYACCEPT;
+	    }
+	| LABEL EOL				{
+		param.number = LABEL; param.pmid = HELP_USAGE;
+		stmt_type = HELP; YYACCEPT;
+	    }
+	| LABEL CONTEXT EOL			{
+		param.number = PM_LABEL_CONTEXT;
+		stmt_type = LABEL; YYACCEPT;
+	    }
+	| LABEL DOMAIN EOL			{
+		param.number = PM_LABEL_DOMAIN;
+		stmt_type = LABEL; YYACCEPT;
+	    }
+	| LABEL INDOM indom EOL			{
+		param.number = PM_LABEL_INDOM;
+		param.indom = indom.whole;
+		stmt_type = LABEL; YYACCEPT;
+	    }
+	| LABEL CLUSTER cluster EOL		{
+		param.number = PM_LABEL_CLUSTER;
+		param.pmid = (pmID)$3;
+		stmt_type = LABEL; YYACCEPT;
+	    }
+	| LABEL ITEM metric EOL			{
+		param.number = PM_LABEL_ITEM;
+		param.pmid = (pmID)$3;
+		stmt_type = LABEL; YYACCEPT;
+	    }
+	| LABEL INSTANCES indom EOL		{
+		param.number = PM_LABEL_INSTANCES;
+		param.indom = indom.whole;
+		stmt_type = LABEL; YYACCEPT;
 	    }
 
 	| HELP EOL				{ 
 		param.number = -1; param.pmid = HELP_FULL; 
 		stmt_type = HELP; YYACCEPT; 
+	    }
+	| HELP ATTR EOL				{
+		param.number = ATTR; param.pmid = HELP_FULL; 
+		stmt_type = HELP; YYACCEPT;
 	    }
 	| HELP CLOSE EOL			{
 		param.number = CLOSE; param.pmid = HELP_FULL; 
@@ -359,6 +397,10 @@ stmt	: OPEN EOL				{
 		param.number = INSTANCE; param.pmid = HELP_FULL; 
 		stmt_type = HELP; YYACCEPT;
 	    }
+	| HELP LABEL EOL			{
+		param.number = LABEL; param.pmid = HELP_FULL; 
+		stmt_type = HELP; YYACCEPT;
+	    }
 	| HELP NAMESPACE EOL			{
 		param.number = NAMESPACE; param.pmid = HELP_FULL; 
 		stmt_type = HELP; YYACCEPT;
@@ -367,7 +409,7 @@ stmt	: OPEN EOL				{
 		param.number = OPEN; param.pmid = HELP_FULL; 
 		stmt_type = HELP; YYACCEPT;
 	    }
-	| HELP PMNS_CHILDREN EOL			{
+	| HELP PMNS_CHILDREN EOL		{
 		param.number = PMNS_CHILDREN; param.pmid = HELP_FULL; 
 		stmt_type = HELP; YYACCEPT;
 	    }
@@ -379,12 +421,8 @@ stmt	: OPEN EOL				{
 		param.number = PMNS_PMID; param.pmid = HELP_FULL; 
 		stmt_type = HELP; YYACCEPT;
 	    }
-	| HELP PMNS_TRAVERSE EOL			{
+	| HELP PMNS_TRAVERSE EOL		{
 		param.number = PMNS_TRAVERSE; param.pmid = HELP_FULL; 
-		stmt_type = HELP; YYACCEPT;
-	    }
-	| HELP ATTR EOL			{
-		param.number = ATTR; param.pmid = HELP_FULL; 
 		stmt_type = HELP; YYACCEPT;
 	    }
 	| HELP PROFILE EOL			{
@@ -422,15 +460,24 @@ stmt	: OPEN EOL				{
 		stmt_type = HELP; YYACCEPT;
 	    }
 	| DBG ALL EOL				{
-		param.number = -1;
+		sts = pmSetDebug("all");
+		if (sts < 0) {
+		    pmsprintf(warnStr, MYWARNSTRSZ, "pmSetDebug(\"all\") failed\n");
+		    yywarn(warnStr);
+		    YYERROR;
+		}
 		stmt_type = DBG; YYACCEPT;
 	    }
 	| DBG NONE EOL				{
-		param.number = 0;
+		sts = pmClearDebug("all");
+		if (sts < 0) {
+		    pmsprintf(warnStr, MYWARNSTRSZ, "pmClearDebug(\"all\") failed\n");
+		    yywarn(warnStr);
+		    YYERROR;
+		}
 		stmt_type = DBG; YYACCEPT;
 	    }
 	| DBG debug EOL				{
-		param.number = $2;
 	        stmt_type = DBG; YYACCEPT;
 	    }
 	| STATUS EOL				{ 
@@ -485,7 +532,7 @@ optdomain : NUMBER				{ $$ = $1; }
 attribute : NUMBER				{
 		sts = __pmAttrKeyStr_r($1, warnStr, sizeof(warnStr));
 		if (sts <= 0) {
-		    snprintf(warnStr, MYWARNSTRSZ, "Attribute (%d) is not recognised", $1);
+		    pmsprintf(warnStr, MYWARNSTRSZ, "Attribute (%d) is not recognised", $1);
 		    yyerror(warnStr);
 		    YYERROR;
 		}
@@ -494,7 +541,7 @@ attribute : NUMBER				{
 	| STRING				{ 
 		sts = __pmLookupAttrKey($1, strlen($1)+1);
 		if (sts <= 0) {
-		    snprintf(warnStr, MYWARNSTRSZ, "Attribute (%s) is not recognised", $1);
+		    pmsprintf(warnStr, MYWARNSTRSZ, "Attribute (%s) is not recognised", $1);
 		    yyerror(warnStr);
 		    YYERROR;
 		}
@@ -506,11 +553,11 @@ servport : NUMBER				{ $$ = $1; }
 	| STRING				{
 		struct servent *srv = getservbyname($1, NULL);
 		if (srv == NULL) {
-		    snprintf(warnStr, MYWARNSTRSZ, "Failed to map (%s) to a port number", $1);
+		    pmsprintf(warnStr, MYWARNSTRSZ, "Failed to map (%s) to a port number", $1);
 		    yyerror(warnStr);
 		    YYERROR;
 		}
-		snprintf(warnStr, MYWARNSTRSZ, "Mapped %s to port number %d", $1, srv->s_port);
+		pmsprintf(warnStr, MYWARNSTRSZ, "Mapped %s to port number %d", $1, srv->s_port);
 		yywarn(warnStr);
 		$$ = srv->s_port;
 	    }
@@ -520,7 +567,7 @@ metric	: NUMBER				{
 		pmid.whole = $1;
 		sts = pmNameID(pmid.whole, &str);
 		if (sts < 0) {
-		    snprintf(warnStr, MYWARNSTRSZ, "PMID (%s) is not defined in the PMNS",
+		    pmsprintf(warnStr, MYWARNSTRSZ, "PMID (%s) is not defined in the PMNS",
 			    pmIDStr(pmid.whole));
 		    yywarn(warnStr);
 		}
@@ -534,7 +581,7 @@ metric	: NUMBER				{
 		pmid.part.item = $1.num2;
 		sts = pmNameID(pmid.whole, &str);
 		if (sts < 0) {
-		    snprintf(warnStr, MYWARNSTRSZ, "PMID (%s) is not defined in the PMNS",
+		    pmsprintf(warnStr, MYWARNSTRSZ, "PMID (%s) is not defined in the PMNS",
 			    pmIDStr(pmid.whole));
 		    yywarn(warnStr);
 		}
@@ -549,7 +596,7 @@ metric	: NUMBER				{
 		pmid.part.item = $1.num3;
 		sts = pmNameID(pmid.whole, &str);
 		if (sts < 0) {
-		    snprintf(warnStr, MYWARNSTRSZ, "PMID (%s) is not defined in the PMNS",
+		    pmsprintf(warnStr, MYWARNSTRSZ, "PMID (%s) is not defined in the PMNS",
 			    pmIDStr(pmid.whole));
 		    yywarn(warnStr);
 		}
@@ -568,6 +615,18 @@ metric	: NUMBER				{
 		    yyerror(pmErrStr(sts));
 		    YYERROR;
 		}
+		$$ = (int)pmid.whole;
+	    }
+	;
+
+cluster	: NUMBER				{ 
+		pmid.whole = $1;
+	        $$ = (int)pmid.whole;
+	    }
+	| NUMBER2D 				{
+		pmid.whole = 0;
+		pmid.part.domain = $1.num1;
+		pmid.part.cluster = $1.num2;
 		$$ = (int)pmid.whole;
 	    }
 	;
@@ -610,25 +669,45 @@ inst	: STRING				{ $$ = $1; }
 	| NAME					{ $$ = $1; }
 	;
 
-debug   : NUMBER 				{ $$ = $1; }
-	| NAME					{
-			sts = __pmParseDebug($1);
+debug   : NUMBER 			{
+			char	nbuf[12];
+			pmsprintf(nbuf, sizeof(nbuf), "%d", $1);
+			sts = pmSetDebug(nbuf);
 			if (sts < 0) {
-			    snprintf(warnStr, MYWARNSTRSZ, "Bad debug flag (%s)", $1);
-			    yywarn(warnStr);
+			    pmsprintf(warnStr, MYWARNSTRSZ, "Bad debug flag (%s)", nbuf);
+			    yyerror(warnStr);
 			    YYERROR;
 			}
-			$$ = sts;
+			$$ = 0;
 		    }
-	| NUMBER debug			{ $$ = $1 | $2; }
-	| NAME debug			{
-			sts = __pmParseDebug($1);
+	| NAME					{
+			sts = pmSetDebug($1);
 			if (sts < 0) {
-			    snprintf(warnStr, MYWARNSTRSZ, "Bad debug flag (%s)", $1);
-			    yywarn(warnStr);
+			    pmsprintf(warnStr, MYWARNSTRSZ, "Bad debug flag (%s)", $1);
+			    yyerror(warnStr);
 			    YYERROR;
 			}
-			$$ = sts | $2;
+			$$ = 0;
+		    }
+	| debug NUMBER				{
+			char	nbuf[12];
+			pmsprintf(nbuf, sizeof(nbuf), "%d", $2);
+			sts = pmSetDebug(nbuf);
+			if (sts < 0) {
+			    pmsprintf(warnStr, MYWARNSTRSZ, "Bad debug flag (%s)", nbuf);
+			    yyerror(warnStr);
+			    YYERROR;
+			}
+			$$ = 0;
+		    }
+	| debug NAME					{
+			sts = pmSetDebug($2);
+			if (sts < 0) {
+			    pmsprintf(warnStr, MYWARNSTRSZ, "Bad debug flag (%s)", $2);
+			    yyerror(warnStr);
+			    YYERROR;
+			}
+			$$ = 0;
 		    }
 	;
 

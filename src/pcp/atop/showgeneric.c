@@ -8,7 +8,7 @@
 ** figures.
 **
 ** Copyright (C) 2000-2010 Gerlof Langeveld
-** Copyright (C) 2015 Red Hat.
+** Copyright (C) 2015-2017 Red Hat.
 **
 ** This program is free software; you can redistribute it and/or modify it
 ** under the terms of the GNU General Public License as published by the
@@ -23,10 +23,15 @@
 
 #include <pcp/pmapi.h>
 #include <pcp/impl.h>
+#ifdef HAVE_NCURSES_CURSES_H
+#include <ncurses/curses.h>
+#else
 #include <curses.h>
+#endif
 #include <regex.h>
 #include <pwd.h>
 #include <grp.h>
+#include <stdarg.h>
 
 #include "atop.h"
 #include "photoproc.h"
@@ -275,7 +280,7 @@ generic_samp(double curtime, double delta,
 
 		if (noverflow)
 		{
-			snprintf(statbuf, sizeof statbuf, 
+			pmsprintf(statbuf, sizeof statbuf, 
 			         "Only %d exited processes handled "
 			         "-- %u skipped!", nexit, noverflow);
 			statmsg = statbuf;
@@ -1219,7 +1224,7 @@ generic_samp(double curtime, double delta,
 				{
 					char *ep;
 
-					if (id >= MAXPID-1)
+					if (id >= AT_MAXPID-1)
 					{
 						procsel.pid[id] = 0;	// stub
 
@@ -1713,11 +1718,12 @@ generic_samp(double curtime, double delta,
 					firstproc = 0;
 				break;
 
+#ifndef IS_SOLARIS
 			   /*
 			   ** handle screen resize
 			   */
 			   case KEY_RESIZE:
-				snprintf(statbuf, sizeof statbuf, 
+				pmsprintf(statbuf, sizeof statbuf, 
 					"Window resized to %dx%d...",
 			         		COLS, LINES);
 				statmsg = statbuf;
@@ -1726,6 +1732,7 @@ generic_samp(double curtime, double delta,
 				(void) getch();
 				timeout(-1);
 				break;
+#endif
 
 			   /*
 			   ** unknown key-stroke
@@ -2220,7 +2227,7 @@ generic_init(void)
 			break;
 
 		   default:
-			prusage("atop");
+			prusage("atop", NULL);
 		}
 	}
 

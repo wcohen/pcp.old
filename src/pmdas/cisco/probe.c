@@ -80,10 +80,8 @@ mygetfirstwd(FILE *f)
 	}
     }
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL2)
+    if (pmDebugOptions.appl2)
 	    fprintf(stderr, "mygetfirstwd: %s\n", p == NULL ? "<NULL>" : p);
-#endif
 
     return p;
 }
@@ -137,22 +135,18 @@ probe_cisco(cisco_t * cp)
 		}
 	    }
 	}
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL1) {
+	if (pmDebugOptions.appl1) {
 	    fprintf(stderr, "Send: \n");
 	    fprintf(stderr, "Send: terminal length 0\n");
 	}
-#endif
 	fprintf(cp->fout, "\n");
 	fflush(cp->fout);
 	fprintf(cp->fout, "terminal length 0\n");
 	fflush(cp->fout);
 
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL1) {
+	if (pmDebugOptions.appl1) {
 	    fprintf(stderr, "Send: show int\n");
 	}
-#endif
 	fprintf(cp->fout, "show int\n");
 	fflush(cp->fout);
 
@@ -208,11 +202,9 @@ probe_cisco(cisco_t * cp)
 	    for (i = 0; i < num_intf_tab; i++) {
 		namelen = strlen(intf_tab[i].name);
 		if (strncmp(w, intf_tab[i].name, namelen) == 0) {
-#ifdef PCP_DEBUG
-		    if (pmDebug & DBG_TRACE_APPL2) {
+		    if (pmDebugOptions.appl2) {
 			fprintf(stderr, "Match: if=%s word=%s\n", intf_tab[i].name, w);
 		    }
-#endif
 		    name = strdup(&w[namelen]);
 		    ctype = intf_tab[i].type;
 		    if (intf_tab[i].type != NULL && strcmp(intf_tab[i].type, "a") == 0) {
@@ -233,7 +225,7 @@ probe_cisco(cisco_t * cp)
 		}
 	    }
 	    if (i == num_intf_tab)
-		fprintf(stderr, "%s: Warning, unknown interface: %s\n", pmProgname, w);
+		fprintf(stderr, "%s: Warning, unknown interface: %s\n", pmGetProgname(), w);
 	    if (ctype != NULL && name != NULL && !defer) {
 		if (first)
 		    first = 0;
@@ -248,11 +240,9 @@ probe_cisco(cisco_t * cp)
     putchar('\n');
 
     /* close CISCO telnet session */
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL1) {
+    if (pmDebugOptions.appl1) {
 	fprintf(stderr, "Send: exit\n");
     }
-#endif
     fprintf(cp->fout, "exit\n");
     fflush(cp->fout);
 
@@ -271,7 +261,7 @@ main(int argc, char **argv)
     char		*username = NULL;
     __pmHostEnt		*hostInfo = NULL;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "ND:P:s:U:x:?")) != EOF) {
 	switch (c) {
@@ -280,15 +270,13 @@ main(int argc, char **argv)
 		Nflag = 1;
 		break;
 
-	    case 'D':	/* debug flag */
-		sts = __pmParseDebug(optarg);
+	    case 'D':	/* debug options */
+		sts = pmSetDebug(optarg);
 		if (sts < 0) {
-		    fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-			pmProgname, optarg);
+		    fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+			pmGetProgname(), optarg);
 		    errflag++;
 		}
-		else
-		    pmDebug |= sts;
 		break;
 
 	    case 'P':		/* passwd */
@@ -307,7 +295,7 @@ main(int argc, char **argv)
 		port = (int)strtol(optarg, &endnum, 10);
 		if (*endnum != '\0') {
 		    fprintf(stderr, "%s: -x requires numeric argument\n",
-			    pmProgname);
+			    pmGetProgname());
 		    errflag++;
 		}
 		break;
@@ -318,7 +306,7 @@ main(int argc, char **argv)
     }
 
     if (errflag || optind != argc-1) {
-	fprintf(stderr, "Usage: %s [-U username] [-P passwd] [-s prompt] [-x port] host\n\n", pmProgname);
+	fprintf(stderr, "Usage: %s [-U username] [-P passwd] [-s prompt] [-x port] host\n\n", pmGetProgname());
 	exit(1);
     }
 
@@ -330,14 +318,14 @@ main(int argc, char **argv)
 
 	if ((f = fopen(argv[optind], "r")) == NULL) {
 	    fprintf(stderr, "%s: unknown hostname or filename %s: %s\n",
-		pmProgname, argv[optind], hoststrerror());
+		pmGetProgname(), argv[optind], hoststrerror());
 	    exit(1);
 	}
 	else {
 	    cisco_t c;
 
 	    fprintf(stderr, "%s: assuming file %s contains output from \"show int\" command\n",
-	    	pmProgname, argv[optind]);
+	    	pmGetProgname(), argv[optind]);
 
 	    c.host = argv[optind];
 	    c.username = NULL;

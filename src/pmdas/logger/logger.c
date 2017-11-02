@@ -408,7 +408,7 @@ logger_init(pmdaInterface *dp, const char *configfile)
     /* Create the dynamic PMNS tree and populate it. */
     if ((sts = __pmNewPMNS(&pmns)) < 0) {
 	__pmNotifyErr(LOG_ERR, "%s: failed to create new pmns: %s\n",
-			pmProgname, pmErrStr(sts));
+			pmGetProgname(), pmErrStr(sts));
 	pmns = NULL;
 	return;
     }
@@ -416,7 +416,7 @@ logger_init(pmdaInterface *dp, const char *configfile)
     for (i = 0; i < numloggers; i++) {
 	const char *id = event_pmnsname(i);
 	for (j = 0; j < numdynamics; j++) {
-	    snprintf(name, sizeof(name),
+	    pmsprintf(name, sizeof(name),
 			"logger.perfile.%s.%s", id, dynamic_nametab[j]);
 	    __pmAddPMNSNode(pmns, pmetric[j].m_desc.pmid, name);
 	}
@@ -457,7 +457,7 @@ loggerMain(pmdaInterface *dispatch)
     for (;;) {
 	memcpy(&readyfds, &fds, sizeof(readyfds));
 	nready = select(maxfd+1, &readyfds, NULL, NULL, NULL);
-	if (pmDebug & DBG_TRACE_APPL2)
+	if (pmDebugOptions.appl2)
 	    __pmNotifyErr(LOG_DEBUG, "select: nready=%d interval=%d",
 			  nready, interval_expired);
 	if (nready < 0) {
@@ -471,13 +471,13 @@ loggerMain(pmdaInterface *dispatch)
 
 	__pmAFblock();
 	if (nready > 0 && FD_ISSET(pmcdfd, &readyfds)) {
-	    if (pmDebug & DBG_TRACE_APPL0)
+	    if (pmDebugOptions.appl0)
 		__pmNotifyErr(LOG_DEBUG, "processing pmcd PDU [fd=%d]", pmcdfd);
 	    if (__pmdaMainPDU(dispatch) < 0) {
 		__pmAFunblock();
 		exit(1);	/* fatal if we lose pmcd */
 	    }
-	    if (pmDebug & DBG_TRACE_APPL0)
+	    if (pmDebugOptions.appl0)
 		__pmNotifyErr(LOG_DEBUG, "completed pmcd PDU [fd=%d]", pmcdfd);
 	}
 	if (interval_expired) {
@@ -522,7 +522,7 @@ usage(void)
 	"  -m memory    maximum memory used per logfile (default %ld bytes)\n"
 	"  -s interval  default delay between iterations (default %d sec)\n"
 	"  -U username  user account to run under (default \"pcp\")\n",
-		pmProgname, maxmem, (int)interval.tv_sec);
+		pmGetProgname(), maxmem, (int)interval.tv_sec);
     exit(1);
 }
 
@@ -535,14 +535,14 @@ main(int argc, char **argv)
     long		minmem;
     int			c, err = 0, sep = __pmPathSeparator();
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
     __pmGetUsername(&username);
 
     minmem = getpagesize();
     maxmem = (minmem > DEFAULT_MAXMEM) ? minmem : DEFAULT_MAXMEM;
-    snprintf(helppath, sizeof(helppath), "%s%c" "logger" "%c" "help",
+    pmsprintf(helppath, sizeof(helppath), "%s%c" "logger" "%c" "help",
 		pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
-    pmdaDaemon(&desc, PMDA_INTERFACE_5, pmProgname, LOGGER,
+    pmdaDaemon(&desc, PMDA_INTERFACE_5, pmGetProgname(), LOGGER,
 		"logger.log", helppath);
 
     while ((c = pmdaGetOpt(argc, argv, "D:d:l:m:s:U:?", &desc, &err)) != EOF) {
@@ -553,7 +553,7 @@ main(int argc, char **argv)
 		    convertUnits(&endnum, &maxmem);
 		if (*endnum != '\0' || maxmem < minmem) {
 		    fprintf(stderr, "%s: invalid max memory '%s' (min=%ld)\n",
-			    pmProgname, optarg, minmem);
+			    pmGetProgname(), optarg, minmem);
 		    err++;
 		}
 		break;
@@ -561,7 +561,7 @@ main(int argc, char **argv)
 	    case 's':
 		if (pmParseInterval(optarg, &interval, &endnum) < 0) {
 		    fprintf(stderr, "%s: -s requires a time interval: %s\n",
-			    pmProgname, endnum);
+			    pmGetProgname(), endnum);
 		    free(endnum);
 		    err++;
 		}

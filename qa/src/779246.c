@@ -76,22 +76,19 @@ main(int argc, char *argv[])
     int		errflag = 0;
     char	*host = "localhost";
     char	*namespace = PM_NS_DEFAULT;
-    static char	*debug = "[-D N] ";
-    static char	*usage = "[-h hostname]";
+    static char	*usage = "[-D debugspec] [-h hostname]";
 
-    __pmSetProgname(pmProgname);
+    pmSetProgname(pmGetProgname());
 
     while ((c = getopt(argc, argv, "D:h:")) != EOF) {
 	switch (c) {
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case 'h':	/* hostname for PMCD to contact */
@@ -106,17 +103,17 @@ main(int argc, char *argv[])
     }
 
     if (errflag || optind != argc) {
-	fprintf(stderr, "Usage: %s %s%s\n", pmProgname, debug, usage);
+	fprintf(stderr, "Usage: %s %s\n", pmGetProgname(), usage);
 	exit(1);
     }
 
     if (namespace != PM_NS_DEFAULT && (sts = pmLoadASCIINameSpace(namespace, 1)) < 0) {
-	printf("%s: Cannot load namespace from \"%s\": %s\n", pmProgname, namespace, pmErrStr(sts));
+	printf("%s: Cannot load namespace from \"%s\": %s\n", pmGetProgname(), namespace, pmErrStr(sts));
 	exit(1);
     }
 
     if ((sts = pmNewContext(PM_CONTEXT_HOST, host)) < 0) {
-	printf("%s: Cannot connect to PMCD on host \"%s\": %s\n", pmProgname, host, pmErrStr(sts));
+	printf("%s: Cannot connect to PMCD on host \"%s\": %s\n", pmGetProgname(), host, pmErrStr(sts));
 	exit(1);
     }
 

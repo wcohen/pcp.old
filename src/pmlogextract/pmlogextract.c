@@ -23,9 +23,7 @@
 #include "impl.h"
 #include "logger.h"
 
-#ifdef PCP_DEBUG
 long totalmalloc;
-#endif
 static pmUnits nullunits;
 static int desperate;
 
@@ -186,15 +184,13 @@ matchnames(__pmPDU *a, __pmPDU *b)
 	if (num_a_eq == num_a) sts = MATCH_SUBSET;
 	else sts = MATCH_SOME;
     }
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL1) {
+    if (pmDebugOptions.appl1) {
 	fprintf(stderr, "matchnames: ");
 	printmetricnames(stderr, a);
 	fprintf(stderr, " : ");
 	printmetricnames(stderr, b);
 	fprintf(stderr, " num_a=%d num_b=%d num_a_eq=%d num_b_eq=%d -> %d\n", num_a, num_b, num_a_eq, num_b_eq, sts);
     }
-#endif
 
     return sts;
 }
@@ -353,13 +349,13 @@ abandon_extract(void)
     if (desperate == 0) {
 	fprintf(stderr, "Archive \"%s\" not created.\n", outarchname);
 	while (logctl.l_curvol >= 0) {
-	    snprintf(fname, sizeof(fname), "%s.%d", outarchname, logctl.l_curvol);
+	    pmsprintf(fname, sizeof(fname), "%s.%d", outarchname, logctl.l_curvol);
 	    unlink(fname);
 	    logctl.l_curvol--;
 	}
-	snprintf(fname, sizeof(fname), "%s.meta", outarchname);
+	pmsprintf(fname, sizeof(fname), "%s.meta", outarchname);
 	unlink(fname);
-	snprintf(fname, sizeof(fname), "%s.index", outarchname);
+	pmsprintf(fname, sizeof(fname), "%s.index", outarchname);
 	unlink(fname);
     }
     exit(1);
@@ -377,7 +373,7 @@ _report(__pmFILE *fp)
 
     here = __pmLseek(fp, 0L, SEEK_CUR);
     fprintf(stderr, "%s: Error occurred at byte offset %ld into a file of",
-	    pmProgname, (long int)here);
+	    pmGetProgname(), (long int)here);
     if (__pmFstat(fp, &sbuf) < 0)
 	fprintf(stderr, ": stat: %s\n", osstrerror());
     else
@@ -404,13 +400,13 @@ newvolume(char *base, __pmTimeval *tvp)
 	__pmFflush(logctl.l_mfp);
 	stamp.tv_sec = ntohl(tvp->tv_sec);
 	stamp.tv_usec = ntohl(tvp->tv_usec);
-	fprintf(stderr, "%s: New log volume %d, at ", pmProgname, nextvol);
+	fprintf(stderr, "%s: New log volume %d, at ", pmGetProgname(), nextvol);
 	__pmPrintStamp(stderr, &stamp);
 	fputc('\n', stderr);
     }
     else {
 	fprintf(stderr, "%s: Error: volume %d: %s\n",
-		pmProgname, nextvol, pmErrStr(-oserror()));
+		pmGetProgname(), nextvol, pmErrStr(-oserror()));
 	abandon_extract();
     }
     flushsize = 100000;
@@ -437,7 +433,7 @@ newlabel(void)
 
     if (inarchvers != PM_LOG_VERS02) {
 	fprintf(stderr,"%s: Error: illegal version number %d in archive (%s)\n",
-		pmProgname, inarchvers, iap->name);
+		pmGetProgname(), inarchvers, iap->name);
 	abandon_extract();
     }
 
@@ -469,7 +465,7 @@ newlabel(void)
 		"%s: Error: input archives with different version numbers\n"
 		"archive: %s version: %d\n"
 		"archive: %s version: %d\n",
-		    pmProgname, inarch[0].name, inarchvers,
+		    pmGetProgname(), inarch[0].name, inarchvers,
 		    iap->name, (iap->label.ll_magic & 0xff));
 	    abandon_extract();
         }
@@ -477,7 +473,7 @@ newlabel(void)
 	/* Ensure all archives of the same host */
 	if (strcmp(lp->ill_hostname, iap->label.ll_hostname) != 0) {
 	    fprintf(stderr,"%s: Error: host name mismatch for input archives\n",
-		    pmProgname);
+		    pmGetProgname());
 	    fprintf(stderr, "archive: %s host: %s\n",
 		    inarch[0].name, inarch[0].label.ll_hostname);
 	    fprintf(stderr, "archive: %s host: %s\n",
@@ -489,7 +485,7 @@ newlabel(void)
 	if (strcmp(lp->ill_tz, iap->label.ll_tz) != 0) {
 	    fprintf(stderr,
 		"%s: Warning: timezone mismatch for input archives\n",
-		    pmProgname);
+		    pmGetProgname());
 	    if (farg) {
 		fprintf(stderr, "archive: %s timezone: %s [will be used]\n",
 		    inarch[0].name, lp->ill_tz);
@@ -546,15 +542,13 @@ mk_reclist_t(void)
 
     if ((rec = (reclist_t *)malloc(sizeof(reclist_t))) == NULL) {
 	fprintf(stderr, "%s: Error: cannot malloc space for record list.\n",
-		pmProgname);
+		pmGetProgname());
 	abandon_extract();
     }
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL0) {
+    if (pmDebugOptions.appl0) {
         totalmalloc += sizeof(reclist_t);
         fprintf(stderr, "mk_reclist_t: allocated %d\n", (int)sizeof(reclist_t));
     }
-#endif
     rec->pdu = NULL;
     rec->desc.pmid = PM_ID_NULL;
     rec->desc.type = PM_TYPE_NOSUPPORT;
@@ -670,37 +664,32 @@ update_descreclist(int i)
     else {
 	curr = rdesc;
 	/* find matching record or last record */
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL1) {
+	if (pmDebugOptions.appl1) {
 	    fprintf(stderr, "update_descreclist: looking for ");
 	    printmetricnames(stderr, iap->pb[META]);
 	    fprintf(stderr, " (pmid:%s)\n", pmIDStr(ntoh_pmID(iap->pb[META][2])));
 	}
-#endif
 	while (curr->next != NULL && curr->desc.pmid != ntoh_pmID(iap->pb[META][2])) {
 	    if (curr->pdu != NULL) {
 		if (matchnames(curr->pdu, iap->pb[META]) != MATCH_NONE) {
-		    fprintf(stderr, "%s: Error: metric ", pmProgname);
+		    fprintf(stderr, "%s: Error: metric ", pmGetProgname());
 		    printmetricnames(stderr, curr->pdu);
 		    fprintf(stderr, ": PMID changed from %s", pmIDStr(curr->desc.pmid));
 		    fprintf(stderr, " to %s!\n", pmIDStr(ntoh_pmID(iap->pb[META][2])));
 		    abandon_extract();
 		}
-#ifdef PCP_DEBUG
-		if (pmDebug & DBG_TRACE_APPL1) {
+		if (pmDebugOptions.appl1) {
 		    fprintf(stderr, "update_descreclist: nomatch ");
 		    printmetricnames(stderr, curr->pdu);
 		    fprintf(stderr, " (pmid:%s)\n", pmIDStr(curr->desc.pmid));
 		}
-#endif
 	    }
 	    curr = curr->next;
 	}
     }
 
     if (curr->desc.pmid == ntoh_pmID(iap->pb[META][2])) {
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL1) {
+	if (pmDebugOptions.appl1) {
 	    fprintf(stderr, "update_descreclist: pmid match ");
 	    printmetricnames(stderr, curr->pdu);
 	    fprintf(stderr, " type: old %s", pmTypeStr(curr->desc.type));
@@ -717,9 +706,8 @@ update_descreclist(int i)
 	    fprintf(stderr, " new %s", pmUnitsStr(&pmu));
 	    fputc('\n', stderr);
 	}
-#endif
 	if (matchnames(curr->pdu, iap->pb[META]) != MATCH_EQUAL) {
-	    fprintf(stderr, "%s: Error: metric PMID %s", pmProgname, pmIDStr(curr->desc.pmid));
+	    fprintf(stderr, "%s: Error: metric PMID %s", pmGetProgname(), pmIDStr(curr->desc.pmid));
 	    fprintf(stderr, ": name changed from ");
 	    printmetricnames(stderr, curr->pdu);
 	    fprintf(stderr, " to ");
@@ -728,7 +716,7 @@ update_descreclist(int i)
 	    abandon_extract();
 	}
 	if (curr->desc.type != ntohl(iap->pb[META][3])) {
-	    fprintf(stderr, "%s: Error: metric ", pmProgname);
+	    fprintf(stderr, "%s: Error: metric ", pmGetProgname());
 	    printmetricnames(stderr, curr->pdu);
 	    fprintf(stderr, ": type changed from");
 	    fprintf(stderr, " %s", pmTypeStr(curr->desc.type));
@@ -736,7 +724,7 @@ update_descreclist(int i)
 	    abandon_extract();
 	}
 	if (curr->desc.indom != ntoh_pmInDom(iap->pb[META][4])) {
-	    fprintf(stderr, "%s: Error: metric ", pmProgname);
+	    fprintf(stderr, "%s: Error: metric ", pmGetProgname());
 	    printmetricnames(stderr, curr->pdu);
 	    fprintf(stderr, ": indom changed from");
 	    fprintf(stderr, " %s", pmInDomStr(curr->desc.indom));
@@ -744,7 +732,7 @@ update_descreclist(int i)
 	    abandon_extract();
 	}
 	if (curr->desc.sem != ntohl(iap->pb[META][5])) {
-	    fprintf(stderr, "%s: Error: metric ", pmProgname);
+	    fprintf(stderr, "%s: Error: metric ", pmGetProgname());
 	    printmetricnames(stderr, curr->pdu);
 	    fprintf(stderr, ": semantics changed from");
 	    fprintf(stderr, " ");
@@ -762,7 +750,7 @@ update_descreclist(int i)
 	    curr->desc.units.scaleSpace != pmu.scaleSpace ||
 	    curr->desc.units.scaleTime != pmu.scaleTime ||
 	    curr->desc.units.scaleCount != pmu.scaleCount) {
-	    fprintf(stderr, "%s: Error: metric ", pmProgname);
+	    fprintf(stderr, "%s: Error: metric ", pmGetProgname());
 	    printmetricnames(stderr, curr->pdu);
 	    fprintf(stderr, ": units changed from");
 	    fprintf(stderr, " %s", pmUnitsStr(&curr->desc.units));
@@ -870,13 +858,12 @@ write_rec(reclist_t *rec)
 
     if (rec->written == MARK_FOR_WRITE) {
 	if (rec->pdu == NULL) {
-	    fprintf(stderr, "%s: Fatal Error!\n", pmProgname);
+	    fprintf(stderr, "%s: Fatal Error!\n", pmGetProgname());
 	    fprintf(stderr,"    record is marked for write, but pdu is NULL\n");
 	    abandon_extract();
 	}
 
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_LOGMETA) {
+	if (pmDebugOptions.logmeta) {
 	    __pmLogHdr	*h;
 	    int		len;
 	    int		type;
@@ -934,12 +921,11 @@ write_rec(reclist_t *rec)
 		fprintf(stderr, "Botch: bad type\n");
 	    }
 	}
-#endif
 
 	/* write out the pdu ; exit if write failed */
 	if ((sts = _pmLogPut(logctl.l_mdfp, rec->pdu)) < 0) {
 	    fprintf(stderr, "%s: Error: _pmLogPut: meta data : %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
 	    abandon_extract();
 	}
 	/* META: free PDU buffer */
@@ -950,7 +936,7 @@ write_rec(reclist_t *rec)
     else {
 	fprintf(stderr,
 		"%s : Warning: attempting to write out meta record (%d,%d)\n",
-		pmProgname, rec->desc.pmid, rec->desc.indom);
+		pmGetProgname(), rec->desc.pmid, rec->desc.indom);
 	fprintf(stderr, "        when it is not marked for writing (%d)\n",
 		rec->written);
     }
@@ -983,7 +969,7 @@ write_metareclist(pmResult *result, int *needti)
 	if (curr_desc == NULL) {
 	    /* descriptor has not been found - this is bad
 	     */
-	    fprintf(stderr, "%s: Error: meta data (TYPE_DESC) for pmid %s has not been found.\n", pmProgname, pmIDStr(pmid));
+	    fprintf(stderr, "%s: Error: meta data (TYPE_DESC) for pmid %s has not been found.\n", pmGetProgname(), pmIDStr(pmid));
 	    abandon_extract();
 	}
 	else {
@@ -1001,7 +987,7 @@ write_metareclist(pmResult *result, int *needti)
 		 *  - this is bad
 		 */
 		fprintf(stderr, "%s: Error: missing pdu for pmid %s\n",
-			pmProgname, pmIDStr(pmid));
+			pmGetProgname(), pmIDStr(pmid));
 	        abandon_extract();
 	    }
 	    else {
@@ -1080,15 +1066,13 @@ _createmark(void)
     markp = (mark_t *)malloc(sizeof(mark_t)+sizeof(int));
     if (markp == NULL) {
 	fprintf(stderr, "%s: Error: mark_t malloc: %s\n",
-		pmProgname, osstrerror());
+		pmGetProgname(), osstrerror());
 	abandon_extract();
     }
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL0) {
+    if (pmDebugOptions.appl0) {
         totalmalloc += sizeof(mark_t);
         fprintf(stderr, "_createmark : allocated %d\n", (int)sizeof(mark_t));
     }
-#endif
 
     markp->len = (int)sizeof(mark_t);
     markp->type = markp->from = 0;
@@ -1124,6 +1108,7 @@ nextmeta(void)
 {
     int		i;
     int		j;
+    int		type;
     int		want;
     int		numeof = 0;
     int		sts;
@@ -1146,12 +1131,12 @@ nextmeta(void)
 	/* we should never already have a meta record
 	 */
 	if (iap->pb[META] != NULL) {
-	    fprintf(stderr, "%s: Fatal Error!\n", pmProgname);
+	    fprintf(stderr, "%s: Fatal Error!\n", pmGetProgname());
 	    fprintf(stderr, "    iap->pb[META] is not NULL\n");
 	    abandon_extract();
 	}
 	if ((ctxp = __pmHandleToPtr(iap->ctx)) == NULL) {
-	    fprintf(stderr, "%s: botch: __pmHandleToPtr(%d) returns NULL!\n", pmProgname, iap->ctx);
+	    fprintf(stderr, "%s: botch: __pmHandleToPtr(%d) returns NULL!\n", pmGetProgname(), iap->ctx);
 	    abandon_extract();
 	}
 	/* Need to hold c_lock for _pmLogGet() */
@@ -1166,7 +1151,7 @@ againmeta:
 	    ++numeof;
 	    if (sts != PM_ERR_EOL) {
 		fprintf(stderr, "%s: Error: _pmLogGet[meta %s]: %s\n",
-			pmProgname, iap->name, pmErrStr(sts));
+			pmGetProgname(), iap->name, pmErrStr(sts));
 		_report(lcp->l_mdfp);
 		abandon_extract();
 	    }
@@ -1174,10 +1159,12 @@ againmeta:
 	    continue;
 	}
 
+	type = ntohl(iap->pb[META][1]);
+
 	/* pmDesc entries, if not seen before & wanted,
 	 *	then append to desc list
 	 */
-	if (ntohl(iap->pb[META][1]) == TYPE_DESC) {
+	if (type == TYPE_DESC) {
 	    pmid = ntoh_pmID(iap->pb[META][2]);
 
 	    /* if ml is defined, then look for pmid in the list
@@ -1210,7 +1197,7 @@ againmeta:
 		goto againmeta;
 	    }
 	}
-	else if (ntohl(iap->pb[META][1]) == TYPE_INDOM) {
+	else if (type == TYPE_INDOM) {
 	    /* if ml is defined, then look for instance domain in the list
 	     * if indom is not in the list then discard it immediately
 	     */
@@ -1243,9 +1230,27 @@ againmeta:
 	        goto againmeta;
 	    }
 	}
+	else if (type == TYPE_LABEL) {
+	    /* TODO: support label metadata extraction */
+	    if (pmDebugOptions.logmeta)
+		fprintf(stderr, "%s: Warning: %s\n",
+			pmGetProgname(), pmErrStr(PM_ERR_NOLABELS));
+	    free(iap->pb[META]);
+	    iap->pb[META] = NULL;
+	    goto againmeta;
+	}
+	else if (type == TYPE_TEXT) {
+	    /* TODO: support help text extraction */
+	    if (pmDebugOptions.logmeta)
+		fprintf(stderr, "%s: Warning: %s\n",
+			pmGetProgname(), pmErrStr(PM_ERR_TEXT));
+	    free(iap->pb[META]);
+	    iap->pb[META] = NULL;
+	    goto againmeta;
+	}
 	else {
 	    fprintf(stderr, "%s: Error: unrecognised meta data type: %d\n",
-		    pmProgname, (int)ntohl(iap->pb[META][1]));
+		    pmGetProgname(), type);
 	    abandon_extract();
 	}
 
@@ -1297,7 +1302,7 @@ nextlog(void)
 	}
 
 	if ((ctxp = __pmHandleToPtr(iap->ctx)) == NULL) {
-	    fprintf(stderr, "%s: botch: __pmHandleToPtr(%d) returns NULL!\n", pmProgname, iap->ctx);
+	    fprintf(stderr, "%s: botch: __pmHandleToPtr(%d) returns NULL!\n", pmGetProgname(), iap->ctx);
 	    abandon_extract();
 	}
 	/* Need to hold c_lock for __pmLogRead_ctx() */
@@ -1307,7 +1312,7 @@ againlog:
 	if ((sts=__pmLogRead_ctx(ctxp, PM_MODE_FORW, NULL, &iap->_result, PMLOGREAD_NEXT)) < 0) {
 	    if (sts != PM_ERR_EOL) {
 		fprintf(stderr, "%s: Error: __pmLogRead[log %s]: %s\n",
-			pmProgname, iap->name, pmErrStr(sts));
+			pmGetProgname(), iap->name, pmErrStr(sts));
 		_report(lcp->l_mfp);
 		if (sts != PM_ERR_LOGREC)
 		    abandon_extract();
@@ -1406,20 +1411,18 @@ parseargs(int argc, char *argv[])
 	case 'c':	/* config file */
 	    configfile = opts.optarg;
 	    if (stat(configfile, &sbuf) < 0) {
-		pmprintf("%s: %s - invalid file\n", pmProgname, configfile);
+		pmprintf("%s: %s - invalid file\n", pmGetProgname(), configfile);
 		opts.errors++;
 	    }
 	    break;
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(opts.optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(opts.optarg);
 	    if (sts < 0) {
-		pmprintf("%s: unrecognized debug flag specification (%s)\n",
-			pmProgname, opts.optarg);
+		pmprintf("%s: unrecognized debug options specification (%s)\n",
+			pmGetProgname(), opts.optarg);
 		opts.errors++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case 'd':	/* desperate to save output archive, even after error */
@@ -1433,7 +1436,7 @@ parseargs(int argc, char *argv[])
 	case 's':	/* number of samples to write out */
 	    sarg = (int)strtol(opts.optarg, &endnum, 10);
 	    if (*endnum != '\0' || sarg < 0) {
-		pmprintf("%s: -s requires numeric argument\n", pmProgname);
+		pmprintf("%s: -s requires numeric argument\n", pmGetProgname());
 		opts.errors++;
 	    }
 	    break;
@@ -1449,7 +1452,7 @@ parseargs(int argc, char *argv[])
 	case 'v':	/* number of samples per volume */
 	    varg = (int)strtol(opts.optarg, &endnum, 10);
 	    if (*endnum != '\0' || varg < 0) {
-		pmprintf("%s: -v requires numeric argument\n", pmProgname);
+		pmprintf("%s: -v requires numeric argument\n", pmGetProgname());
 		opts.errors++;
 	    }
 	    break;
@@ -1461,7 +1464,7 @@ parseargs(int argc, char *argv[])
 	case 'Z':	/* use timezone from command line */
 	    if (zarg) {
 		pmprintf("%s: at most one of -Z and/or -z allowed\n",
-			pmProgname);
+			pmGetProgname());
 		opts.errors++;
 	    }
 	    tz = opts.optarg;
@@ -1470,7 +1473,7 @@ parseargs(int argc, char *argv[])
 	case 'z':	/* use timezone from archive */
 	    if (tz != NULL) {
 		pmprintf("%s: at most one of -Z and/or -z allowed\n",
-			pmProgname);
+			pmGetProgname());
 		opts.errors++;
 	    }
 	    zarg++;
@@ -1485,14 +1488,14 @@ parseargs(int argc, char *argv[])
 
     if (warg) {
 	if (Sarg == NULL || Targ == NULL) {
-	    fprintf(stderr, "%s: Warning: -w flag requires that both -S and -T are specified.\nIgnoring -w flag.\n", pmProgname);
+	    fprintf(stderr, "%s: Warning: -w flag requires that both -S and -T are specified.\nIgnoring -w flag.\n", pmGetProgname());
 	    warg = 0;
 	}
     }
 
 
     if (opts.errors == 0 && opts.optind > argc - 2) {
-	pmprintf("%s: Error: insufficient arguments\n", pmProgname);
+	pmprintf("%s: Error: insufficient arguments\n", pmGetProgname());
 	opts.errors++;
     }
 
@@ -1506,7 +1509,7 @@ parseconfig(void)
 
     if ((yyin = fopen(configfile, "r")) == NULL) {
 	fprintf(stderr, "%s: Cannot open config file \"%s\": %s\n",
-		pmProgname, configfile, osstrerror());
+		pmGetProgname(), configfile, osstrerror());
 	exit(1);
     }
 
@@ -1593,7 +1596,7 @@ checkwinend(__pmTimeval now)
     markpdu = _createmark();
     if ((sts = __pmLogPutResult2(&logctl, markpdu)) < 0) {
 	fprintf(stderr, "%s: Error: __pmLogPutResult2: log data: %s\n",
-		pmProgname, pmErrStr(sts));
+		pmGetProgname(), pmErrStr(sts));
 	abandon_extract();
     }
     written++;
@@ -1658,7 +1661,7 @@ fprintf(stderr, " break!\n");
 	sts = __pmEncodeResult(PDU_OVERRIDE2, elm->res, &pb);
 	if (sts < 0) {
 	    fprintf(stderr, "%s: Error: __pmEncodeResult: %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
 	    abandon_extract();
 	}
 
@@ -1687,7 +1690,7 @@ fprintf(stderr, " break!\n");
 	assert(old_log_offset >= 0);
 	if ((sts = __pmLogPutResult2(&logctl, pb)) < 0) {
 	    fprintf(stderr, "%s: Error: __pmLogPutResult2: log data: %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
 	    abandon_extract();
 	}
 	written++;
@@ -1759,13 +1762,13 @@ writemark(inarch_t *iap)
     mark_t      *p = (mark_t *)iap->pb[LOG];
 
     if (!iap->mark) {
-	fprintf(stderr, "%s: Fatal Error!\n", pmProgname);
+	fprintf(stderr, "%s: Fatal Error!\n", pmGetProgname());
 	fprintf(stderr, "    writemark called, but mark not set\n");
 	abandon_extract();
     }
 
     if (p == NULL) {
-	fprintf(stderr, "%s: Fatal Error!\n", pmProgname);
+	fprintf(stderr, "%s: Fatal Error!\n", pmGetProgname());
 	fprintf(stderr, "    writemark called, but no pdu\n");
 	abandon_extract();
     }
@@ -1775,7 +1778,7 @@ writemark(inarch_t *iap)
 
     if ((sts = __pmLogPutResult2(&logctl, iap->pb[LOG])) < 0) {
 	fprintf(stderr, "%s: Error: __pmLogPutResult2: log data: %s\n",
-		pmProgname, pmErrStr(sts));
+		pmGetProgname(), pmErrStr(sts));
 	abandon_extract();
     }
     written++;
@@ -1832,16 +1835,14 @@ main(int argc, char **argv)
     inarch = (inarch_t *) malloc(inarchnum * sizeof(inarch_t));
     if (inarch == NULL) {
 	fprintf(stderr, "%s: Error: mallco inarch: %s\n",
-		pmProgname, osstrerror());
+		pmGetProgname(), osstrerror());
 	exit(1);
     }
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL0) {
+    if (pmDebugOptions.appl0) {
         totalmalloc += (inarchnum * sizeof(inarch_t));
         fprintf(stderr, "main        : allocated %d\n",
 			(int)(inarchnum * sizeof(inarch_t)));
     }
-#endif
 
 
     for (i=0; i<inarchnum; i++, opts.optind++) {
@@ -1857,24 +1858,24 @@ main(int argc, char **argv)
 
 	if ((iap->ctx = pmNewContext(PM_CONTEXT_ARCHIVE, iap->name)) < 0) {
 	    fprintf(stderr, "%s: Error: cannot open archive \"%s\": %s\n",
-		    pmProgname, iap->name, pmErrStr(iap->ctx));
+		    pmGetProgname(), iap->name, pmErrStr(iap->ctx));
 	    exit(1);
 	}
 
 	if ((sts = pmUseContext(iap->ctx)) < 0) {
 	    fprintf(stderr, "%s: Error: cannot use context (%s): %s\n",
-		    pmProgname, iap->name, pmErrStr(sts));
+		    pmGetProgname(), iap->name, pmErrStr(sts));
 	    exit(1);
 	}
 
 	if ((sts = pmGetArchiveLabel(&iap->label)) < 0) {
-	    fprintf(stderr, "%s: Error: cannot get archive label record (%s): %s\n", pmProgname, iap->name, pmErrStr(sts));
+	    fprintf(stderr, "%s: Error: cannot get archive label record (%s): %s\n", pmGetProgname(), iap->name, pmErrStr(sts));
 	    exit(1);
 	}
 
 	if ((sts = pmGetArchiveEnd(&unused)) < 0) {
 	    fprintf(stderr, "%s: Error: cannot get end of archive (%s): %s\n",
-		pmProgname, iap->name, pmErrStr(sts));
+		pmGetProgname(), iap->name, pmErrStr(sts));
 	    if (desperate) {
 		unused.tv_sec = INT_MAX;
 		unused.tv_usec = 0;
@@ -1924,7 +1925,7 @@ main(int argc, char **argv)
 	/* use TZ from metrics source (input-archive) */
 	if ((sts = pmNewZone(inarch[0].label.ll_tz)) < 0) {
 	    fprintf(stderr, "%s: Cannot set context timezone: %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
             exit_status = 1;
             goto cleanup;
 	}
@@ -1934,7 +1935,7 @@ main(int argc, char **argv)
 	/* use TZ as specified by user */
 	if ((sts = pmNewZone(tz)) < 0) {
 	    fprintf(stderr, "%s: Cannot set timezone to \"%s\": %s\n",
-		    pmProgname, tz, pmErrStr(sts));
+		    pmGetProgname(), tz, pmErrStr(sts));
 	    exit_status = 1;
 	    goto cleanup;
 	}
@@ -1946,7 +1947,7 @@ main(int argc, char **argv)
 	/* use TZ from local host */
 	if ((sts = pmNewZone(tz)) < 0) {
 	    fprintf(stderr, "%s: Cannot set local host's timezone: %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
 	    exit_status = 1;
 	    goto cleanup;
 	}
@@ -1956,7 +1957,7 @@ main(int argc, char **argv)
     /* create output log - must be done before writing label */
     if ((sts = __pmLogCreate("", outarchname, outarchvers, &logctl)) < 0) {
 	fprintf(stderr, "%s: Error: __pmLogCreate: %s\n",
-		pmProgname, pmErrStr(sts));
+		pmGetProgname(), pmErrStr(sts));
 	exit(1);
     }
 
@@ -1976,7 +1977,7 @@ main(int argc, char **argv)
 			    &winstart_tval, &winend_tval, &unused, &msg);
     if (sts < 0) {
 	fprintf(stderr, "%s: Invalid time window specified: %s\n",
-		pmProgname, msg);
+		pmGetProgname(), msg);
 	abandon_extract();
     }
     winstart.tv_sec = winstart_tval.tv_sec;
@@ -1988,7 +1989,7 @@ main(int argc, char **argv)
 
     if (warg) {
 	if (winstart.tv_sec + NUM_SEC_PER_DAY < winend.tv_sec) {
-	    fprintf(stderr, "%s: Warning: -S and -T must specify a time window within\nthe same day, for -w to be used.  Ignoring -w flag.\n", pmProgname);
+	    fprintf(stderr, "%s: Warning: -S and -T must specify a time window within\nthe same day, for -w to be used.  Ignoring -w flag.\n", pmGetProgname());
 	    warg = 0;
 	}
     }
@@ -2083,7 +2084,7 @@ main(int argc, char **argv)
 	/* prepare to write out log record
 	 */
 	if (ilog < 0 || ilog >= inarchnum) {
-	    fprintf(stderr, "%s: Fatal Error!\n", pmProgname);
+	    fprintf(stderr, "%s: Fatal Error!\n", pmGetProgname());
 	    fprintf(stderr, "    log file index = %d\n", ilog);
 	    abandon_extract();
 	}
@@ -2096,7 +2097,7 @@ main(int argc, char **argv)
 	    /* result is to be written out, but there is no _Nresult
 	     */
 	    if (iap->_Nresult == NULL) {
-		fprintf(stderr, "%s: Fatal Error!\n", pmProgname);
+		fprintf(stderr, "%s: Fatal Error!\n", pmGetProgname());
 		fprintf(stderr, "    pick == LOG and _Nresult = NULL\n");
 		abandon_extract();
 	    }
@@ -2148,7 +2149,7 @@ main(int argc, char **argv)
 
     if (first_datarec) {
         fprintf(stderr, "%s: Warning: no qualifying records found.\n",
-                pmProgname);
+                pmGetProgname());
 cleanup:
 	abandon_extract();
     }
@@ -2177,11 +2178,9 @@ cleanup:
 	/* need to fix up label with new start-time */
 	writelabel_metati(1);
     }
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL0) {
+    if (pmDebugOptions.appl0) {
         fprintf(stderr, "main        : total allocated %ld\n", totalmalloc);
     }
-#endif
 
     exit(exit_status);
 }

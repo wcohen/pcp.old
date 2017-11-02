@@ -118,22 +118,20 @@ parseargs(int argc, char *argv[])
 	    Aarg = opts.optarg;
 	    break;
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(opts.optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(opts.optarg);
 	    if (sts < 0) {
-		pmprintf("%s: unrecognized debug flag specification (%s)\n",
-			pmProgname, opts.optarg);
+		pmprintf("%s: unrecognized debug options specification (%s)\n",
+			pmGetProgname(), opts.optarg);
 		opts.errors++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case 's':	/* number of samples to write out */
 	    sarg = (int)strtol(opts.optarg, &endnum, 10);
 	    if (*endnum != '\0' || sarg < 0) {
 		pmprintf("%s: -s requires numeric argument\n",
-			pmProgname);
+			pmGetProgname());
 		opts.errors++;
 	    }
 	    break;
@@ -160,7 +158,7 @@ parseargs(int argc, char *argv[])
 	    varg = (int)strtol(opts.optarg, &endnum, 10);
 	    if (*endnum != '\0' || varg < 0) {
 		pmprintf("%s: -v requires numeric argument\n",
-			pmProgname);
+			pmGetProgname());
 		opts.errors++;
 	    }
 	    break;
@@ -168,7 +166,7 @@ parseargs(int argc, char *argv[])
 	case 'Z':	/* use timezone from command line */
 	    if (zarg) {
 		pmprintf("%s: at most one of -Z and/or -z allowed\n",
-			pmProgname);
+			pmGetProgname());
 		opts.errors++;
 
 	    }
@@ -178,7 +176,7 @@ parseargs(int argc, char *argv[])
 	case 'z':	/* use timezone from archive */
 	    if (tz != NULL) {
 		pmprintf("%s: at most one of -Z and/or -z allowed\n",
-			pmProgname);
+			pmGetProgname());
 		opts.errors++;
 	    }
 	    zarg++;
@@ -192,7 +190,7 @@ parseargs(int argc, char *argv[])
     }
 
     if (opts.errors == 0 && opts.optind > argc-2) {
-	pmprintf("%s: Error: insufficient arguments\n", pmProgname);
+	pmprintf("%s: Error: insufficient arguments\n", pmGetProgname());
 	opts.errors++;
     }
 
@@ -233,12 +231,12 @@ main(int argc, char **argv)
      */
     if ((ictx_a = pmNewContext(PM_CONTEXT_ARCHIVE, iname)) < 0) {
 	fprintf(stderr, "%s: Error: cannot open archive \"%s\" (ctx_a): %s\n",
-		pmProgname, iname, pmErrStr(ictx_a));
+		pmGetProgname(), iname, pmErrStr(ictx_a));
 	exit(1);
     }
 
     if ((sts = pmGetArchiveLabel(&ilabel)) < 0) {
-	fprintf(stderr, "%s: Error: cannot get archive label record (%s): %s\n", pmProgname, iname, pmErrStr(sts));
+	fprintf(stderr, "%s: Error: cannot get archive label record (%s): %s\n", pmGetProgname(), iname, pmErrStr(sts));
 	exit(1);
     }
 
@@ -249,7 +247,7 @@ main(int argc, char **argv)
     /* end time */
     if ((sts = pmGetArchiveEnd(&logend_tval)) < 0) {
 	fprintf(stderr, "%s: Error: cannot get end of archive (%s): %s\n",
-		pmProgname, iname, pmErrStr(sts));
+		pmGetProgname(), iname, pmErrStr(sts));
 	exit(1);
     }
 
@@ -257,7 +255,7 @@ main(int argc, char **argv)
 	/* use TZ from metrics source (input-archive) */
 	if ((sts = pmNewZone(ilabel.ll_tz)) < 0) {
 	    fprintf(stderr, "%s: Cannot set context timezone: %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
             exit(1);
 	}
 	printf("Note: timezone set to local timezone of host \"%s\" from archive\n\n", ilabel.ll_hostname);
@@ -266,7 +264,7 @@ main(int argc, char **argv)
 	/* use TZ as specified by user */
 	if ((sts = pmNewZone(tz)) < 0) {
 	    fprintf(stderr, "%s: Cannot set timezone to \"%s\": %s\n",
-		    pmProgname, tz, pmErrStr(sts));
+		    pmGetProgname(), tz, pmErrStr(sts));
 	    exit(1);
 	}
 	printf("Note: timezone set to \"TZ=%s\"\n\n", tz);
@@ -277,7 +275,7 @@ main(int argc, char **argv)
 	/* use TZ from local host */
 	if ((sts = pmNewZone(tz)) < 0) {
 	    fprintf(stderr, "%s: Cannot set local host's timezone: %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
 	    exit(1);
 	}
     }
@@ -288,30 +286,28 @@ main(int argc, char **argv)
 			    &winstart_tval, &winend_tval, &unused, &msg);
     if (sts < 0) {
 	fprintf(stderr, "%s: Invalid time window specified: %s\n",
-		pmProgname, msg);
+		pmGetProgname(), msg);
 	exit(1);
     }
-#if PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL0) {
+    if (pmDebugOptions.appl0) {
 	char	buf[26];
 	pmCtime((const time_t *)&winstart_tval.tv_sec, buf);
 	fprintf(stderr, "Start time: %s", buf);
 	pmCtime((const time_t *)&winend_tval.tv_sec, buf);
 	fprintf(stderr, "End time: %s", buf);
     }
-#endif
 
     if ((sts = pmSetMode(PM_MODE_INTERP | PM_XTB_SET(PM_TIME_SEC),
                          &winstart_tval, (int)targ)) < 0) {
 	fprintf(stderr, "%s: pmSetMode(PM_MODE_INTERP ...) failed: %s\n",
-		pmProgname, pmErrStr(sts));
+		pmGetProgname(), pmErrStr(sts));
 	exit(1);
     }
 
     /* create output log - must be done before writing label */
     if ((sts = __pmLogCreate("", oname, PM_LOG_VERS02, &logctl)) < 0) {
 	fprintf(stderr, "%s: Error: __pmLogCreate: %s\n",
-		pmProgname, pmErrStr(sts));
+		pmGetProgname(), pmErrStr(sts));
 	exit(1);
     }
 
@@ -337,7 +333,7 @@ main(int argc, char **argv)
      */
     if ((sts = pmTraversePMNS ("", dometric)) < 0) {
 	fprintf(stderr, "%s: Error traversing namespace ... %s\n",
-		pmProgname, pmErrStr(sts));
+		pmGetProgname(), pmErrStr(sts));
 	goto cleanup;
     }
 
@@ -358,14 +354,14 @@ main(int argc, char **argv)
 	 */
 	if ((sts = pmUseContext(ictx_a)) < 0) {
 	    fprintf(stderr, "%s: Error: cannot use context (%s): %s\n",
-		    pmProgname, iname, pmErrStr(sts));
+		    pmGetProgname(), iname, pmErrStr(sts));
 	    goto cleanup;
 	}
 	if ((sts = pmFetch(numpmid, pmidlist, &irp)) < 0) {
 	    if (sts == PM_ERR_EOL)
 		break;
 	    fprintf(stderr,
-		"%s: Error: pmFetch failed: %s\n", pmProgname, pmErrStr(sts));
+		"%s: Error: pmFetch failed: %s\n", pmGetProgname(), pmErrStr(sts));
 	    exit(1);
 	}
 	if (irp->timestamp.tv_sec > winend_tval.tv_sec ||
@@ -374,12 +370,10 @@ main(int argc, char **argv)
 	    /* past end time as per -T */
 	    break;
 	}
-#if PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL2) {
+	if (pmDebugOptions.appl2) {
 	    fprintf(stderr, "input record ...\n");
 	    __pmDumpResult(stderr, irp);
 	}
-#endif
 
 	/*
 	 * traverse the interval, looking at every archive record ...
@@ -393,13 +387,12 @@ main(int argc, char **argv)
 
 	if ((sts = pmUseContext(ictx_a)) < 0) {
 	    fprintf(stderr, "%s: Error: cannot use context (%s): %s\n",
-		    pmProgname, iname, pmErrStr(sts));
+		    pmGetProgname(), iname, pmErrStr(sts));
 	    goto cleanup;
 	}
 
 	orp = rewrite(irp);
-#if PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL2) {
+	if (pmDebugOptions.appl2) {
 	    if (orp == NULL)
 		fprintf(stderr, "output record ... none!\n");
 	    else {
@@ -407,7 +400,6 @@ main(int argc, char **argv)
 		__pmDumpResult(stderr, orp);
 	    }
 	}
-#endif
 	if (orp == NULL)
 	    goto next;
 
@@ -418,7 +410,7 @@ main(int argc, char **argv)
 	sts = __pmEncodeResult(PDU_OVERRIDE2, orp, &pb);
 	if (sts < 0) {
 	    fprintf(stderr, "%s: Error: __pmEncodeResult: %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
 	    goto cleanup;
 	}
 
@@ -454,7 +446,7 @@ main(int argc, char **argv)
 	__pmUnpinPDUBuf(pb);
 	if (sts < 0) {
 	    fprintf(stderr, "%s: Error: __pmLogPutResult2: log data: %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
 	    goto cleanup;
 	}
 	written++;
@@ -476,11 +468,11 @@ cleanup:
     {
 	char    fname[MAXNAMELEN];
 	fprintf(stderr, "Archive \"%s\" not created.\n", oname);
-	snprintf(fname, sizeof(fname), "%s.0", oname);
+	pmsprintf(fname, sizeof(fname), "%s.0", oname);
 	unlink(fname);
-	snprintf(fname, sizeof(fname), "%s.meta", oname);
+	pmsprintf(fname, sizeof(fname), "%s.meta", oname);
 	unlink(fname);
-	snprintf(fname, sizeof(fname), "%s.index", oname);
+	pmsprintf(fname, sizeof(fname), "%s.index", oname);
 	unlink(fname);
 	exit(1);
     }

@@ -39,21 +39,17 @@ main(int argc, char* argv[])
     int		c;
     QString	source;
 
-    pmProgname = basename(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "D:?")) != EOF) {
 	switch (c) {
 	case 'D':
-	    sts = __pmParseDebug(optarg);
+	    sts = pmSetDebug(optarg);
             if (sts < 0) {
-		pmprintf("%s: unrecognized debug flag specification (%s)\n",
-			 pmProgname, optarg);
+		pmprintf("%s: unrecognized debug options specification (%s)\n",
+			 pmGetProgname(), optarg);
                 sts = 1;
             }
-            else {
-                pmDebug |= sts;
-		sts = 0;
-	    }
             break;
 	case '?':
 	default:
@@ -63,7 +59,7 @@ main(int argc, char* argv[])
     }
 
     if (sts) {
-	pmprintf("Usage: %s\n", pmProgname);
+	pmprintf("Usage: %s\n", pmGetProgname());
 	pmflush();
 	exit(1);
         /*NOTREACHED*/

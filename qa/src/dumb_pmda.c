@@ -17,10 +17,10 @@
 static void
 usage(void)
 {
-    fprintf(stderr, "Usage: %s [options] controlwords\n\n", pmProgname);
+    fprintf(stderr, "Usage: %s [options] controlwords\n\n", pmGetProgname());
     fputs("Options:\n"
-	  "  -D N       set pmDebug debugging flag to N\n"
-	  "  -d domain  use domain (numeric) for metrics domain of PMDA\n"
+	  "  -D debugspec set PCP debugging options\n"
+	  "  -d domain    use domain (numeric) for metrics domain of PMDA\n"
 	  "  -h helpfile  get help text from helpfile rather then default path\n"
 	  "  -l logfile write log into logfile rather than using default log name\n",
 	  stderr);
@@ -40,9 +40,9 @@ main(int argc, char **argv)
     char		c;
     int			exit_action = 0;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
-    pmdaDaemon(&desc, PMDA_INTERFACE_3, pmProgname, desc.domain, "dumb_pmda.log", NULL);
+    pmdaDaemon(&desc, PMDA_INTERFACE_3, pmGetProgname(), desc.domain, "dumb_pmda.log", NULL);
     if (desc.status != 0) {
 	fprintf(stderr, "pmdaDaemon() failed!\n");
 	exit(1);

@@ -89,7 +89,7 @@ _report(__pmFILE *fp)
 
     here = __pmLseek(fp, 0L, SEEK_CUR);
     fprintf(stderr, "%s: Error occurred at byte offset %ld into a file of",
-	    pmProgname, (long)here);
+	    pmGetProgname(), (long)here);
     if (__pmFstat(fp, &sbuf) < 0)
 	fprintf(stderr, ": stat: %s\n", osstrerror());
     else
@@ -117,7 +117,7 @@ newvolume(int vol)
     }
     else {
 	fprintf(stderr, "%s: __pmLogNewFile(%s,%d) Error: %s\n",
-		pmProgname, outarch.name, vol, pmErrStr(-oserror()));
+		pmGetProgname(), outarch.name, vol, pmErrStr(-oserror()));
 	abandon();
 	/*NOTREACHED*/
     }
@@ -196,7 +196,7 @@ nextmeta()
     if ((sts = _pmLogGet(lcp, PM_LOG_VOL_META, &inarch.metarec)) < 0) {
 	if (sts != PM_ERR_EOL) {
 	    fprintf(stderr, "%s: Error: _pmLogGet[meta %s]: %s\n",
-		    pmProgname, inarch.name, pmErrStr(sts));
+		    pmGetProgname(), inarch.name, pmErrStr(sts));
 	    _report(lcp->l_mdfp);
 	}
 	return -1;
@@ -230,7 +230,7 @@ nextlog(void)
     if (sts < 0) {
 	if (sts != PM_ERR_EOL) {
 	    fprintf(stderr, "%s: Error: __pmLogRead[log %s]: %s\n",
-		    pmProgname, inarch.name, pmErrStr(sts));
+		    pmGetProgname(), inarch.name, pmErrStr(sts));
 	    _report(lcp->l_mfp);
 	}
 	return -1;
@@ -264,7 +264,7 @@ parseargs(int argc, char *argv[])
 	case 'c':	/* config file */
 	    if (stat(opts.optarg, &sbuf) < 0) {
 		pmprintf("%s: stat(%s) failed: %s\n",
-			pmProgname, opts.optarg, osstrerror());
+			pmGetProgname(), opts.optarg, osstrerror());
 		opts.errors++;
 		break;
 	    }
@@ -279,15 +279,15 @@ parseargs(int argc, char *argv[])
 		char		path[MAXPATHLEN+1];
 
 		if ((dirp = opendir(opts.optarg)) == NULL) {
-		    pmprintf("%s: opendir(%s) failed: %s\n", pmProgname, opts.optarg, osstrerror());
+		    pmprintf("%s: opendir(%s) failed: %s\n", pmGetProgname(), opts.optarg, osstrerror());
 		    opts.errors++;
 		}
 		else while ((dp = readdir(dirp)) != NULL) {
 		    /* skip ., .. and "hidden" files */
 		    if (dp->d_name[0] == '.') continue;
-		    snprintf(path, sizeof(path), "%s%c%s", opts.optarg, sep, dp->d_name);
+		    pmsprintf(path, sizeof(path), "%s%c%s", opts.optarg, sep, dp->d_name);
 		    if (stat(path, &sbuf) < 0) {
-			pmprintf("%s: %s: %s\n", pmProgname, path, osstrerror());
+			pmprintf("%s: %s: %s\n", pmGetProgname(), path, osstrerror());
 			opts.errors++;
 		    }
 		    else if (S_ISREG(sbuf.st_mode) || S_ISLINK(sbuf.st_mode)) {
@@ -305,11 +305,11 @@ parseargs(int argc, char *argv[])
 		    closedir(dirp);
 	    }
 	    else {
-		pmprintf("%s: Error: -c config %s is not a file or directory\n", pmProgname, opts.optarg);
+		pmprintf("%s: Error: -c config %s is not a file or directory\n", pmGetProgname(), opts.optarg);
 		opts.errors++;
 	    }
 	    if (nconf > 0 && conf == NULL) {
-		fprintf(stderr, "%s: Error: conf[%d] realloc(%d) failed: %s\n", pmProgname, nconf, (int)(nconf*sizeof(conf[0])), strerror(errno));
+		fprintf(stderr, "%s: Error: conf[%d] realloc(%d) failed: %s\n", pmGetProgname(), nconf, (int)(nconf*sizeof(conf[0])), strerror(errno));
 		abandon();
 		/*NOTREACHED*/
 	    }
@@ -325,15 +325,13 @@ parseargs(int argc, char *argv[])
 	    dflag = 1;
 	    break;
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(opts.optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(opts.optarg);
 	    if (sts < 0) {
-		pmprintf("%s: unrecognized debug flag specification (%s)\n",
-			pmProgname, opts.optarg);
+		pmprintf("%s: unrecognized debug options specification (%s)\n",
+			pmGetProgname(), opts.optarg);
 		opts.errors++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case 'i':	/* in-place, over-write input archive */
@@ -378,7 +376,7 @@ parseconfig(char *file)
     configfile = file;
     if ((yyin = fopen(configfile, "r")) == NULL) {
 	fprintf(stderr, "%s: Cannot open config file \"%s\": %s\n",
-		pmProgname, configfile, osstrerror());
+		pmGetProgname(), configfile, osstrerror());
 	exit(1);
     }
     if (vflag > 1)
@@ -399,10 +397,10 @@ SemStr(int sem)
 {
     static char	buf[20];
 
-    if (sem == PM_SEM_COUNTER) snprintf(buf, sizeof(buf), "counter");
-    else if (sem == PM_SEM_INSTANT) snprintf(buf, sizeof(buf), "instant");
-    else if (sem == PM_SEM_DISCRETE) snprintf(buf, sizeof(buf), "discrete");
-    else snprintf(buf, sizeof(buf), "bad sem? %d", sem);
+    if (sem == PM_SEM_COUNTER) pmsprintf(buf, sizeof(buf), "counter");
+    else if (sem == PM_SEM_INSTANT) pmsprintf(buf, sizeof(buf), "instant");
+    else if (sem == PM_SEM_DISCRETE) pmsprintf(buf, sizeof(buf), "discrete");
+    else pmsprintf(buf, sizeof(buf), "bad sem? %d", sem);
 
     return buf;
 }
@@ -650,8 +648,8 @@ link_entries(void)
 			/* indom already changed via metric clause */
 			if (mp->new_desc.indom != ip->new_indom) {
 			    char	strbuf[80];
-			    snprintf(strbuf, sizeof(strbuf), "%s", pmInDomStr(mp->new_desc.indom));
-			    snprintf(mess, sizeof(mess), "Conflicting indom change for metric %s (%s from metric clause, %s from indom clause)", mp->old_name, strbuf, pmInDomStr(ip->new_indom));
+			    pmsprintf(strbuf, sizeof(strbuf), "%s", pmInDomStr(mp->new_desc.indom));
+			    pmsprintf(mess, sizeof(mess), "Conflicting indom change for metric %s (%s from metric clause, %s from indom clause)", mp->old_name, strbuf, pmInDomStr(ip->new_indom));
 			    yysemantic(mess);
 			}
 		    }
@@ -714,7 +712,7 @@ check_indoms()
 		}
 	    }
 	    if (node == NULL) {
-		snprintf(mess, sizeof(mess), "New indom (%s) for metric %s is not in the output archive", pmInDomStr(mp->new_desc.indom), mp->old_name);
+		pmsprintf(mess, sizeof(mess), "New indom (%s) for metric %s is not in the output archive", pmInDomStr(mp->new_desc.indom), mp->old_name);
 		yysemantic(mess);
 	    }
 	}
@@ -753,11 +751,11 @@ check_indoms()
 		else
 		    namej = ip->old_iname[j];
 		if (insti == instj) {
-		    snprintf(mess, sizeof(mess), "Duplicate instance id %d (\"%s\" and \"%s\") for indom %s", insti, namei, namej, pmInDomStr(ip->old_indom));
+		    pmsprintf(mess, sizeof(mess), "Duplicate instance id %d (\"%s\" and \"%s\") for indom %s", insti, namei, namej, pmInDomStr(ip->old_indom));
 		    yysemantic(mess);
 		}
 		if (inst_name_eq(namei, namej) > 0) {
-		    snprintf(mess, sizeof(mess), "Duplicate instance name \"%s\" (%d) and \"%s\" (%d) for indom %s", namei, insti, namej, instj, pmInDomStr(ip->old_indom));
+		    pmsprintf(mess, sizeof(mess), "Duplicate instance name \"%s\" (%d) and \"%s\" (%d) for indom %s", namei, insti, namej, instj, pmInDomStr(ip->old_indom));
 		    yysemantic(mess);
 		}
 	    }
@@ -813,9 +811,9 @@ check_output()
 		    if (i == ip->numinst) {
 			if (wflag) {
 			    if (mp->one_name != NULL)
-				snprintf(mess, sizeof(mess), "Instance \"%s\" from OUTPUT clause not found in old indom %s", mp->one_name, pmInDomStr(mp->old_desc.indom));
+				pmsprintf(mess, sizeof(mess), "Instance \"%s\" from OUTPUT clause not found in old indom %s", mp->one_name, pmInDomStr(mp->old_desc.indom));
 			    else
-				snprintf(mess, sizeof(mess), "Instance %d from OUTPUT clause not found in old indom %s", mp->one_inst, pmInDomStr(mp->old_desc.indom));
+				pmsprintf(mess, sizeof(mess), "Instance %d from OUTPUT clause not found in old indom %s", mp->one_inst, pmInDomStr(mp->old_desc.indom));
 			    yywarn(mess);
 			}
 		    }
@@ -843,9 +841,9 @@ check_output()
 		    if (i == ip->numinst) {
 			if (wflag) {
 			    if (mp->one_name != NULL)
-				snprintf(mess, sizeof(mess), "Instance \"%s\" from OUTPUT clause not found in new indom %s", mp->one_name, pmInDomStr(mp->new_desc.indom));
+				pmsprintf(mess, sizeof(mess), "Instance \"%s\" from OUTPUT clause not found in new indom %s", mp->one_name, pmInDomStr(mp->new_desc.indom));
 			    else
-				snprintf(mess, sizeof(mess), "Instance %d from OUTPUT clause not found in new indom %s", mp->one_inst, pmInDomStr(mp->new_desc.indom));
+				pmsprintf(mess, sizeof(mess), "Instance %d from OUTPUT clause not found in new indom %s", mp->one_inst, pmInDomStr(mp->new_desc.indom));
 			    yywarn(mess);
 			}
 		    }
@@ -894,7 +892,7 @@ main(int argc, char **argv)
 
     if ((inarch.ctx = pmNewContext(PM_CONTEXT_ARCHIVE, inarch.name)) < 0) {
 	fprintf(stderr, "%s: Error: cannot open archive \"%s\": %s\n",
-		pmProgname, inarch.name, pmErrStr(inarch.ctx));
+		pmGetProgname(), inarch.name, pmErrStr(inarch.ctx));
 	exit(1);
     }
     inarch.ctxp = __pmHandleToPtr(inarch.ctx);
@@ -910,13 +908,13 @@ main(int argc, char **argv)
 
     if ((sts = pmGetArchiveLabel(&inarch.label)) < 0) {
 	fprintf(stderr, "%s: Error: cannot get archive label record (%s): %s\n",
-		pmProgname, inarch.name, pmErrStr(sts));
+		pmGetProgname(), inarch.name, pmErrStr(sts));
 	exit(1);
     }
 
     if ((inarch.label.ll_magic & 0xff) != PM_LOG_VERS02) {
 	fprintf(stderr,"%s: Error: illegal version number %d in archive (%s)\n",
-		pmProgname, inarch.label.ll_magic & 0xff, inarch.name);
+		pmGetProgname(), inarch.label.ll_magic & 0xff, inarch.name);
 	exit(1);
     }
 
@@ -946,6 +944,7 @@ main(int argc, char **argv)
 	mode_t	cur_umask;
 	int	tmp_f1;			/* fd for first temp basename */
 	int	tmp_f2;			/* fd for second temp basename */
+	int	sep = __pmPathSeparator();
 
 #if HAVE_MKSTEMP
 	strncpy(path, argv[argc-1], sizeof(path));
@@ -953,21 +952,21 @@ main(int argc, char **argv)
 	strncpy(dname, dirname(path), sizeof(dname));
 	dname[sizeof(dname)-1] = '\0';
 	if ((dir_fd = open(dname, O_RDONLY)) < 0) {
-	    fprintf(stderr, "%s: Error: cannot open directory \"%s\" for reading: %s\n", pmProgname, dname, strerror(errno));
+	    fprintf(stderr, "%s: Error: cannot open directory \"%s\" for reading: %s\n", pmGetProgname(), dname, strerror(errno));
 	    abandon();
 	    /*NOTREACHED*/
 	}
-	sprintf(path, "%s%cXXXXXX", dname, __pmPathSeparator());
+	pmsprintf(path, sizeof(path), "%s%cXXXXXX", dname, sep);
 	cur_umask = umask(S_IXUSR | S_IRWXG | S_IRWXO);
 	tmp_f1 = mkstemp(path);
 	umask(cur_umask);
 	outarch.name = strdup(path);
 	if (outarch.name == NULL) {
-	    fprintf(stderr, "%s: Error: temp file strdup(%s) failed: %s\n", pmProgname, path, strerror(errno));
+	    fprintf(stderr, "%s: Error: temp file strdup(%s) failed: %s\n", pmGetProgname(), path, strerror(errno));
 	    abandon();
 	    /*NOTREACHED*/
 	}
-	sprintf(bak_base, "%s%cXXXXXX", dname, __pmPathSeparator());
+	pmsprintf(bak_base, sizeof(bak_base), "%s%cXXXXXX", dname, sep);
 	cur_umask = umask(S_IXUSR | S_IRWXG | S_IRWXO);
 	tmp_f2 = mkstemp(bak_base);
 	umask(cur_umask);
@@ -983,14 +982,14 @@ main(int argc, char **argv)
 	dname[sizeof(dname)-1] = '\0';
 
 	if ((s = tempnam(dname, fname)) == NULL) {
-	    fprintf(stderr, "%s: Error: first tempnam() failed: %s\n", pmProgname, strerror(errno));
+	    fprintf(stderr, "%s: Error: first tempnam() failed: %s\n", pmGetProgname(), strerror(errno));
 	    abandon();
 	    /*NOTREACHED*/
 	}
 	else {
 	    outarch.name = strdup(s);
 	    if (outarch.name == NULL) {
-		fprintf(stderr, "%s: Error: temp file strdup(%s) failed: %s\n", pmProgname, s, strerror(errno));
+		fprintf(stderr, "%s: Error: temp file strdup(%s) failed: %s\n", pmGetProgname(), s, strerror(errno));
 		abandon();
 		/*NOTREACHED*/
 	    }
@@ -999,7 +998,7 @@ main(int argc, char **argv)
 	    umask(cur_umask);
 	}
 	if ((s = tempnam(dname, fname)) == NULL) {
-	    fprintf(stderr, "%s: Error: second tempnam() failed: %s\n", pmProgname, strerror(errno));
+	    fprintf(stderr, "%s: Error: second tempnam() failed: %s\n", pmGetProgname(), strerror(errno));
 	    abandon();
 	    /*NOTREACHED*/
 	}
@@ -1011,12 +1010,12 @@ main(int argc, char **argv)
 	}
 #endif
 	if (tmp_f1 < 0) {
-	    fprintf(stderr, "%s: Error: create first temp (%s) failed: %s\n", pmProgname, outarch.name, strerror(errno));
+	    fprintf(stderr, "%s: Error: create first temp (%s) failed: %s\n", pmGetProgname(), outarch.name, strerror(errno));
 	    abandon();
 	    /*NOTREACHED*/
 	}
 	if (tmp_f2 < 0) {
-	    fprintf(stderr, "%s: Error: create second temp (%s) failed: %s\n", pmProgname, bak_base, strerror(errno));
+	    fprintf(stderr, "%s: Error: create second temp (%s) failed: %s\n", pmGetProgname(), bak_base, strerror(errno));
 	    abandon();
 	    /*NOTREACHED*/
 	}
@@ -1055,7 +1054,7 @@ main(int argc, char **argv)
     /* create output log - must be done before writing label */
     if ((sts = __pmLogCreate("", outarch.name, PM_LOG_VERS02, &outarch.logctl)) < 0) {
 	fprintf(stderr, "%s: Error: __pmLogCreate(%s): %s\n",
-		pmProgname, outarch.name, pmErrStr(sts));
+		pmGetProgname(), outarch.name, pmErrStr(sts));
 	abandon();
 	/*NOTREACHED*/
     }
@@ -1085,10 +1084,8 @@ main(int argc, char **argv)
 	in_offset = __pmFtell(inarch.ctxp->c_archctl->ac_log->l_mfp);
 	stslog = nextlog();
 	if (stslog < 0) {
-#if PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL0)
+	    if (pmDebugOptions.appl0)
 		fprintf(stderr, "Log: read EOF @ offset=%ld\n", in_offset);
-#endif
 	    break;
 	}
 	if (stslog == 1) {
@@ -1103,8 +1100,7 @@ main(int argc, char **argv)
 		 */
 		newvolume(outarch.logctl.l_curvol+1);
 	}
-#if PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL0) {
+	if (pmDebugOptions.appl0) {
 	    struct timeval	stamp;
 	    fprintf(stderr, "Log: read ");
 	    stamp.tv_sec = inarch.rp->timestamp.tv_sec;
@@ -1112,7 +1108,6 @@ main(int argc, char **argv)
 	    __pmPrintStamp(stderr, &stamp);
 	    fprintf(stderr, " numpmid=%d @ offset=%ld\n", inarch.rp->numpmid, in_offset);
 	}
-#endif
 
 	if (ti_idx < inarch.ctxp->c_archctl->ac_log->l_numti) {
 	    __pmLogTI	*tip = &inarch.ctxp->c_archctl->ac_log->l_ti[ti_idx];
@@ -1144,8 +1139,7 @@ main(int argc, char **argv)
 	    if (stsmeta == 0) {
 		in_offset = __pmFtell(inarch.ctxp->c_archctl->ac_log->l_mdfp);
 		stsmeta = nextmeta();
-#if PCP_DEBUG
-		if (pmDebug & DBG_TRACE_APPL0) {
+		if (pmDebugOptions.appl0) {
 		    if (stsmeta < 0)
 			fprintf(stderr, "Metadata: read EOF @ offset=%ld\n", in_offset);
 		    else if (stsmeta == TYPE_DESC)
@@ -1153,7 +1147,6 @@ main(int argc, char **argv)
 		    else if (stsmeta == TYPE_INDOM)
 			fprintf(stderr, "Metadata: read InDom %s @ offset=%ld\n", pmInDomStr(ntoh_pmInDom((unsigned int)inarch.metarec[4])), in_offset);
 		}
-#endif
 	    }
 	    if (stsmeta < 0) {
 		break;
@@ -1226,9 +1219,21 @@ main(int argc, char **argv)
 		needti = 1;
 		do_indom();
 	    }
+	    else if (stsmeta == TYPE_LABEL) {
+		/* TODO: support label metadata extraction */
+		if (pmDebugOptions.logmeta)
+		    fprintf(stderr, "%s: Warning: %s\n",
+			    pmGetProgname(), pmErrStr(PM_ERR_NOLABELS));
+	    }
+	    else if (stsmeta == TYPE_TEXT) {
+		/* TODO: support help text extraction */
+		if (pmDebugOptions.logmeta)
+		    fprintf(stderr, "%s: Warning: %s\n",
+			    pmGetProgname(), pmErrStr(PM_ERR_TEXT));
+	    }
 	    else {
 		fprintf(stderr, "%s: Error: unrecognised meta data type: %d\n",
-		    pmProgname, stsmeta);
+		    pmGetProgname(), stsmeta);
 		abandon();
 		/*NOTREACHED*/
 	    }
@@ -1287,25 +1292,25 @@ main(int argc, char **argv)
 	 */
 	if (__pmFsync(outarch.logctl.l_mdfp) < 0) {
 	    fprintf(stderr, "%s: Error: fsync(%d) failed for output metadata file: %s\n",
-		pmProgname, __pmFileno(outarch.logctl.l_mdfp), strerror(errno));
+		pmGetProgname(), __pmFileno(outarch.logctl.l_mdfp), strerror(errno));
 		abandon();
 		/*NOTREACHED*/
 	}
 	if (__pmFsync(outarch.logctl.l_mfp) < 0) {
 	    fprintf(stderr, "%s: Error: fsync(%d) failed for output data file: %s\n",
-		pmProgname, __pmFileno(outarch.logctl.l_mfp), strerror(errno));
+		pmGetProgname(), __pmFileno(outarch.logctl.l_mfp), strerror(errno));
 		abandon();
 		/*NOTREACHED*/
 	}
 	if (__pmFsync(outarch.logctl.l_tifp) < 0) {
 	    fprintf(stderr, "%s: Error: fsync(%d) failed for output index file: %s\n",
-		pmProgname, __pmFileno(outarch.logctl.l_tifp), strerror(errno));
+		pmGetProgname(), __pmFileno(outarch.logctl.l_tifp), strerror(errno));
 		abandon();
 		/*NOTREACHED*/
 	}
 	if (fsync(dir_fd) < 0) {
 	    fprintf(stderr, "%s: Error: fsync(%d) failed for output directory: %s\n",
-		pmProgname, dir_fd, strerror(errno));
+		pmGetProgname(), dir_fd, strerror(errno));
 		abandon();
 		/*NOTREACHED*/
 	}
@@ -1336,13 +1341,13 @@ abandon(void)
 	if (iflag)
 	    _pmLogRename(bak_base, inarch.name);
 	while (outarch.logctl.l_curvol >= 0) {
-	    snprintf(path, sizeof(path), "%s.%d", outarch.name, outarch.logctl.l_curvol);
+	    pmsprintf(path, sizeof(path), "%s.%d", outarch.name, outarch.logctl.l_curvol);
 	    unlink(path);
 	    outarch.logctl.l_curvol--;
 	}
-	snprintf(path, sizeof(path), "%s.meta", outarch.name);
+	pmsprintf(path, sizeof(path), "%s.meta", outarch.name);
 	unlink(path);
-	snprintf(path, sizeof(path), "%s.index", outarch.name);
+	pmsprintf(path, sizeof(path), "%s.index", outarch.name);
 	unlink(path);
     }
     else

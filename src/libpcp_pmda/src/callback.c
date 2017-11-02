@@ -42,16 +42,14 @@ __pmdaCntInst(pmInDom indom, pmdaExt *pmda)
 	}
 	if (i == pmda->e_nindoms) {
 	    char	strbuf[20];
-	    __pmNotifyErr(LOG_WARNING, "cntinst: unknown indom %s", pmInDomStr_r(indom, strbuf, sizeof(strbuf)));
+	    __pmNotifyErr(LOG_WARNING, "__pmdaCntInst: unknown indom %s", pmInDomStr_r(indom, strbuf, sizeof(strbuf)));
 	}
     }
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_INDOM) {
+    if (pmDebugOptions.indom) {
 	char	strbuf[20];
 	fprintf(stderr, "__pmdaCntInst(indom=%s) -> %d\n", pmInDomStr_r(indom, strbuf, sizeof(strbuf)), sts);
     }
-#endif
 
     return sts;
 }
@@ -113,13 +111,11 @@ __pmdaStartInst(pmInDom indom, pmdaExt *pmda)
 	}
     }
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_INDOM) {
+    if (pmDebugOptions.indom) {
 	char	strbuf[20];
 	fprintf(stderr, "__pmdaStartInst(indom=%s) e_ordinal=%d\n",
 	    pmInDomStr_r(indom, strbuf, sizeof(strbuf)), pmda->e_ordinal);
     }
-#endif
     return;
 }
 
@@ -147,13 +143,11 @@ __pmdaNextInst(int *inst, pmdaExt *pmda)
 		pmda->e_ordinal++;
 		if (__pmInProfile(pmda->e_idp->it_indom, pmda->e_prof, myinst)) {
 		    *inst = myinst;
-#ifdef PCP_DEBUG
-		    if (pmDebug & DBG_TRACE_INDOM) {
+		    if (pmDebugOptions.indom) {
 			char	strbuf[20];
 			fprintf(stderr, "__pmdaNextInst(indom=%s) -> %d e_ordinal=%d (cache)\n",
 			    pmInDomStr_r(pmda->e_idp->it_indom, strbuf, sizeof(strbuf)), myinst, pmda->e_ordinal);
 		    }
-#endif
 		    return 1;
 		}
 	    }
@@ -166,13 +160,11 @@ __pmdaNextInst(int *inst, pmdaExt *pmda)
 				 pmda->e_idp->it_set[j].i_inst)) {
 		    *inst = pmda->e_idp->it_set[j].i_inst;
 		    pmda->e_ordinal = j+1;
-#ifdef PCP_DEBUG
-		    if (pmDebug & DBG_TRACE_INDOM) {
+		    if (pmDebugOptions.indom) {
 			char	strbuf[20];
 			fprintf(stderr, "__pmdaNextInst(indom=%s) -> %d e_ordinal=%d\n",
 			    pmInDomStr_r(pmda->e_idp->it_indom, strbuf, sizeof(strbuf)), *inst, pmda->e_ordinal);
 		    }
-#endif
 		    return 1;
 		}
 	    }
@@ -432,13 +424,11 @@ pmdaInstance(pmInDom indom, int inst, char *name, __pmInResult **result, pmdaExt
 		char *instname = idp->it_set[i].i_name;
 		if (strcmp(name, instname) == 0) {
 		    /* accept an exact match */
-#ifdef PCP_DEBUG
-		    if (pmDebug & DBG_TRACE_LIBPMDA) {
+		    if (pmDebugOptions.libpmda) {
 			fprintf(stderr, 
 				"pmdaInstance: exact match name=%s id=%d\n",
 				name, idp->it_set[i].i_inst);
 		    }
-#endif
 		    res->instlist[0] = idp->it_set[i].i_inst;
 		    break;
 		}
@@ -449,12 +439,10 @@ pmdaInstance(pmInDom indom, int inst, char *name, __pmInResult **result, pmdaExt
 		    if (p != NULL) {
 			int len = (int)(p - instname);
 			if (namelen == len && strncmp(name, instname, len) == 0) {
-#ifdef PCP_DEBUG
-			    if (pmDebug & DBG_TRACE_LIBPMDA) {
+			    if (pmDebugOptions.libpmda) {
 				fprintf(stderr, "pmdaInstance: matched argument name=\"%s\" with indom id=%d name=\"%s\" len=%d\n",
 				    name, idp->it_set[i].i_inst, instname, len);
 			    }
-#endif
 			    res->instlist[0] = idp->it_set[i].i_inst;
 			    break;
 			}
@@ -492,6 +480,7 @@ pmdaFetch(int numpmid, pmID pmidlist[], pmResult **resp, pmdaExt *pmda)
     int			inst;
     int			numval;
     pmValueSet		*vset;
+    pmValueSet		*tmp_vset;
     pmDesc		*dp;
     pmdaMetric          metabuf;
     pmdaMetric		*metap;
@@ -499,15 +488,13 @@ pmdaFetch(int numpmid, pmID pmidlist[], pmResult **resp, pmdaExt *pmda)
     int			type;
     e_ext_t		*extp = (e_ext_t *)pmda->e_ext;
 
-#ifdef PCP_DEBUG
-    if ((pmDebug & DBG_TRACE_LIBPMDA) && (pmDebug & DBG_TRACE_DESPERATE)) {
+    if ((pmDebugOptions.libpmda) && (pmDebugOptions.desperate)) {
 	char	dbgbuf[20];
 	fprintf(stderr, "pmdaFetch(%d, pmid[0] %s", numpmid, pmIDStr_r(pmidlist[0], dbgbuf, sizeof(dbgbuf)));
 	if (numpmid > 1)
 	    fprintf(stderr, "... pmid[%d] %s", numpmid-1, pmIDStr_r(pmidlist[numpmid-1], dbgbuf, sizeof(dbgbuf)));
 	fprintf(stderr, ", ...) called\n");
     }
-#endif
 
     if (extp->dispatch->version.any.ext != pmda)
 	fprintf(stderr, "Botch: pmdaFetch: PMDA domain=%d pmda=%p extp=%p backpointer=%p pmda-via-backpointer %p NOT EQUAL to pmda\n",
@@ -583,12 +570,15 @@ pmdaFetch(int numpmid, pmID pmidlist[], pmResult **resp, pmdaExt *pmda)
 	    if (j == numval) {
 		/* more instances than expected! */
 		numval++;
-		extp->res->vset[i] = vset = (pmValueSet *)realloc(vset,
+		extp->res->vset[i] = tmp_vset = (pmValueSet *)realloc(vset,
 			    sizeof(pmValueSet) + (numval - 1)*sizeof(pmValue));
-		if (vset == NULL) {
+		if (tmp_vset == NULL) {
+		    free(vset);
+		    vset = NULL;
 		    sts = -oserror();
 		    goto error;
 		}
+		vset = tmp_vset;
 	    }
 	    vset->vlist[j].inst = inst;
 
@@ -602,25 +592,21 @@ pmdaFetch(int numpmid, pmID pmidlist[], pmResult **resp, pmdaExt *pmda)
 				strbuf);
 		}
 		else if (sts == PM_ERR_INST) {
-#ifdef PCP_DEBUG
-		    if (pmDebug & DBG_TRACE_LIBPMDA) {
+		    if (pmDebugOptions.libpmda) {
 			__pmNotifyErr(LOG_ERR,
 			    "pmdaFetch: Instance %d of PMID %s not handled by fetch callback\n",
 				    inst, strbuf);
 		    }
-#endif
 		}
 		else if (sts == PM_ERR_APPVERSION ||
 			 sts == PM_ERR_PERMISSION ||
 			 sts == PM_ERR_AGAIN ||
 			 sts == PM_ERR_NYI) {
-#ifdef PCP_DEBUG
-		    if (pmDebug & DBG_TRACE_LIBPMDA) {
+		    if (pmDebugOptions.libpmda) {
 			__pmNotifyErr(LOG_ERR,
 			     "pmdaFetch: Unavailable metric PMID %s[%d]\n",
 				    strbuf, inst);
 		    }
-#endif
 		}
 		else {
 		    __pmNotifyErr(LOG_ERR,
@@ -706,12 +692,10 @@ pmdaDesc(pmID pmid, pmDesc *desc, pmdaExt *pmda)
     pmdaMetric		*metric;
     char		strbuf[32];
 
-#ifdef PCP_DEBUG
-    if ((pmDebug & DBG_TRACE_LIBPMDA) && (pmDebug & DBG_TRACE_DESPERATE)) {
+    if ((pmDebugOptions.libpmda) && (pmDebugOptions.desperate)) {
 	char	dbgbuf[20];
 	fprintf(stderr, "pmdaDesc(%s, ...) called\n", pmIDStr_r(pmid, dbgbuf, sizeof(dbgbuf)));
     }
-#endif
 
     if (extp->dispatch->comm.pmda_interface >= PMDA_INTERFACE_5)
 	__pmdaSetContext(pmda->e_context);
@@ -758,6 +742,204 @@ pmdaText(int ident, int type, char **buffer, pmdaExt *pmda)
 }
 
 /*
+ * Provide default handlers to fill set(s) of labels for the context
+ * or requested ID of type domain, indom, cluster, item or instances.
+ */
+
+int
+pmdaLabel(int ident, int type, pmLabelSet **lpp, pmdaExt *pmda)
+{
+    e_ext_t		*extp = (e_ext_t *)pmda->e_ext;
+    pmLabelSet		*rlp, *lp = NULL;
+    size_t		size;
+    char		idbuf[32], *idp;
+    char		errbuf[PM_MAXERRMSGLEN];
+    int			sts = 0, count, inst, numinst;
+
+    if (extp->dispatch->comm.pmda_interface >= PMDA_INTERFACE_5)
+	__pmdaSetContext(pmda->e_context);
+
+    switch (type) {
+    case PM_LABEL_CONTEXT:
+	if (pmDebugOptions.labels)
+	    fprintf(stderr, "pmdaLabel: context %d labels request\n",
+			pmda->e_context);
+	if ((lp = *lpp) == NULL)	/* use default handler */
+	    return __pmGetContextLabels(lpp);
+	return pmdaAddLabelFlags(lp, type);
+
+    case PM_LABEL_DOMAIN:
+	if (pmDebugOptions.labels)
+	    fprintf(stderr, "pmdaLabel: domain %d (%s) labels request\n",
+			pmda->e_domain, pmda->e_name);
+	if ((lp = *lpp) == NULL)	/* use default handler */
+	    return __pmGetDomainLabels(pmda->e_domain, pmda->e_name, lpp);
+	return pmdaAddLabelFlags(lp, type);
+
+    case PM_LABEL_INDOM:
+	if (pmDebugOptions.labels)
+	    fprintf(stderr, "pmdaLabel: InDom %s labels request\n",
+			    pmInDomStr_r(ident, idbuf, sizeof(idbuf)));
+	if ((lp = *lpp) == NULL)	/* no default handler */
+	    return 0;
+	return pmdaAddLabelFlags(lp, type);
+
+    case PM_LABEL_CLUSTER:
+	if (pmDebugOptions.labels) {
+	    pmIDStr_r(ident, idbuf, sizeof(idbuf));
+	    idp = rindex(idbuf, '.');
+	    *idp = '\0';	/* drop the final (item) part */
+	    fprintf(stderr, "pmdaLabel: cluster %s labels request\n", idbuf);
+	}
+	if ((lp = *lpp) == NULL)	/* no default handler */
+	    return 0;
+	return pmdaAddLabelFlags(lp, type);
+
+    case PM_LABEL_ITEM:
+	if (pmDebugOptions.labels)
+	    fprintf(stderr, "pmdaLabel: cluster %s labels request\n",
+			    pmIDStr_r(ident, idbuf, sizeof(idbuf)));
+	if ((lp = *lpp) == NULL)	/* no default handler */
+	    return 0;
+	return pmdaAddLabelFlags(lp, type);
+
+    case PM_LABEL_INSTANCES:
+	if (extp->dispatch->comm.pmda_interface < PMDA_INTERFACE_7)
+	    return 0;
+
+	if (ident == PM_INDOM_NULL)
+	    numinst = 1;
+	else
+	    numinst = __pmdaCntInst(ident, pmda);
+
+	if (pmDebugOptions.labels)
+	    fprintf(stderr, "pmdaLabel: InDom %s %d instance labels request\n",
+			    pmInDomStr_r(ident, idbuf, sizeof(idbuf)), numinst);
+
+	if (numinst == 0)
+	    return 0;
+
+	/* allocate minimally-sized chunk of contiguous memory upfront */
+	size = numinst * sizeof(pmLabelSet);
+	if ((lp = (pmLabelSet *)malloc(size)) == NULL)
+	    return -oserror();
+	*lpp = lp;
+
+	inst = PM_IN_NULL;
+	if (ident != PM_INDOM_NULL) {
+	    __pmdaStartInst(ident, pmda);
+	    __pmdaNextInst(&inst, pmda);
+	}
+
+	count = 0;
+	do {
+	    if (count == numinst) {
+		/* more instances than expected! */
+		numinst++;
+		size = numinst * sizeof(pmLabelSet);
+		if ((rlp = (pmLabelSet *)realloc(*lpp, size)) == NULL)
+		    return -oserror();
+		*lpp = rlp;
+		lp = rlp + count;
+	    }
+	    memset(lp, 0, sizeof(*lp));
+
+	    if ((sts = (*(pmda->e_labelCallBack))(ident, inst, &lp)) < 0) {
+		pmInDomStr_r(ident, idbuf, sizeof(idbuf));
+		pmErrStr_r(sts, errbuf, sizeof(errbuf));
+		__pmNotifyErr(LOG_DEBUG, "pmdaLabel: "
+				"InDom %s[%d]: %s\n", idbuf, inst, errbuf);
+	    }
+	    if ((lp->nlabels = sts) > 0)
+		pmdaAddLabelFlags(lp, type);
+	    lp->inst = inst;
+	    count++;
+	    lp++;
+
+	} while (ident != PM_INDOM_NULL && __pmdaNextInst(&inst, pmda));
+
+	return count;
+
+    default:
+	break;
+    }
+
+    return PM_ERR_TYPE;
+}
+
+int
+pmdaAddLabelFlags(pmLabelSet *lsp, int flags)
+{
+    int		i;
+
+    if (lsp == NULL)
+	return 0;
+    for (i = 0; i < lsp->nlabels; i++)
+	lsp->labels[i].flags |= flags;
+    return 1;
+}
+
+/*
+ * Add labels (name:value pairs) to a labelset, varargs style.
+ */
+
+int
+pmdaAddLabels(pmLabelSet **lsp, const char *fmt, ...)
+{
+    char		errbuf[PM_MAXERRMSGLEN];
+    char		buf[PM_MAXLABELJSONLEN];
+    va_list		arg;
+    int			sts;
+
+    va_start(arg, fmt);
+    sts = vsnprintf(buf, sizeof(buf), fmt, arg);
+    va_end(arg);
+    if (sts < 0)
+	return sts;
+    if (sts >= sizeof(buf))
+	buf[sizeof(buf)-1] = '\0';
+
+    if (pmDebugOptions.labels)
+	fprintf(stderr, "pmdaAddLabels: %s\n", buf);
+
+    if ((sts = __pmAddLabels(lsp, buf, 0)) < 0) {
+	__pmNotifyErr(LOG_ERR, "pmdaAddLabels: %s (%s)\n", buf,
+		pmErrStr_r(sts, errbuf, sizeof(errbuf)));
+    }
+    return sts;
+}
+
+/*
+ * Add notes (optional name:value pairs) to a labelset, varargs style.
+ */
+
+int
+pmdaAddNotes(pmLabelSet **lsp, const char *fmt, ...)
+{
+    char		errbuf[PM_MAXERRMSGLEN];
+    char		buf[PM_MAXLABELJSONLEN];
+    va_list		arg;
+    int			sts;
+
+    va_start(arg, fmt);
+    sts = vsnprintf(buf, sizeof(buf), fmt, arg);
+    va_end(arg);
+    if (sts < 0)
+	return sts;
+    if (sts >= sizeof(buf))
+	buf[sizeof(buf)-1] = '\0';
+
+    if (pmDebugOptions.labels)
+	fprintf(stderr, "pmdaAddNotes: %s\n", buf);
+
+    if ((sts = __pmAddLabels(lsp, buf, PM_LABEL_OPTIONAL)) < 0) {
+	__pmNotifyErr(LOG_ERR, "pmdaAddNotes: %s (%s)\n", buf,
+		pmErrStr_r(sts, errbuf, sizeof(errbuf)));
+    }
+    return sts;
+}
+
+/*
  * Tell PMCD there is nothing to store
  */
 
@@ -801,7 +983,7 @@ pmdaChildren(const char *name, int traverse, char ***offspring, int **status, pm
 int
 pmdaAttribute(int ctx, int attr, const char *value, int size, pmdaExt *pmda)
 {
-    if (pmDebug & (DBG_TRACE_ATTR|DBG_TRACE_AUTH)) {
+    if (pmDebugOptions.attr || pmDebugOptions.auth) {
 	char buffer[256];
 	if (!__pmAttrStr_r(attr, value, buffer, sizeof(buffer))) {
 	    __pmNotifyErr(LOG_ERR, "Bad attr: ctx=%d, attr=%d\n", ctx, attr);

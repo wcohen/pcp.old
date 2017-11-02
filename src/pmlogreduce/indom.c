@@ -32,7 +32,7 @@ doindom(pmResult *rp)
 	if (mp == NULL) {
 	    fprintf(stderr,
 		"%s: doindom: Arrgh, unexpected PMID %s @ vset[%d]\n",
-		    pmProgname, pmIDStr(vsp->pmid), i);
+		    pmGetProgname(), pmIDStr(vsp->pmid), i);
 	    __pmDumpResult(stderr, rp);
 	    exit(1);
 	}
@@ -42,7 +42,7 @@ doindom(pmResult *rp)
 	if ((sts = pmGetInDom(mp->idp->indom, &instlist, &namelist)) < 0) {
 	    fprintf(stderr,
 		"%s: doindom: pmGetInDom (%s) failed: %s\n",
-		    pmProgname, pmInDomStr(mp->idp->indom), pmErrStr(sts));
+		    pmGetProgname(), pmInDomStr(mp->idp->indom), pmErrStr(sts));
 	    exit(1);
 	}
 
@@ -70,11 +70,9 @@ doindom(pmResult *rp)
 	}
 
 	if (need) {
-#if PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL0) {
+	    if (pmDebugOptions.appl0) {
 		fprintf(stderr, "Add metadata: indom %s for metric %s\n", pmInDomStr(mp->idp->indom), pmIDStr(vsp->pmid));
 	    }
-#endif
 	    if (mp->idp->name != NULL) free(mp->idp->name);
 	    if (mp->idp->inst != NULL) free(mp->idp->inst);
 	    mp->idp->name = namelist;
@@ -83,7 +81,7 @@ doindom(pmResult *rp)
 	    if ((sts = __pmLogPutInDom(&logctl, mp->idp->indom, &current, mp->idp->numinst, mp->idp->inst, mp->idp->name)) < 0) {
 		fprintf(stderr,
 		    "%s: Error: failed to add pmInDom: indom %s (for pmid %s): %s\n",
-			pmProgname, pmInDomStr(mp->idp->indom), pmIDStr(vsp->pmid), pmErrStr(sts));
+			pmGetProgname(), pmInDomStr(mp->idp->indom), pmIDStr(vsp->pmid), pmErrStr(sts));
 		exit(1);
 	    }
 	    needti = 1;		/* requires a temporal index update */

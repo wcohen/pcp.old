@@ -50,6 +50,10 @@ then
 	echo "Botch: cannot get configopts from configure_paths in debian/rules"
 	exit 1
     fi
+    # and optionally configure_tools from debian/rules also ...
+    #
+    configtools=`sed -n <debian/rules -e '/^configure_tools/s/^[^=]*= *//p'`
+    echo configtools=$configtools
 elif $dorpm
 then
     configopts=`rpmbuild --eval '--prefix=%{_prefix} --exec-prefix=%{_exec_prefix} --bindir=%{_bindir} --sbindir=%{_sbindir} --sysconfdir=%{_sysconfdir} --datadir=%{_datadir} --includedir=%{_includedir} --libdir=%{_libdir} --libexecdir=%{_libexecdir} --localstatedir=%{_localstatedir} --sharedstatedir=%{_sharedstatedir} --mandir=%{_mandir}' 2>/dev/null`
@@ -85,6 +89,11 @@ then
 		configopts="--prefix=/usr --sysconfdir=/etc --localstatedir=/var"
 		;;
     esac
+elif [ $target = sunos ]
+then
+    # Need to take control of the Python versions, otherwise standard.
+    #
+    configopts="--prefix=/usr --sysconfdir=/etc --localstatedir=/var --with-python=no --with-python3=check"
 else
     # default case, we know no better
     #
@@ -121,9 +130,9 @@ in
 	;;
 esac
 
-echo "Using: configure $configopts ..."
+echo "Using: $configtools configure $configopts ..."
 
-./configure $configopts
+eval $configtools ./configure $configopts
 
 if [ ! -f src/include/pcp.conf ]
 then

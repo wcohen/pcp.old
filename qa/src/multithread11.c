@@ -85,19 +85,17 @@ main(int argc, char *argv[])
     int c;
     pthread_t p1, p2;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "D:i:?")) != EOF) {
 	switch (c) {
 	case 'D':
-	    sts = __pmParseDebug(optarg);
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case 'i':
@@ -112,7 +110,7 @@ main(int argc, char *argv[])
     }
 
     if (errflag || optind != argc-2) {
-    	fprintf(stderr, "Usage: %s [-D...] [-i iter] hostname archivename\n", pmProgname);
+    	fprintf(stderr, "Usage: %s [-D...] [-i iter] hostname archivename\n", pmGetProgname());
 	exit(1);
     }
 

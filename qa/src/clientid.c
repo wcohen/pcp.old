@@ -21,23 +21,19 @@ main(int argc, char *argv[])
     int		errflag = 0;
     static char	*usage = "[-l] [-D debugopts]";
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "D:l")) != EOF) {
 	switch (c) {
 
-#ifdef PCP_DEBUG
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
-#endif
 
 	case 'l':	/* linger when done */
 	    lflag = 1;
@@ -51,7 +47,7 @@ main(int argc, char *argv[])
     }
 
     if (errflag) {
-	printf("Usage: %s %s\n", pmProgname, usage);
+	printf("Usage: %s %s\n", pmGetProgname(), usage);
 	exit(1);
     }
 

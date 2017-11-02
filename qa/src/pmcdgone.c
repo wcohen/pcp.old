@@ -243,19 +243,17 @@ main(int argc, char **argv)
     char	*binadm = pmGetConfig("PCP_BINADM_DIR");
     char	path[MAXPATHLEN];
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "D:")) != EOF) {
 	switch (c) {
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case '?':
@@ -270,8 +268,8 @@ main(int argc, char **argv)
 "Usage: %s options ...\n\
 \n\
 Options:\n\
-  -D N		set pmDebug debugging flag to N\n",
-		pmProgname);
+  -D debugspec		set PCP debugging options\n",
+		pmGetProgname());
 	exit(1);
     }
 
@@ -371,7 +369,7 @@ Options:\n\
     if (sts != 0)
 	fprintf(stderr, "Warning: pmcd start script returns %d\n", sts);
 
-    sprintf(path, "%s/pmcd_wait", binadm);
+    pmsprintf(path, sizeof(path), "%s/pmcd_wait", binadm);
     if(access(path, X_OK) == 0) {
         sts = system(". $PCP_DIR/etc/pcp.env; [ -x $PCP_BINADM_DIR/pmcd_wait ] && $PCP_BINADM_DIR/pmcd_wait");
 	if (sts != 0)

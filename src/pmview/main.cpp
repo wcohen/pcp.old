@@ -13,7 +13,7 @@
  */
 #include <QSettings>
 #include <QTextStream>
-#include <QtGui/QMessageBox>
+#include <QMessageBox>
 #include <Inventor/nodes/SoCube.h>
 #include <Inventor/nodes/SoBaseColor.h>
 #include <Inventor/nodes/SoSeparator.h>
@@ -26,10 +26,6 @@
 #include "modlist.h"
 #include "viewobj.h"
 #include "main.h"
-
-#include <sys/stat.h>
-#include <iostream>
-using namespace std;
 
 int Cflag;
 int Lflag;
@@ -47,6 +43,7 @@ SceneGroup *archiveGroup;	// one metrics class group for all archives
 SceneGroup *activeGroup;	// currently active metric fetchgroup
 QedTimeControl *pmtime;		// one timecontrol class for pmtime
 PmView *pmview;
+QTextStream cerr(stderr);
 
 static const char *options = "A:a:Cc:D:g:h:Ln:O:p:S:T:t:VzZ:?";
 
@@ -70,7 +67,7 @@ static void usage(void)
 "  -V            display pmview version number and exit\n"
 "  -Z timezone   set reporting timezone\n"
 "  -z            set reporting timezone to local time of metrics source\n",
-	pmProgname, (int)PmView::defaultViewDelta());
+	pmGetProgname(), (int)PmView::defaultViewDelta());
     pmflush();
     exit(1);
 }
@@ -81,9 +78,9 @@ int warningMsg(const char *file, int line, const char *msg, ...)
     va_list arg;
     va_start(arg, msg);
 
-    int pos = sprintf(theBuffer, "%s: Warning: ", pmProgname);
-    pos += vsprintf(theBuffer + pos, msg, arg);
-    sprintf(theBuffer+pos, "\n");
+    int pos = pmsprintf(theBuffer, theBufferLen, "%s: Warning: ", pmGetProgname());
+    pos += vsnprintf(theBuffer + pos, theBufferLen - pos, msg, arg);
+    pmsprintf(theBuffer + pos, theBufferLen - pos, "\n");
 
     if (pmDebug) {
 	QTextStream cerr(stderr);
@@ -142,7 +139,7 @@ void writeSettings(void)
 {
     QSettings userSettings;
 
-    userSettings.beginGroup(pmProgname);
+    userSettings.beginGroup(pmGetProgname());
     if (globalSettings.viewDeltaModified) {
 	globalSettings.viewDeltaModified = false;
 	userSettings.setValue("viewDelta", globalSettings.viewDelta);
@@ -189,7 +186,7 @@ void writeSettings(void)
 void readSettings(void)
 {
     QSettings userSettings;
-    userSettings.beginGroup(pmProgname);
+    userSettings.beginGroup(pmGetProgname());
 
     //
     // Parameters related to sampling
@@ -253,7 +250,7 @@ genInventor(void)
 	if (!(yyin = fopen(configfile, "r"))) {
 	    pmprintf(
 		"%s: Error: Unable to open configuration file \"%s\": %s\n",
-		pmProgname, configfile, strerror(errno));
+		pmGetProgname(), configfile, strerror(errno));
 	    return -1;
 	}
 	theAltConfigName = theConfigName;
@@ -265,7 +262,7 @@ genInventor(void)
 #if HAVE_MKSTEMP
 	configfile = (char *)malloc(MAXPATHLEN+1);
 	if (configfile == NULL) goto fail;
-	snprintf(configfile, MAXPATHLEN, "%s/pcp-XXXXXX", tmpdir);
+	pmsprintf(configfile, MAXPATHLEN, "%s/pcp-XXXXXX", tmpdir);
 	cur_umask = umask(S_IXUSR | S_IRWXG | S_IRWXO);
 	fd = mkstemp(configfile);
 	umask(cur_umask);
@@ -282,7 +279,7 @@ genInventor(void)
 fail:
             pmprintf("%s: Warning: Unable to save configuration for "
 		     "recording to \"%s\": %s\n",
-		    pmProgname, configfile, strerror(errno));
+		    pmGetProgname(), configfile, strerror(errno));
 	else if (pmDebug & DBG_TRACE_APPL0)
 	    cerr << "genInventor: Copy of configuration saved to "
 		 << configfile << endl;
@@ -296,7 +293,7 @@ fail:
 	fclose(theAltConfig);
 
     if (pmDebug & DBG_TRACE_APPL0) {
-	cerr << pmProgname << ": " << errorCount << " errors detected in "
+	cerr << pmGetProgname() << ": " << errorCount << " errors detected in "
 	     << theConfigName << endl;
     }
 
@@ -331,12 +328,12 @@ fail:
     if ((ViewObj::numModObjects() == 0 || theModList->size() == 0) && 
 	 elementalNodeList.getLength() == 0) {
 	pmprintf("%s: No valid modulated objects in the scene\n",
-		 pmProgname);
+		 pmGetProgname());
 	sts--;
     }
     else if (sts < 0) {
 	pmprintf("%s: Unrecoverable errors in the configuration file %s\n",
-	    pmProgname, (const char *)theConfigName.toLatin1());
+	    pmGetProgname(), (const char *)theConfigName.toLatin1());
     }
 
     return sts;
@@ -391,7 +388,7 @@ main(int argc, char **argv)
 	usage();
 
     if (a.my.pmnsfile && (sts = pmLoadNameSpace(a.my.pmnsfile)) < 0) {
-	pmprintf("%s: %s\n", pmProgname, pmErrStr(sts));
+	pmprintf("%s: %s\n", pmGetProgname(), pmErrStr(sts));
 	pmflush();
 	exit(1);
     }
@@ -428,7 +425,7 @@ main(int argc, char **argv)
 	    liveGroup->useTZ(QString(a.my.tz));
 	if ((sts = pmNewZone(a.my.tz)) < 0) {
 	    pmprintf("%s: cannot set timezone to \"%s\": %s\n",
-		    pmProgname, (char *)a.my.tz, pmErrStr(sts));
+		    pmGetProgname(), (char *)a.my.tz, pmErrStr(sts));
 	    pmflush();
 	    exit(1);
 	}

@@ -22,7 +22,7 @@ main(int argc, char **argv)
     int		errflag = 0;
 
     /* trim cmd name of leading directory components */
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "c:D:?")) != EOF) {
 	switch (c) {
@@ -32,15 +32,13 @@ main(int argc, char **argv)
 	    printf("pmLoadConfig(%s) -> %d\n", optarg, sts);
 	    break;	
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case '?':
@@ -56,7 +54,7 @@ main(int argc, char **argv)
 \n\
 Options:\n\
   -c configfile  file to load derived metric configurations from\n",
-                pmProgname);
+                pmGetProgname());
         exit(1);
     }
 

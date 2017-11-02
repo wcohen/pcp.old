@@ -2,7 +2,7 @@
  * pmie.c - performance inference engine
  ***********************************************************************
  *
- * Copyright (c) 2013-2015 Red Hat, Inc.
+ * Copyright (c) 2013-2015,2017 Red Hat.
  * Copyright (c) 1995-2003 Silicon Graphics, Inc.  All Rights Reserved.
  * 
  * This program is free software; you can redistribute it and/or modify it
@@ -50,8 +50,8 @@ static char *intro  = "Performance Co-Pilot Inference Engine (pmie), "
 char	*clientid;
 
 static FILE *logfp;
-static char logfile[MAXPATHLEN+1];
-static char perffile[MAXPATHLEN+1];	/* /var/tmp/<pid> file name */
+static char logfile[MAXPATHLEN];
+static char perffile[MAXPATHLEN];	/* /var/tmp/<pid> file name */
 static char *username;
 
 static char menu[] =
@@ -208,42 +208,36 @@ load(char *fname)
     if (fname && access(fname, F_OK) != 0) {
 	sts = oserror();	/* always report the first error */
 	if (__pmAbsolutePath(fname)) {
-	    fprintf(stderr, "%s: cannot access config file %s: %s\n", pmProgname, 
+	    fprintf(stderr, "%s: cannot access config file %s: %s\n", pmGetProgname(), 
 		    fname, strerror(sts));
 	    exit(1);
 	}
-#if PCP_DEBUG
-	else if (pmDebug & DBG_TRACE_APPL0) {
+	else if (pmDebugOptions.appl0) {
 	    fprintf(stderr, "load: cannot access config file %s: %s\n", fname, strerror(sts));
 	}
-#endif
-	snprintf(config, sizeof(config)-1, "%s%c" "config%c" "pmie%c" "%s",
+	pmsprintf(config, sizeof(config)-1, "%s%c" "config%c" "pmie%c" "%s",
 		pmGetConfig("PCP_VAR_DIR"), sep, sep, sep, fname);
 	if (access(config, F_OK) != 0) {
 	    fprintf(stderr, "%s: cannot access config file as either %s or %s: %s\n",
-		    pmProgname, fname, config, strerror(sts));
+		    pmGetProgname(), fname, config, strerror(sts));
 	    exit(1);
 	}
-#if PCP_DEBUG
-	else if (pmDebug & DBG_TRACE_APPL0) {
+	else if (pmDebugOptions.appl0) {
 	    fprintf(stderr, "load: using standard config file %s\n", config);
 	}
-#endif
 	fname = config;
     }
-#if PCP_DEBUG
-    else if (pmDebug & DBG_TRACE_APPL0) {
+    else if (pmDebugOptions.appl0) {
 	fprintf(stderr, "load: using config file %s\n",
 		fname == NULL? "<stdin>":fname);
     }
-#endif
 
     if (perf->config[0] == '\0') {	/* keep record of first config */
 	if (fname == NULL)
 	    strcpy(perf->config, "<stdin>");
 	else if (realpath(fname, perf->config) == NULL) {
 	    fprintf(stderr, "%s: failed to resolve realpath for %s: %s\n",
-		    pmProgname, fname, osstrerror());
+		    pmGetProgname(), fname, osstrerror());
 	    exit(1);
 	}
     }
@@ -270,7 +264,7 @@ list(char *name)
 	if ( (s = symLookup(&rules, name)) )
 	    showSyntax(stdout, s);
 	else
-	    printf("%s: error - rule \"%s\" not defined\n", pmProgname, name);
+	    printf("%s: error - rule \"%s\" not defined\n", pmGetProgname(), name);
     }
     else {	/* all rules */
 	t = taskq;
@@ -299,7 +293,7 @@ sublist(char *name)
 	if ( (s = symLookup(&rules, name)) )
 	    showSubsyntax(stdout, s);
 	else
-	    printf("%s: error - rule '%s' not defined\n", pmProgname, name);
+	    printf("%s: error - rule '%s' not defined\n", pmGetProgname(), name);
     }
     else {	/* all rules */
 	t = taskq;
@@ -336,18 +330,19 @@ startmonitor(void)
     char		pmie_dir[MAXPATHLEN];
 
     /* try to create the port file directory. OK if it already exists */
-    snprintf(pmie_dir, sizeof(pmie_dir), "%s%c%s",
+    pmsprintf(pmie_dir, sizeof(pmie_dir), "%s%c%s",
 	     pmGetConfig("PCP_TMP_DIR"), __pmPathSeparator(), PMIE_SUBDIR);
     if (mkdir2(pmie_dir, S_IRWXU | S_IRWXG | S_IRWXO) < 0) {
 	if (oserror() != EEXIST) {
 	    fprintf(stderr, "%s: warning cannot create stats file dir %s: %s\n",
-		    pmProgname, pmie_dir, osstrerror());
+		    pmGetProgname(), pmie_dir, osstrerror());
 	}
     }
     atexit(stopmonitor);
 
     /* create and initialize memory mapped performance data file */
-    sprintf(perffile, "%s%c%" FMT_PID, pmie_dir, __pmPathSeparator(), getpid());
+    pmsprintf(perffile, sizeof(perffile),
+		"%s%c%" FMT_PID, pmie_dir, __pmPathSeparator(), (pid_t)getpid());
     unlink(perffile);
     if ((fd = open(perffile, O_RDWR | O_CREAT | O_EXCL | O_TRUNC,
 			     S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) < 0) {
@@ -359,13 +354,13 @@ startmonitor(void)
     lseek(fd, sizeof(pmiestats_t)-1, SEEK_SET);
     if (write(fd, &zero, 1) != 1) {
 	fprintf(stderr, "%s: Warning: write failed for stats file %s: %s\n",
-		pmProgname, perffile, osstrerror());
+		pmGetProgname(), perffile, osstrerror());
     }
 
     /* map perffile & associate the instrumentation struct with it */
     if ((ptr = __pmMemoryMap(fd, sizeof(pmiestats_t), 1)) == NULL) {
 	fprintf(stderr, "%s: memory map failed for stats file %s: %s\n",
-		pmProgname, perffile, osstrerror());
+		pmGetProgname(), perffile, osstrerror());
 	perf = &instrument;
     } else {
 	perf = (pmiestats_t *)ptr;
@@ -393,8 +388,8 @@ sigintproc(int sig)
 {
     __pmSetSignalHandler(SIGINT, SIG_IGN);
     __pmSetSignalHandler(SIGTERM, SIG_IGN);
-    if (pmDebug & DBG_TRACE_DESPERATE)
-	__pmNotifyErr(LOG_INFO, "%s caught SIGINT or SIGTERM\n", pmProgname);
+    if (pmDebugOptions.desperate)
+	__pmNotifyErr(LOG_INFO, "%s caught SIGINT or SIGTERM\n", pmGetProgname());
     if (inrun)
 	doexit = sig;
     else {
@@ -418,7 +413,7 @@ remap_stdout_stderr(void)
     if ((j = dup(fileno(stderr))) != i)
 	fprintf(stderr, "%s: Warning: failed to link stdout ... "
 			"dup() returns %d, expected %d (stderr=%d)\n",
-			pmProgname, j, i, fileno(stderr));
+			pmGetProgname(), j, i, fileno(stderr));
 }
 
 void
@@ -427,10 +422,10 @@ logRotate(void)
     FILE *fp;
     int sts;
 
-    fp = __pmRotateLog(pmProgname, logfile, logfp, &sts);
+    fp = __pmRotateLog(pmGetProgname(), logfile, logfp, &sts);
     if (sts != 0) {
 	fprintf(stderr, "pmie: PID = %" FMT_PID ", via %s\n\n",
-                getpid(), dfltHostConn);
+                (pid_t)getpid(), dfltHostConn);
 	remap_stdout_stderr();
 	logfp = fp;
     } else {
@@ -448,7 +443,7 @@ sighupproc(int sig)
 static void
 sigbadproc(int sig)
 {
-    if (pmDebug & DBG_TRACE_DESPERATE) {
+    if (pmDebugOptions.desperate) {
 	__pmNotifyErr(LOG_ERR, "Unexpected signal %d ...\n", sig);
 	fprintf(stderr, "\nProcedure call traceback ...\n");
 	__pmDumpStack(stderr);
@@ -494,7 +489,7 @@ getargs(int argc, char *argv[])
 	case 'a':			/* archives */
 	    if (dfltConn && dfltConn != PM_CONTEXT_ARCHIVE) {
                 /* (technically, multiple -a's are allowed.) */
-		pmprintf("%s: at most one of -a or -h allowed\n", pmProgname);
+		pmprintf("%s: at most one of -a or -h allowed\n", pmGetProgname());
 		opts.errors++;
 		break;
 	    }
@@ -522,7 +517,7 @@ getargs(int argc, char *argv[])
 
 	case 'c': 			/* configuration file */
 	    if (interactive) {
-		pmprintf("%s: at most one of -c and -d allowed\n", pmProgname);
+		pmprintf("%s: at most one of -c and -d allowed\n", pmGetProgname());
 		opts.errors++;
 		break;
 	    }
@@ -535,7 +530,7 @@ getargs(int argc, char *argv[])
 
 	case 'd': 			/* interactive mode */
 	    if (configfile) {
-		pmprintf("%s: at most one of -c and -d allowed\n", pmProgname);
+		pmprintf("%s: at most one of -c and -d allowed\n", pmGetProgname());
 		opts.errors++;
 		break;
 	    }
@@ -555,7 +550,7 @@ getargs(int argc, char *argv[])
 
 	case 'h': 			/* default host name */
 	    if (dfltConn) {
-		pmprintf("%s: at most one of -a or -h allowed\n", pmProgname);
+		pmprintf("%s: at most one of -a or -h allowed\n", pmGetProgname());
 		opts.errors++;
 		break;
 	    }
@@ -569,7 +564,7 @@ getargs(int argc, char *argv[])
 
 	case 'l':			/* alternate log file */
 	    if (commandlog != NULL) {
-		pmprintf("%s: at most one -l option is allowed\n", pmProgname);
+		pmprintf("%s: at most one -l option is allowed\n", pmGetProgname());
 		opts.errors++;
 		break;
 	    }
@@ -614,12 +609,12 @@ getargs(int argc, char *argv[])
 
     if (!opts.errors && configfile && opts.optind != argc) {
 	pmprintf("%s: extra filenames cannot be given after using -c\n",
-		pmProgname);
+		pmGetProgname());
 	opts.errors++;
     }
     if (!opts.errors && bflag && agent) {
 	pmprintf("%s: the -b and -x options are incompatible\n",
-		pmProgname);
+		pmGetProgname());
 	opts.errors++;
     }
     if (opts.errors) {
@@ -674,10 +669,10 @@ getargs(int argc, char *argv[])
     }
 
     if (commandlog != NULL) {
-	logfp = __pmOpenLog(pmProgname, commandlog, stderr, &sts);
+	logfp = __pmOpenLog(pmGetProgname(), commandlog, stderr, &sts);
 	if (realpath(commandlog, logfile) == NULL) {
 	    fprintf(stderr, "%s: cannot find realpath for log %s: %s\n",
-		    pmProgname, commandlog, osstrerror());
+		    pmGetProgname(), commandlog, osstrerror());
 	    exit(1);
 	}
 	__pmSetSignalHandler(SIGHUP, (isdaemon && !agent) ? sighupproc : SIG_IGN);
@@ -706,7 +701,7 @@ getargs(int argc, char *argv[])
     if (!archives && !interactive) {
 	if (commandlog != NULL)
             fprintf(stderr, "pmie: PID = %" FMT_PID ", via %s\n\n",
-                    getpid(), dfltHostConn);
+                    (pid_t)getpid(), dfltHostConn);
 	startmonitor();
     }
 
@@ -749,10 +744,8 @@ getargs(int argc, char *argv[])
 	}
     }
 
-#if PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL1)
+    if (pmDebugOptions.appl1)
 	dumpRules();
-#endif
 
     /* really parse time window */
     if (!archives) {
@@ -831,10 +824,8 @@ interact(void)
 	    case 'f':
 		token = scanArg(finger);
 		load(token);
-#if PCP_DEBUG
-		if (pmDebug & DBG_TRACE_APPL1)
+		if (pmDebugOptions.appl1)
 		    dumpRules();
-#endif
 		break;
 
 	    case 'l':
@@ -867,7 +858,7 @@ interact(void)
 	    case 'S':
 		token = scanArg(finger);
 		if (token == NULL) {
-		    fprintf(stderr, "%s: error - argument required\n", pmProgname);
+		    fprintf(stderr, "%s: error - argument required\n", pmGetProgname());
 		    break;
 		}
 		__pmtimevalFromReal(start, &tv1);
@@ -890,7 +881,7 @@ interact(void)
 	    case 'T':
 		token = scanArg(finger);
 		if (token == NULL) {
-		    fprintf(stderr, "%s: error - argument required\n", pmProgname);
+		    fprintf(stderr, "%s: error - argument required\n", pmGetProgname());
 		    break;
 		}
 		if (pmParseInterval(token, &tv1, &msg) < 0) {

@@ -193,8 +193,7 @@ sleepTight(Task *t)
     if (need_wait) {
 	/* harvest terminated children */
 	while ((pid = waitpid(-1, &sts, WNOHANG)) > (pid_t)0) {
-#if PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL2) {
+	    if (pmDebugOptions.appl2) {
 		fprintf(stderr, "sleepTight: wait: pid=%" FMT_PID " done status=0x%x", pid, sts);
 		if (WIFEXITED(sts))
 		    fprintf(stderr, " exit=%d", WEXITSTATUS(sts));
@@ -202,7 +201,6 @@ sleepTight(Task *t)
 		    fprintf(stderr, " signal=%d", WTERMSIG(sts));
 		fprintf(stderr, "\n");
 	    }
-#endif
 	    ;
 	}
 	need_wait = 0;
@@ -225,15 +223,13 @@ sleepTight(Task *t)
 			    delay, sched, cur);
 		show_detail = 1;
 	    }
-#if PCP_DEBUG
 	    else {
-		if (pmDebug & DBG_TRACE_APPL2) {
+		if (pmDebugOptions.appl2) {
 		    fprintf(stderr, "sleepTight: small negative delay (%f). sched=%f, cur=%f\n",
 			    delay, sched, cur);
 		    show_detail = 1;
 		}
 	    }
-#endif
 
 	    if (show_detail) {
 		if (last_sched > 0) {
@@ -517,7 +513,7 @@ agentId(char *name)
 
     if ((sts = pmLookupName(1, &name, &pmid)) < 0) {
 	fprintf(stderr, "%s: agentId: metric %s not found in namespace: %s\n",
-		pmProgname, name, pmErrStr(sts));
+		pmGetProgname(), name, pmErrStr(sts));
 	exit(1);
     }
     return pmid;
@@ -987,7 +983,7 @@ agentInit(void)
     /* Only load PMNS if it's default and hence not already loaded */
     if (pmnsfile == PM_NS_DEFAULT && (sts = pmLoadNameSpace(pmnsfile)) < 0) {
 	fprintf(stderr, "%s: agentInit: cannot load metric namespace: %s\n",
-		pmProgname, pmErrStr(sts));
+		pmGetProgname(), pmErrStr(sts));
 	exit(1);
     }
 

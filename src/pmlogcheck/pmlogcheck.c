@@ -66,7 +66,7 @@ dumpLabel(void)
 
     if ((sts = pmGetArchiveLabel(&label)) < 0) {
 	fprintf(stderr, "%s: cannot get archive label record: %s\n",
-		pmProgname, pmErrStr(sts));
+		pmGetProgname(), pmErrStr(sts));
 	exit(EXIT_FAILURE);
     }
 
@@ -224,7 +224,7 @@ main(int argc, char *argv[])
 	fprintf(stderr, "Scanning for components of archive \"%s\"\n", archpathname);
     nfile = scandir(archdirname, &namelist, filter, NULL);
     if (nfile < 1) {
-	fprintf(stderr, "%s: no PCP archive files match \"%s\"\n", pmProgname, archpathname);
+	fprintf(stderr, "%s: no PCP archive files match \"%s\"\n", pmGetProgname(), archpathname);
 	exit(EXIT_FAILURE);
     }
 
@@ -240,7 +240,7 @@ main(int argc, char *argv[])
 	    strncpy(path, namelist[i]->d_name, sizeof(path));
 	}
 	else {
-	    snprintf(path, sizeof(path), "%s%c%s", archdirname, sep, namelist[i]->d_name);
+	    pmsprintf(path, sizeof(path), "%s%c%s", archdirname, sep, namelist[i]->d_name);
 	}
 	if (pass0(path) == STS_FATAL)
 	    /* unrepairable or unrepaired error */
@@ -261,7 +261,7 @@ main(int argc, char *argv[])
     }
 
     if ((sts = ctx = pmNewContext(PM_CONTEXT_ARCHIVE, archpathname)) < 0) {
-	fprintf(stderr, "%s: cannot open archive \"%s\": %s\n", pmProgname, archpathname, pmErrStr(sts));
+	fprintf(stderr, "%s: cannot open archive \"%s\": %s\n", pmGetProgname(), archpathname, pmErrStr(sts));
 	fprintf(stderr, "Checking abandoned.\n");
 	exit(EXIT_FAILURE);
     }
@@ -276,12 +276,12 @@ main(int argc, char *argv[])
 
     if ((n = pmWhichContext()) >= 0) {
 	if ((ctxp = __pmHandleToPtr(n)) == NULL) {
-	    fprintf(stderr, "%s: botch: __pmHandleToPtr(%d) returns NULL!\n", pmProgname, n);
+	    fprintf(stderr, "%s: botch: __pmHandleToPtr(%d) returns NULL!\n", pmGetProgname(), n);
 	    exit(EXIT_FAILURE);
 	}
     }
     else {
-	fprintf(stderr, "%s: botch: %s!\n", pmProgname, pmErrStr(PM_ERR_NOCONTEXT));
+	fprintf(stderr, "%s: botch: %s!\n", pmGetProgname(), pmErrStr(PM_ERR_NOCONTEXT));
 	exit(EXIT_FAILURE);
     }
     /*
@@ -297,7 +297,7 @@ main(int argc, char *argv[])
 	/* skip ./ prefix */
 	strncpy(archname, archbasename, sizeof(archname) - 1);
     else
-	snprintf(archname, sizeof(archname), "%s%c%s", archdirname, sep, archbasename);
+	pmsprintf(archname, sizeof(archname), "%s%c%s", archdirname, sep, archbasename);
 
     sts = pass1(ctxp, archname);
 

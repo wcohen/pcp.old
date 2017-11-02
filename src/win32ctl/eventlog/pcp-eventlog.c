@@ -39,9 +39,9 @@ append(char *buffer, int bsize, char *string)
     static int offset;
 
     if (spaced)
-	offset += snprintf(buffer + offset, bsize - offset, " %s", string);
+	offset += pmsprintf(buffer + offset, bsize - offset, " %s", string);
     else {
-	offset += snprintf(buffer + offset, bsize - offset, "%s", string);
+	offset += pmsprintf(buffer + offset, bsize - offset, "%s", string);
 	spaced = 1;	/* remainder will all be space-prefixed */
     }
 }
@@ -61,7 +61,7 @@ main(int argc, char **argv)
     int priority;
     int c;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "ip:st:?")) != EOF) {
 	switch (c) {
@@ -89,7 +89,7 @@ main(int argc, char **argv)
 			"  -s          log message to standard error as well\n"
 			"  -p pri      enter message with specified priority\n"
 			"  -t tag      mark the line with the specified tag\n",
-		pmProgname);
+		pmGetProgname());
 	return 2;
     }
 
@@ -111,11 +111,11 @@ main(int argc, char **argv)
      * Construct the message from all contributing components.
      */
     if (iflag) {
-	snprintf(buffer, sizeof(buffer), "[%" FMT_PID "]", getpid());
+	pmsprintf(buffer, sizeof(buffer), "[%" FMT_PID "]", (pid_t)getpid());
 	append(msg, sizeof(msg), buffer);
     }
     if (tag) {
-	snprintf(buffer, sizeof(buffer), "%s:", tag);
+	pmsprintf(buffer, sizeof(buffer), "%s:", tag);
 	append(msg, sizeof(msg), buffer);
     }
     for (c = optind; c < argc; c++)	/* insert the remaining text */
@@ -132,13 +132,13 @@ main(int argc, char **argv)
     sink = RegisterEventSource(NULL, "Application");
     if (!sink) {
 	fprintf(stderr, "%s: RegisterEventSource failed (%ld)\n",
-			pmProgname, GetLastError());
+			pmGetProgname(), GetLastError());
 	return 1;
     }
     msgptr = msg;
     if (!ReportEvent(sink, priority, 0, 0, NULL, 1, 0, &msgptr, NULL))
 	fprintf(stderr, "%s: ReportEvent failed (%ld)\n",
-			pmProgname, GetLastError());
+			pmGetProgname(), GetLastError());
     DeregisterEventSource(sink);
     return 0;
 }

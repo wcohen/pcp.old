@@ -16,7 +16,7 @@ main(int argc, char **argv)
     int		c;
     int		sts;
     int		errflag = 0;
-    static char	*usage = "[-D N]";
+    static char	*usage = "[-D debugspec]";
     pmAtomValue	atom;
     char	aggr[] = {
 	    '\00', '\01', '\02', '\03', '\04', '\05', '\06', '\07',
@@ -26,23 +26,19 @@ main(int argc, char **argv)
     struct timeval	stamp = { 123, 456 };
     struct timespec	hrstamp = { 123456, 78901234 };
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "D:")) != EOF) {
 	switch (c) {
 
-#ifdef PCP_DEBUG
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
-#endif
 
 	case '?':
 	default:
@@ -52,7 +48,7 @@ main(int argc, char **argv)
     }
 
     if (errflag || optind != argc) {
-	printf("Usage: %s %s\n", pmProgname, usage);
+	printf("Usage: %s %s\n", pmGetProgname(), usage);
 	exit(1);
     }
 

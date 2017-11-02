@@ -49,6 +49,7 @@ pmdaOpenHelp(const char *fname)
     help_idx_t	hdr;
     help_t	*hp;
     struct stat	sbuf;
+    help_t	*tmp_tab;
 
     for (sts = 0; sts < numhelp; sts++) {
 	if (tab[sts].dir_fd == -1)
@@ -56,19 +57,21 @@ pmdaOpenHelp(const char *fname)
     }
     if (sts == numhelp) {
 	sts = numhelp++;
-	tab = (help_t *)realloc(tab, numhelp * sizeof(tab[0]));
-	if (tab == NULL) {
+	tmp_tab = (help_t *)realloc(tab, numhelp * sizeof(tab[0]));
+	if (tmp_tab == NULL) {
 	    __pmNoMem("pmdaOpenHelp", numhelp * sizeof(tab[0]), PM_RECOV_ERR);
+	    tab = NULL;
 	    numhelp = 0;
 	    return -oserror();
 	}
+	tab = tmp_tab;
     }
     hp = &tab[sts];
     memset(hp, 0, sizeof(*hp));
     hp->dir_fd = -1;
     hp->pag_fd = -1;
 
-    snprintf(pathname, sizeof(pathname), "%s.dir", fname);
+    pmsprintf(pathname, sizeof(pathname), "%s.dir", fname);
     hp->dir_fd = open(pathname, O_RDONLY);
     if (hp->dir_fd < 0) {
 	sts = -oserror();
@@ -95,7 +98,7 @@ pmdaOpenHelp(const char *fname)
 	goto failed;
     }
 
-    snprintf(pathname, sizeof(pathname), "%s.pag", fname);
+    pmsprintf(pathname, sizeof(pathname), "%s.pag", fname);
     hp->pag_fd = open(pathname, O_RDONLY);
     if (hp->pag_fd < 0) {
 	sts = -oserror();

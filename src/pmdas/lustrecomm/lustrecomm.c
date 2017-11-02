@@ -239,7 +239,7 @@ lustrecomm_init(pmdaInterface *dp)
 {
     if (isDSO) {
 	int sep = __pmPathSeparator();
-	snprintf(mypath, sizeof(mypath), "%s%c" "lustrecomm" "%c" "help",
+	pmsprintf(mypath, sizeof(mypath), "%s%c" "lustrecomm" "%c" "help",
 		pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
 	pmdaDSO(dp, PMDA_INTERFACE_2, "lustrecomm DSO", mypath);
     } else {
@@ -280,12 +280,12 @@ main(int argc, char **argv)
     pmdaInterface	desc;
 
     isDSO = 0;
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
     __pmGetUsername(&username);
 
-    snprintf(mypath, sizeof(mypath), "%s%c" "lustrecomm" "%c" "help",
+    pmsprintf(mypath, sizeof(mypath), "%s%c" "lustrecomm" "%c" "help",
 		pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
-    pmdaDaemon(&desc, PMDA_INTERFACE_2, pmProgname, LUSTRECOMM,
+    pmdaDaemon(&desc, PMDA_INTERFACE_2, pmGetProgname(), LUSTRECOMM,
 		"lustrecomm.log", mypath);
 
     pmdaGetOptions(argc, argv, &opts, &desc);

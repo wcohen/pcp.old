@@ -205,20 +205,32 @@ Dump Instance Profile state=EXCLUDE, 2 profiles
 008:        0        4        0        8        0       10        0       20 
 016:        0       40        0       80        0      100        0      200 
 024:        0      400        0 
+[SERVER]pmGetPDU: LABEL_REQ fd=<n> len=20 from=CLIENT
+000:       14     7012   CLIENT cdab3412  4000000 
+[SERVER]pmXmitPDU: LABEL_REQ fd=<n> len=20
+000:       14     7012   SERVER cdab3412  4000000 
+[SERVER]pmGetPDU: LABEL fd=<n> len=77 from=CLIENT
+000:       4d     7013   CLIENT 3412cdab 10000000        0  1000000 ffffffff 
+008:  1000000 34000000 19000000    b0200    90f00 6574227b 7265706d 72757461 
+016: 223a2265 636c6563 22737569 7e7e7e7d 
+[SERVER]pmXmitPDU: LABEL fd=<n> len=77
+000:       4d     7013   SERVER 3412cdab 10000000        0  1000000 ffffffff 
+008:  1000000 34000000 19000000    b0200    90f00 6574227b 7265706d 72757461 
+016: 223a2265 636c6563 22737569 7e7e7e7d 
 [SERVER]pmGetPDU: TEXT_REQ fd=<n> len=20 from=CLIENT
 000:       14     7008   CLIENT 12341234        5 
 + PDU_TEXT_REQ: ident=305402420 PMID 72.3332.564 txtype=5
 [SERVER]pmXmitPDU: TEXT_REQ fd=<n> len=20
 000:       14     7008   SERVER 12341234        5 
-[SERVER]pmGetPDU: TEXT fd=<n> len=72 from=CLIENT
-000:       48     7009   CLIENT 43214321       34 6d617279 20686164 2061206c 
+[SERVER]pmGetPDU: TEXT fd=<n> len=76 from=CLIENT
+000:       4c     7009   CLIENT 43214321 35000000 7972616d 64616820 6c206120 
 008: 6974746c 65206c61 6d620a69 74732066 6c656563 65207761 73207768 69746520 
-016: 61732073 6e6f770a 
-+ PDU_TEXT: ident=1126253345 text="mary had a l ... was white as snow"
-[SERVER]pmXmitPDU: TEXT fd=<n> len=72
-000:       48     7009   SERVER 43214321       34 6d617279 20686164 2061206c 
+016: 73207361 2e776f6e 7e7e7e0a 
++ PDU_TEXT: ident=1126253345 text="mary had a l ... as white as snow."
+[SERVER]pmXmitPDU: TEXT fd=<n> len=76
+000:       4c     7009   SERVER 43214321 35000000 7972616d 64616820 6c206120 
 008: 6974746c 65206c61 6d620a69 74732066 6c656563 65207761 73207768 69746520 
-016: 61732073 6e6f770a 
+016: 73207361 2e776f6e 7e7e7e0a 
 [SERVER]pmGetPDU: ATTR fd=<n> len=22 from=CLIENT
 000:       16     7011   CLIENT        5 70637071 61007e7e 
 + PDU_AUTH: attr=5 length=6 value="pcpqa"

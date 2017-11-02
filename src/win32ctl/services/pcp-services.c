@@ -69,7 +69,7 @@ int
 pcpScript(const char *name, const char *action)
 {
     char s[MAXPATHLEN];
-    snprintf(s, sizeof(s), "%s\\bin\\sh.exe /etc/%s %s", pcpdir, name, action);
+    pmsprintf(s, sizeof(s), "%s\\bin\\sh.exe /etc/%s %s", pcpdir, name, action);
     return system(s);
 }
 
@@ -117,7 +117,7 @@ pcpServiceMain(DWORD argc, LPTSTR *argv, PCPSERVICE s)
     if (argc > 2)	/* second argument is PCP_DIR */
 	basedir = argv[2];
     else if ((basedir = getenv("PCP_DIR")) == NULL) {
-	for (i = 0; i < 3; i++)
+	for (i = 0; i < sizeof(default_basedirs)/sizeof(default_basedirs[0]); i++)
 	    if (access(default_basedirs[i], R_OK) == 0) {
 		basedir = default_basedirs[i];
 		break;
@@ -126,9 +126,9 @@ pcpServiceMain(DWORD argc, LPTSTR *argv, PCPSERVICE s)
     if (!basedir || access(basedir, R_OK) != 0)
 	return;	/* stuffed up if we have no PCP_DIR - bail out */
 
-    snprintf(pcpdir, sizeof(pcpdir), "%s", basedir);
-    snprintf(pcpconf, sizeof(pcpconf), "PCP_CONF=%s\\etc\\pcp.conf", pcpdir);
-    snprintf(pcpdirenv, sizeof(pcpdirenv), "PCP_DIR=%s", pcpdir);
+    pmsprintf(pcpdir, sizeof(pcpdir), "%s", basedir);
+    pmsprintf(pcpconf, sizeof(pcpconf), "PCP_CONF=%s\\etc\\pcp.conf", pcpdir);
+    pmsprintf(pcpdirenv, sizeof(pcpdirenv), "PCP_DIR=%s", pcpdir);
     putenv(pcpconf);
     putenv(pcpdirenv);
 
@@ -229,7 +229,7 @@ main(int argc, char **argv)
 {
     SERVICE_TABLE_ENTRY dispatchTable[2];
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     /* setup dispatch table and sentinel */
     dispatchTable[0].lpServiceName = services[0].name;
@@ -239,9 +239,9 @@ main(int argc, char **argv)
 
     if (!StartServiceCtrlDispatcher(dispatchTable)) {
 	DWORD c = GetLastError();
-	fprintf(stderr, "%s: cannot dispatch services (%ld)\n", pmProgname, c);
+	fprintf(stderr, "%s: cannot dispatch services (%ld)\n", pmGetProgname(), c);
 	if (c == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT)
-	    fprintf(stderr, "%s: run as service, not on console\n", pmProgname);
+	    fprintf(stderr, "%s: run as service, not on console\n", pmGetProgname());
 	return 1;
     }
     return 0;

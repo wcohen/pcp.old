@@ -23,18 +23,14 @@ _pmLogPut(__pmFILE *f, __pmPDU *pb)
     int		rlen = ntohl(pb[0]);
     int		sts;
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_LOG) {
+    if (pmDebugOptions.log) {
 	fprintf(stderr, "_pmLogPut: fd=%d rlen=%d\n",
 	    __pmFileno(f), rlen);
     }
-#endif
 
     if ((sts = (int)__pmFwrite(pb, 1, rlen, f)) != rlen) {
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_LOG)
+	if (pmDebugOptions.log)
 	    fprintf(stderr, "_pmLogPut: fwrite=%d %s\n", sts, osstrerror());
-#endif
 	return -oserror();
     }
     return 0;
@@ -52,7 +48,7 @@ newlabel(void)
     /* check version number */
     if ((ilabel.ll_magic & 0xff) != PM_LOG_VERS02) {
 	fprintf(stderr,"%s: Error: version number %d (not %d as expected) in archive (%s)\n",
-		pmProgname, ilabel.ll_magic & 0xff, PM_LOG_VERS02, iname);
+		pmGetProgname(), ilabel.ll_magic & 0xff, PM_LOG_VERS02, iname);
 	exit(1);
     }
 
@@ -99,14 +95,14 @@ newvolume(char *base, __pmTimeval *tvp)
 	stamp.tv_sec = tvp->tv_sec;
 	stamp.tv_usec = tvp->tv_usec;
 	fprintf(stderr, "%s: New log volume %d, at ",
-		pmProgname, nextvol);
+		pmGetProgname(), nextvol);
 	__pmPrintStamp(stderr, &stamp);
 	fputc('\n', stderr);
 	return;
     }
     else {
 	fprintf(stderr, "%s: Error: volume %d: %s\n",
-		pmProgname, nextvol, pmErrStr(-oserror()));
+		pmGetProgname(), nextvol, pmErrStr(-oserror()));
 	exit(1);
     }
 }

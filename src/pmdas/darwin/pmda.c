@@ -821,7 +821,7 @@ fetch_uname(unsigned int item, pmAtomValue *atom)
 	return mach_uname_error;
     switch (item) {
     case 28: /* pmda.uname */
-	snprintf(mach_uname_all, sizeof(mach_uname_all), "%s %s %s %s %s",
+	pmsprintf(mach_uname_all, sizeof(mach_uname_all), "%s %s %s %s %s",
 		mach_uname.sysname, mach_uname.nodename,
 		mach_uname.release, mach_uname.version,
 		mach_uname.machine);
@@ -1206,7 +1206,7 @@ darwin_init(pmdaInterface *dp)
     if (_isDSO) {
 	int sep = __pmPathSeparator();
 	char helppath[MAXPATHLEN];
-	sprintf(helppath, "%s%c" "darwin" "%c" "help",
+	pmsprintf(helppath, MAXPATHLEN, "%s%c" "darwin" "%c" "help",
 		pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
 	pmdaDSO(dp, PMDA_INTERFACE_3, "darwin DSO", helppath);
     } else {
@@ -1237,7 +1237,7 @@ darwin_init(pmdaInterface *dp)
 static void
 usage(void)
 {
-    fprintf(stderr, "Usage: %s [options]\n\n", pmProgname);
+    fprintf(stderr, "Usage: %s [options]\n\n", pmGetProgname());
     fputs("Options:\n"
 "  -d domain    use domain (numeric) for metrics domain of PMDA\n"
 "  -l logfile   write log into logfile rather than using default log name\n"
@@ -1259,12 +1259,12 @@ main(int argc, char **argv)
     char		helppath[MAXPATHLEN];
 
     _isDSO = 0;
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
     __pmGetUsername(&username);
 
-    sprintf(helppath, "%s%c" "darwin" "%c" "help",
+    pmsprintf(helppath, MAXPATHLEN, "%s%c" "darwin" "%c" "help",
 		pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
-    pmdaDaemon(&dispatch, PMDA_INTERFACE_3, pmProgname, DARWIN, "darwin.log",
+    pmdaDaemon(&dispatch, PMDA_INTERFACE_3, pmGetProgname(), DARWIN, "darwin.log",
 		helppath);
 
     while ((c = pmdaGetOpt(argc, argv, "D:d:i:l:pu:U:6:?", &dispatch, &errflag)) != EOF) {

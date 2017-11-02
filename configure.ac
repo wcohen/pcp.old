@@ -290,7 +290,7 @@ then
 elif test $target_os = solaris
 then
     AC_DEFINE(IS_SOLARIS, [1], [Platform is Solaris])
-    export CFLAGS_IF_GCC="-fPIC -fno-strict-aliasing"
+    export CFLAGS_IF_GCC="-fPIC -fno-strict-aliasing -D_XPG4_2 -D__EXTENSIONS__"
     export CFLAGS_IF_SUNCC="-fPIC -xalias_level=any -D_XPG4_2 -D__EXTENSIONS__"
     pcp_platform_paths='/usr/bin/X11:/usr/local/bin:/opt/sfw/bin:/opt/csw/bin'
     pcp_ps_all_flags=-ef
@@ -893,8 +893,12 @@ AC_DEFUN([PCP_CHECK_PYTHON_MODULE],
   ])
 PCP_CHECK_PYTHON_MODULE(OrderedDict, [from collections import OrderedDict])
 AC_SUBST(have_python_OrderedDict)
+PCP_CHECK_PYTHON_MODULE(Elasticsearch, [from elasticsearch import Elasticsearch])
+AC_SUBST(have_python_Elasticsearch)
 PCP_CHECK_PYTHON_MODULE(jsonpointer)
 AC_SUBST(have_python_jsonpointer)
+PCP_CHECK_PYTHON_MODULE(xlsxwriter)
+AC_SUBST(have_python_xlsxwriter)
 PCP_CHECK_PYTHON_MODULE(setuptools)
 AC_SUBST(have_python_setuptools)
 PCP_CHECK_PYTHON_MODULE(requests)
@@ -1120,7 +1124,8 @@ AS_IF([test "x$do_qt" != "xno"], [
     
     if test -z "$QMAKE"
     then
-	AC_PATH_PROGS(QMAKE, [qmake-qt5 qmake-qt4 qmake],, [$QTDIR/bin:/usr/bin:/usr/lib64/qt5/bin:/usr/lib/qt5/bin:/usr/lib64/qt4/bin:/usr/lib/qt4/bin:/usr/local/bin])
+	dnl default to qmake from qtchooser whenever it is available
+	AC_PATH_PROGS(QMAKE, [qmake qmake-qt5 qmake-qt4],, [$QTDIR/bin:/usr/lib/qtchooser:/usr/bin:/usr/lib64/qt5/bin:/usr/lib/qt5/bin:/usr/lib64/qt4/bin:/usr/lib/qt4/bin:/usr/local/bin])
 	test "x$cc_is_gcc" = xyes -a $target_os = solaris && QMAKE="$QMAKE -spec solaris-g++"
     fi
     qmake=$QMAKE
@@ -1572,6 +1577,7 @@ AC_CHECK_HEADERS(iptypes.h, [], [], [#include <windows.h>])
 AC_CHECK_HEADERS(iphlpapi.h, [], [], [#include <winsock2.h>])
 AC_CHECK_HEADERS(fts.h libzfs.h)
 AC_CHECK_HEADERS(sys/statvfs.h sys/statfs.h sys/mount.h)
+AC_CHECK_HEADERS(ncurses/curses.h)
 
 dnl Check if we have <sys/endian.h> ... standard way
 AC_MSG_CHECKING([for sys/endian.h ])
@@ -1621,6 +1627,9 @@ AC_SUBST(lib_for_regex)
 
 PKG_CHECK_MODULES([ncurses], [ncurses], [have_ncurses=true], [have_ncurses=false])
 AC_SUBST(HAVE_NCURSES, [$have_ncurses])
+
+PKG_CHECK_MODULES([hiredis], [hiredis], [have_hiredis=true], [have_hiredis=false])
+AC_SUBST(HAVE_HIREDIS, [$have_hiredis])
 
 PKG_CHECK_MODULES([DEVMAPPER], [devmapper], [have_devmapper=true], [have_devmapper=false])
 if $have_devmapper
@@ -1833,6 +1842,15 @@ dnl Do you have graphics libraries for pmwebapi?
 PKG_CHECK_MODULES([cairo], [cairo >= 1.2, cairo-ft >= 1.2, cairo-png >= 1.2], [have_cairo=true], [have_cairo=false])
 AC_SUBST(HAVE_CAIRO, [$have_cairo])
 
+AC_LANG_PUSH([C++])
+AC_CHECK_HEADERS([boost/flyweight.hpp])
+AC_LANG_POP
+AC_SUBST(HAVE_BOOST_FLYWEIGHT_HPP, [$ac_cv_header_boost_flyweight_hpp])
+
+have_boost=false
+test "$ac_cv_header_boost_flyweight_hpp" = yes && have_boost=true
+AC_SUBST(have_boost)
+
 enable_webapi=false
 AS_IF([test "x$do_webapi" != "xno"], [
     enable_webapi=true
@@ -1912,52 +1930,52 @@ for policy_file in /etc/selinux/targeted/policy/policy.*
 do
     if test -f "$policy_file"
     then
-        class_status=`eval seinfo -x --class=system $policy_file | grep status | awk '{ print $1 }'`
+        class_status=`eval seinfo -x --class=system -- $policy_file | grep status | awk '{ print $1 }'`
     	if test "x$class_status" != "x"
 	then
 	    pcp_selinux_class_status=true
 	fi
-	container_runtime=`eval seinfo -t $policy_file | grep container_runtime_t | awk '{ print $1 }'`
+	container_runtime=`eval seinfo -t -- $policy_file | grep container_runtime_t | awk '{ print $1 }'`
 	if test "x$container_runtime" != "x"
 	then
 	    pcp_selinux_container_runtime=true
 	fi
-	nsfs=`eval seinfo -t $policy_file | grep nsfs_t | awk '{ print $1 }'`
+	nsfs=`eval seinfo -t -- $policy_file | grep nsfs_t | awk '{ print $1 }'`
 	if test "x$nsfs" != "x"
 	then
 	    pcp_selinux_nsfs=true
 	fi
-	docker_var_lib=`eval seinfo -t $policy_file | grep docker_var_lib_t | awk '{ print $1 }'`
+	docker_var_lib=`eval seinfo -t -- $policy_file | grep docker_var_lib_t | awk '{ print $1 }'`
 	if test "x$docker_var_lib" != "x"
 	then
 	    pcp_selinux_docker_var_lib=true
 	fi
-	svirt_lxc_net=`eval seinfo -t $policy_file | grep svirt_lxc_net_t | awk '{ print $1 }'`
+	svirt_lxc_net=`eval seinfo -t -- $policy_file | grep svirt_lxc_net_t | awk '{ print $1 }'`
 	if test "x$svirt_lxc_net" != "x"
 	then
 	    pcp_selinux_svirt_lxc_net=true
 	fi
-	systemd_unit_file=`eval seinfo -t $policy_file | grep systemd_unit_file_t | awk '{ print $1 }'`
+	systemd_unit_file=`eval seinfo -t -- $policy_file | grep systemd_unit_file_t | awk '{ print $1 }'`
 	if test "x$systemd_unit_file" != "x"
 	then
 	    pcp_selinux_systemd_unit_file=true
 	fi
-	systemd_exec=`eval seinfo -t $policy_file | grep systemd_systemctl_exec_t | awk '{ print $1 }'`
+	systemd_exec=`eval seinfo -t -- $policy_file | grep systemd_systemctl_exec_t | awk '{ print $1 }'`
 	if test "x$systemd_exec" != "x"
 	then
 	    pcp_selinux_systemd_exec=true
 	fi
-	cap_userns_ptrace=`eval seinfo -x --class=cap_userns $policy_file 2>&1 | grep sys_ptrace | awk '{ print $1 }'`
+	cap_userns_ptrace=`eval seinfo -x --class=cap_userns -- $policy_file 2>&1 | grep sys_ptrace | awk '{ print $1 }'`
     	if test "x$cap_userns_ptrace" != "x"
 	then
 	    pcp_selinux_cap_userns_ptrace=true
 	fi
-	unreserved_port=`eval seinfo -t $policy_file | grep unreserved_port_t | awk '{ print $1 }'`
+	unreserved_port=`eval seinfo -t -- $policy_file | grep unreserved_port_t | awk '{ print $1 }'`
 	if test "x$unreserved_port" != "x"
 	then
 	    pcp_selinux_unreserved_port=true
 	fi
-	tracefs=`eval seinfo -t $policy_file | grep tracefs_t | awk '{ print $1 }'`
+	tracefs=`eval seinfo -t -- $policy_file | grep tracefs_t | awk '{ print $1 }'`
 	if test "x$tracefs" != "x"
 	then
 	    pcp_selinux_tracefs=true
@@ -2204,7 +2222,14 @@ _do_type()
     #   typedef long __pid_t;
     #   typedef __pid_t pid_t;
     #
-    _raw=`$CPP conftest.c \
+    if test $target_os = darwin
+    then
+	# Need to strip -arch foo args for gcc -E 
+	_myflags=`echo "$CPPFLAGS" "$CFLAGS" | sed -e 's/-arch [[^ ]]*//g'`
+    else
+	_myflags="$CPPFLAGS $CFLAGS"
+    fi
+    _raw=`$CPP $_myflags conftest.c \
     | $SED \
 	-e 's/[[ 	]]__attribute__ ((.*));/;/' \
 	-e 's/__extension__[[ 	]][[ 	]]*//' \
@@ -3247,6 +3272,28 @@ then
 	  (void) zpool_vdev_name(zh, zp, np, B_FALSE);
 	],
 	AC_DEFINE(HAVE_ZPOOL_VDEV_NAME_4ARG, [1], [4-arg zpool_vdev_name])
+	AC_MSG_RESULT(yes), AC_MSG_RESULT(no))
+fi
+
+dnl check for zfs_iter_snapshots API style from <libzfs.h>
+if test "$ac_cv_header_libzfs_h" = "yes"
+then
+    AC_MSG_CHECKING([for 4-argument style zfs_iter_snapshots])
+    AC_TRY_COMPILE([#include <libzfs.h>],
+	[ zfs_handle_t *zh;
+	  zfs_iter_f callback;
+	  (void)zfs_iter_snapshots(zh, B_FALSE, callback, NULL);
+	],
+	AC_DEFINE(HAVE_ZFS_ITER_SNAPSHOTS_4ARG, [1], [4-arg zfs_iter_snapshots])
+	AC_MSG_RESULT(yes), AC_MSG_RESULT(no))
+
+    AC_MSG_CHECKING([for 3-argument style zfs_iter_snapshots])
+    AC_TRY_COMPILE([#include <libzfs.h>],
+	[ zfs_handle_t *zh;
+	  zfs_iter_f callback;
+	  (void)zfs_iter_snapshots(zh, callback, NULL);
+	],
+	AC_DEFINE(HAVE_ZFS_ITER_SNAPSHOTS_3ARG, [1], [3-arg zfs_iter_snapshots])
 	AC_MSG_RESULT(yes), AC_MSG_RESULT(no))
 fi
 

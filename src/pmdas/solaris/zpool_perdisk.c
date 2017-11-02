@@ -51,7 +51,7 @@ make_vdev_name(zpool_handle_t *zp, const char *pname, nvlist_t *child)
 			  pname, cname);
 	    goto free_out;
 	}
-	snprintf(name, size, "%s.%s", pname, cname);
+	pmsprintf(name, size, "%s.%s", pname, cname);
 free_out:
 	free(cname);
 out:
@@ -267,7 +267,7 @@ zpool_perdisk_fetch(pmdaMetric *pm, int inst, pmAtomValue *atom)
     if (stats->vdev_stats_fresh) {
 	switch (pmid_item(md->md_desc.pmid)) {
 	case 0: /* zpool.perdisk.state */
-	    atom->cp = zpool_state_to_name(stats->vds.vs_state,
+	    atom->cp = (char *)zpool_state_to_name(stats->vds.vs_state,
 					   stats->vds.vs_aux);
 	    break;
 	case 1: /* zpool.perdisk.state_int */

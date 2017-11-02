@@ -115,10 +115,13 @@ _z(void)
     int			attr;
     int			rate;
     int			state;
+    int			nsets;
     int			num;
     pmID		*pmidp;
     __pmInResult	inres;
     __pmInResult	*inresp;
+    pmLabelSet		*labels;
+    pmLabelSet		*rlabels;
     pmInDom		indom;
     int			inst;
     pmDesc		result_desc;
@@ -765,6 +768,114 @@ _z(void)
 	    __pmFreeInResult(inresp);
     }
 
+/* PDU_LABEL_REQ */
+    if ((e = __pmSendLabelReq(fd[1], mypid, 0x1234abcd, PM_LABEL_INDOM)) < 0) {
+	fprintf(stderr, "Error: SendLabelReq: %s\n", pmErrStr(e));
+	fatal = 1;
+	goto cleanup;
+    }
+    else {
+	if ((e = __pmGetPDU(fd[0], ANY_SIZE, timeout, &pb)) < 0) {
+	    fprintf(stderr, "Error: RecvLabelReq: %s\n", pmErrStr(e));
+	    fatal = 1;
+	    goto cleanup;
+	}
+	else if (e == 0) {
+	    fprintf(stderr, "Error: RecvLabelReq: end-of-file!\n");
+	    fatal = 1;
+	    goto cleanup;
+	}
+	else if (e != PDU_LABEL_REQ) {
+	    fprintf(stderr, "Error: RecvLabelReq: %s wrong type PDU!\n", __pmPDUTypeStr(e));
+	    fatal = 1;
+	    goto cleanup;
+	}
+	else {
+	    if ((e = __pmDecodeLabelReq(pb, &ident, &type)) < 0) {
+		fprintf(stderr, "Error: DecodeLabelReq: %s\n", pmErrStr(e));
+		fatal = 1;
+		goto cleanup;
+	    }
+	    else {
+		if (ident != 0x1234abcd)
+		    fprintf(stderr, "Botch: LabelReq: ident: got: 0x%x expect: 0x%x\n",
+			ident, 0x1234abcd);
+		if (type != PM_LABEL_INDOM)
+		    fprintf(stderr, "Botch: LabelReq: type: got: 0x%x expect: 0x%x\n",
+			type, PM_LABEL_INDOM);
+	    }
+	}
+    }
+
+/* PDU_LABEL */
+#define TEMP "{\"temperature\":\"celcius\"}"
+    __pmParseLabelSet(TEMP, strlen(TEMP), PM_LABEL_ITEM, &labels);
+    if ((e = __pmSendLabel(fd[1], mypid, 0xabcd1234, PM_LABEL_ITEM, labels, 1)) < 0) {
+	fprintf(stderr, "Error: SendLabel: %s\n", pmErrStr(e));
+	fatal = 1;
+	goto cleanup;
+    }
+    else {
+	if ((e = __pmGetPDU(fd[0], ANY_SIZE, timeout, &pb)) < 0) {
+	    fprintf(stderr, "Error: RecvLabel: %s\n", pmErrStr(e));
+	    fatal = 1;
+	    goto cleanup;
+	}
+	else if (e == 0) {
+	    fprintf(stderr, "Error: RecvLabel: end-of-file!\n");
+	    fatal = 1;
+	    goto cleanup;
+	}
+	else if (e != PDU_LABEL) {
+	    fprintf(stderr, "Error: RecvLabel: %s wrong type PDU!\n", __pmPDUTypeStr(e));
+	    fatal = 1;
+	    goto cleanup;
+	}
+	else {
+	    rlabels = NULL;
+	    if ((e = __pmDecodeLabel(pb, &ident, &type, &rlabels, &nsets)) < 0) {
+		fprintf(stderr, "Error: DecodeLabels: %s\n", pmErrStr(e));
+		fatal = 1;
+		goto cleanup;
+	    }
+	    else {
+		if (ident != 0xabcd1234)
+		    fprintf(stderr, "Botch: Label: ident: got: 0x%x expect: 0x%x\n",
+			ident, 0xabcd1234);
+		if (type != PM_LABEL_ITEM)
+		    fprintf(stderr, "Botch: Label: type: got: 0x%x expect: 0x%x\n",
+			type, PM_LABEL_ITEM);
+		if (nsets != 1)
+		    fprintf(stderr, "Botch: Label: nset: got: %d expect: %d\n",
+			    nsets, 1);
+		if (rlabels->inst != labels->inst)
+		    fprintf(stderr, "Botch: Labels: inst: got: %d expect: %d\n",
+			    rlabels->inst, labels->inst);
+		if (rlabels->nlabels != labels->nlabels)
+		    fprintf(stderr, "Botch: Label: nlabels: got: %d expect: %d\n",
+			    rlabels->nlabels, labels->nlabels);
+		else {
+		    for (i = 0; i < labels->nlabels; i++) {
+			if (rlabels->labels[i].name != labels->labels[i].name)
+			    fprintf(stderr, "Botch: Label[%d] name got: %d expect: %d\n",
+				    i, rlabels->labels[i].name, labels->labels[i].name);
+			if (rlabels->labels[i].namelen != labels->labels[i].namelen)
+			    fprintf(stderr, "Botch: Label[%d] namelen got: %d expect: %d\n",
+				    i, rlabels->labels[i].namelen, labels->labels[i].namelen);
+			if (rlabels->labels[i].value != labels->labels[i].value)
+			    fprintf(stderr, "Botch: Label[%d] value got: %d expect: %d\n",
+				    i, rlabels->labels[i].value, labels->labels[i].value);
+			if (rlabels->labels[i].valuelen != labels->labels[i].valuelen)
+			    fprintf(stderr, "Botch: Label[%d] valuelen got: %d expect: %d\n",
+				    i, rlabels->labels[i].valuelen, labels->labels[i].valuelen);
+		    }
+		}
+		pmFreeLabelSets(rlabels, nsets);
+	    }
+	}
+	pmFreeLabelSets(labels, 1);
+    }
+
 /* PDU_TEXT_REQ */
     if ((e = __pmSendTextReq(fd[1], mypid, 0x12341234, PM_TEXT_PMID|PM_TEXT_ONELINE)) < 0) {
 	fprintf(stderr, "Error: SendTextReq: %s\n", pmErrStr(e));
@@ -805,7 +916,7 @@ _z(void)
     }
 
 /* PDU_TEXT */
-#define MARY "mary had a little lamb\nits fleece was white as snow\n"
+#define MARY "mary had a little lamb\nits fleece was white as snow.\n"
     if ((e = __pmSendText(fd[1], mypid, 0x43214321, MARY)) < 0) {
 	fprintf(stderr, "Error: SendText: %s\n", pmErrStr(e));
 	fatal = 1;
@@ -850,7 +961,6 @@ _z(void)
 	}
     }
 
-#if PCP_VER >= 3800
 /* PDU_AUTH */
 #define USERNAME "pcpqa"
     if (remote_version == -1 || remote_version >= 3800) {
@@ -900,7 +1010,6 @@ _z(void)
 	    }
 	}
     }
-#endif
 
 /* PDU_CREDS */
     sender = 0;
@@ -910,11 +1019,9 @@ _z(void)
     increds[0].c_vala = (unsigned char)PDU_VERSION;
     increds[0].c_valb = (unsigned char)10;
     increds[0].c_valc = (unsigned char)11;
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL0) {
+    if (pmDebugOptions.appl0) {
 	fprintf(stderr, "0 = %x\n", *(unsigned int*)&(increds[0]));
     }
-#endif
     if ((e = __pmSendCreds(fd[1], mypid, 1, increds)) < 0) {
 	fprintf(stderr, "Error: SendCreds: %s\n", pmErrStr(e));
 	fatal = 1;
@@ -946,11 +1053,9 @@ _z(void)
 	    else if (outcreds == NULL)
 		fprintf(stderr, "Botch: DecodeCreds: outcreds is NULL!\n");
 	    else {
-#ifdef PCP_DEBUG
-		if (pmDebug & DBG_TRACE_APPL0) {
+		if (pmDebugOptions.appl0) {
 		    fprintf(stderr, "0 = %x\n", *(unsigned int*)&(outcreds[0]));
 		}
-#endif
 		if (outcreds[0].c_type != CVERSION)
 		    fprintf(stderr, "Botch: Creds: type: got: %x expect: %x\n",
 			    (unsigned int)outcreds[0].c_type, (unsigned int)CVERSION);
@@ -1527,25 +1632,23 @@ main(int argc, char **argv)
     char	*endnum;
     __pmID_int	*pmidp;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "D:i:Np:v:?")) != EOF) {
 	switch (c) {
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case 'i':	/* iterations */
 	    iter = (int)strtol(optarg, &endnum, 10);
 	    if (*endnum != '\0') {
-		fprintf(stderr, "%s: -i requires numeric argument\n", pmProgname);
+		fprintf(stderr, "%s: -i requires numeric argument\n", pmGetProgname());
 		errflag++;
 	    }
 	    break;
@@ -1558,7 +1661,7 @@ main(int argc, char **argv)
 	case 'p':	/* port */
 	    port = (int)strtol(optarg, &endnum, 10);
 	    if (*endnum != '\0') {
-		fprintf(stderr, "%s: -p requires numeric argument\n", pmProgname);
+		fprintf(stderr, "%s: -p requires numeric argument\n", pmGetProgname());
 		errflag++;
 	    }
 	    break;
@@ -1585,7 +1688,7 @@ main(int argc, char **argv)
     }
 
     if (errflag || optind < argc-1) {
-	fprintf(stderr, "Usage: %s [-N] [-D n] [-i iter] [-p port] [-v remote_version] [host]\n", pmProgname);
+	fprintf(stderr, "Usage: %s [-N] [-D debugspec] [-i iter] [-p port] [-v remote_version] [host]\n", pmGetProgname());
 	exit(1);
     }
 

@@ -198,12 +198,12 @@ void
 domain_write(void)
 {
     char *p, name[512] = { 0 };
-    int i, len = strlen(pmProgname);
+    int i, len = strlen(pmGetProgname());
 
     if (len >= sizeof(name) - 1)
 	len = sizeof(name) - 2;
-    p = pmProgname;
-    if (strncmp(pmProgname, "pmda", 4) == 0)
+    p = pmGetProgname();
+    if (strncmp(p, "pmda", 4) == 0)
 	p += 4;
     for (i = 0; i < len; i++)
 	name[i] = toupper(p[i]);
@@ -630,20 +630,20 @@ new(CLASS,name,domain)
 	char *	pmdaname;
 	char	helpfile[256];
     CODE:
-	pmProgname = name;
 	RETVAL = &dispatch;
 	logfile = local_strdup_suffix(name, ".log");
 	pmdaname = local_strdup_prefix("pmda", name);
-	__pmSetProgname(pmdaname);
+	pmSetProgname(pmdaname);
 	sep = __pmPathSeparator();
-	if ((p = getenv("PCP_PERL_DEBUG")) != NULL)
-	    if ((pmDebug = __pmParseDebug(p)) < 0)
-		pmDebug = 0;
+	if ((p = getenv("PCP_PERL_DEBUG")) != NULL) {
+	    if (pmSetDebug(p) < 0)
+		fprintf(stderr, "unrecognized debug options specification (%s)\n", p);
+	}
 #ifndef IS_MINGW
 	setsid();
 #endif
 	atexit(&local_atexit);
-	snprintf(helpfile, sizeof(helpfile), "%s%c%s%c" "help",
+	pmsprintf(helpfile, sizeof(helpfile), "%s%c%s%c" "help",
 			pmGetConfig("PCP_PMDAS_DIR"), sep, name, sep);
 	if (access(helpfile, R_OK) != 0) {
 	    pmdaDaemon(&dispatch, PMDA_INTERFACE_5, pmdaname, domain,
@@ -812,11 +812,11 @@ pmda_uptime(now)
 	secs = now;
 
 	if (days > 1)
-	    snprintf(s, sz, "%ddays %02d:%02d:%02d", days, hours, mins, secs);
+	    pmsprintf(s, sz, "%ddays %02d:%02d:%02d", days, hours, mins, secs);
 	else if (days == 1)
-	    snprintf(s, sz, "%dday %02d:%02d:%02d", days, hours, mins, secs);
+	    pmsprintf(s, sz, "%dday %02d:%02d:%02d", days, hours, mins, secs);
 	else
-	    snprintf(s, sz, "%02d:%02d:%02d", hours, mins, secs);
+	    pmsprintf(s, sz, "%02d:%02d:%02d", hours, mins, secs);
 	RETVAL = s;
     OUTPUT:
 	RETVAL

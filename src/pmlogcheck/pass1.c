@@ -67,12 +67,12 @@ pass1(__pmContext *ctxp, char *archname)
 	tv.tv_sec = tip->ti_stamp.tv_sec;
 	tv.tv_usec = tip->ti_stamp.tv_usec;
 	if (i == 1) {
-	    snprintf(path, sizeof(path), "%s.meta", archname);
+	    pmsprintf(path, sizeof(path), "%s.meta", archname);
 	    if (stat(path, &sbuf) == 0)
 		meta_size = sbuf.st_size;
 	    else {
 		/* should not get here ... as detected in after pass0 */
-		fprintf(stderr, "%s: pass1: botch: cannot open metadata file (%s)\n", pmProgname, path);
+		fprintf(stderr, "%s: pass1: botch: cannot open metadata file (%s)\n", pmGetProgname(), path);
 		exit(1);
 	    }
 	}
@@ -83,7 +83,7 @@ pass1(__pmContext *ctxp, char *archname)
 	    log_size = -1;
 	}
 	else if (lastp == NULL || tip->ti_vol != lastp->ti_vol) { 
-	    snprintf(path, sizeof(path), "%s.%d", archname, tip->ti_vol);
+	    pmsprintf(path, sizeof(path), "%s.%d", archname, tip->ti_vol);
 	    if (stat(path, &sbuf) == 0)
 		log_size = sbuf.st_size;
 	    else {

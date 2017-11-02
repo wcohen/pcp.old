@@ -1,0 +1,46 @@
+{
+	"prefix": "hot_disk",
+	"metrics": [
+		{
+			"name": "metrics",
+			"pointer": "/hotprocdata",
+			"type": "array",
+			"description": "FIXME",
+			"index": "/inst",
+			"metrics": [
+			{
+				"name": "disk_dev_aveq",
+				"pointer": "/disk.dev.aveq",
+				"semantics": "counter",
+				"units": "millisec",
+				"description": "per-disk time averaged count of request queue length",
+				"type": "integer"
+			},
+			{
+				"name": "disk_dev_total_rawactive",
+				"pointer": "/disk.dev.total_rawactive",
+				"semantics": "counter",
+				"units": "millisec",
+				"description": "per-disk raw count of I/O response time",
+				"type": "integer"
+			},
+			{
+				"name": "disk_dev_blktotal",
+				"pointer": "/disk.dev.blktotal",
+				"semantics": "counter",
+				"units": "count",
+				"description": "per-disk total (read+write) block operations",
+				"type": "integer"
+			},
+			{
+				"name": "disk_dev_total_bytes",
+				"pointer": "/disk.dev.total_bytes",
+				"semantics": "counter",
+				"units": "Kbyte",
+				"description": "per-disk count of total bytes read and written",
+				"type": "integer"
+			}
+			]
+		}
+	]
+}

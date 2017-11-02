@@ -60,7 +60,7 @@ static int	*portlist;
  * The unix domain socket we're willing to listen for clients on,
  * from -s (or env)
  */
-static const char *localSocketPath;
+static char *localSocketPath;
 static int   localSocketFd = -EPROTO;
 static const char *serviceSpec;
 
@@ -253,10 +253,12 @@ __pmServerAddInterface(const char *address)
 void
 __pmServerSetLocalSocket(const char *path)
 {
+    if (localSocketPath != NULL)
+	free(localSocketPath);
     if (path != NULL && *path != '\0')
 	localSocketPath = strdup(path);
     else
-	localSocketPath = __pmPMCDLocalSocketDefault();
+	localSocketPath = strdup(__pmPMCDLocalSocketDefault());
 }
 
 void
@@ -274,7 +276,7 @@ pidonexit(void)
     char        pidpath[MAXPATHLEN];
 
     if (serviceSpec) {
-	snprintf(pidpath, sizeof(pidpath), "%s%c%s.pid",
+	pmsprintf(pidpath, sizeof(pidpath), "%s%c%s.pid",
 	    pmGetConfig("PCP_RUN_DIR"), __pmPathSeparator(), serviceSpec);
 	unlink(pidpath);
     }
@@ -289,7 +291,7 @@ __pmServerCreatePIDFile(const char *spec, int verbose)
     if (!serviceSpec)
 	__pmServerSetServiceSpec(spec);
 
-    snprintf(pidpath, sizeof(pidpath), "%s%c%s.pid",
+    pmsprintf(pidpath, sizeof(pidpath), "%s%c%s.pid",
 	     pmGetConfig("PCP_RUN_DIR"), __pmPathSeparator(), spec);
 
     if ((pidfile = fopen(pidpath, "w")) == NULL) {
@@ -298,7 +300,7 @@ __pmServerCreatePIDFile(const char *spec, int verbose)
 	return -oserror();
     }
     atexit(pidonexit);
-    fprintf(pidfile, "%" FMT_PID, getpid());
+    fprintf(pidfile, "%" FMT_PID, (pid_t)getpid());
 #ifdef HAVE_FCHMOD
     (void)fchmod(fileno(pidfile), S_IRUSR | S_IRGRP | S_IROTH);
 #else
@@ -359,10 +361,8 @@ AddRequestPort(const char *address, int port)
     rp->presence = NULL;
     nReqPorts++;
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL0)
+    if (pmDebugOptions.appl0)
         fprintf(stderr, "AddRequestPort: %s port %d\n", rp->address, rp->port);
-#endif
 
     return nReqPorts;   /* success */
 }
@@ -381,7 +381,7 @@ SetupRequestPorts(void)
 	if (n < nport) {
 	    __pmNotifyErr(LOG_WARNING,
 		"%s: duplicate client request port (%d) will be ignored\n",
-                     pmProgname, portlist[n]);
+                     pmGetProgname(), portlist[n]);
 	    portlist[n] = -1;
 	}
     }
@@ -559,11 +559,9 @@ OpenRequestSocket(int port, const char *address, int *family,
 	sts = __pmBind(fd, (void *)myAddr, __pmSockAddrSize());
 	if (sts >= 0)
 	    break;
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_DESPERATE)
+	if (pmDebugOptions.desperate)
 	    fprintf(stderr, "OpenRequestSocket(%d, %s, %s) __pmBind try %d: %s\n",
 		port, address, AddressFamily(*family), try+1, netstrerror_r(errmsg, sizeof(errmsg)));
-#endif
 	__pmtimevalSleep(tick);
 	try++;
     }
@@ -573,7 +571,7 @@ OpenRequestSocket(int port, const char *address, int *family,
 	__pmNotifyErr(LOG_ERR, "OpenRequestSocket(%d, %s, %s) __pmBind: %s\n",
 		port, address, AddressFamily(*family), netstrerror_r(errmsg, sizeof(errmsg)));
 	if (neterror() == EADDRINUSE)
-	    __pmNotifyErr(LOG_ERR, "%s may already be running\n", pmProgname);
+	    __pmNotifyErr(LOG_ERR, "%s may already be running\n", pmGetProgname());
 	goto fail;
     }
 
@@ -699,7 +697,7 @@ OpenRequestPorts(__pmFdSet *fdset, int backlog)
 	}
 #else
 	__pmNotifyErr(LOG_ERR, "%s: unix domain sockets are not supported\n",
-		      pmProgname);
+		      pmGetProgname());
 #endif
     }
 #endif
@@ -708,7 +706,7 @@ OpenRequestPorts(__pmFdSet *fdset, int backlog)
 	return maximum;
 
     __pmNotifyErr(LOG_ERR, "%s: can't open any request ports, exiting\n",
-		pmProgname);
+		pmGetProgname());
     return -1;
 }
 
@@ -745,7 +743,7 @@ __pmServerCloseRequestPorts(void)
 	if (unlink(localSocketPath) != 0 && oserror() != ENOENT) {
 	    char	errmsg[PM_MAXERRMSGLEN];
 	    __pmNotifyErr(LOG_ERR, "%s: can't unlink %s (uid=%d,euid=%d): %s",
-			  pmProgname, localSocketPath, getuid(), geteuid(),
+			  pmGetProgname(), localSocketPath, getuid(), geteuid(),
 			  osstrerror_r(errmsg, sizeof(errmsg)));
 	}
     }
@@ -780,12 +778,12 @@ SetCredentialAttrs(__pmHashCtl *attrs, unsigned int pid, unsigned int uid, unsig
 {
     char name[32], *namep;
 
-    snprintf(name, sizeof(name), "%u", uid);
+    pmsprintf(name, sizeof(name), "%u", uid);
     name[sizeof(name)-1] = '\0';
     if ((namep = strdup(name)) != NULL)
         __pmHashAdd(PCP_ATTR_USERID, namep, attrs);
 
-    snprintf(name, sizeof(name), "%u", gid);
+    pmsprintf(name, sizeof(name), "%u", gid);
     name[sizeof(name)-1] = '\0';
     if ((namep = strdup(name)) != NULL)
         __pmHashAdd(PCP_ATTR_GROUPID, namep, attrs);
@@ -793,7 +791,7 @@ SetCredentialAttrs(__pmHashCtl *attrs, unsigned int pid, unsigned int uid, unsig
     if (!pid)	/* not available on all platforms */
 	return 0;
 
-    snprintf(name, sizeof(name), "%u", pid);
+    pmsprintf(name, sizeof(name), "%u", pid);
     name[sizeof(name)-1] = '\0';
     if ((namep = strdup(name)) != NULL)
         __pmHashAdd(PCP_ATTR_PROCESSID, namep, attrs);
@@ -857,7 +855,7 @@ __pmServerDumpRequestPorts(FILE *stream)
 
     fprintf(stream, "%s request port(s):\n"
 	  "  sts fd   port  family address\n"
-	  "  === ==== ===== ====== =======\n", pmProgname);
+	  "  === ==== ===== ====== =======\n", pmGetProgname());
 
     if (localSocketFd != -EPROTO)
 	fprintf(stderr, "  %-3s %4d %5s %-6s %s\n",
@@ -883,8 +881,8 @@ __pmServerRequestPortString(int fd, char *buffer, size_t sz)
     int i, j;
 
     if (fd == localSocketFd) {
-	snprintf(buffer, sz, "%s unix request socket %s",
-		 pmProgname, localSocketPath);
+	pmsprintf(buffer, sz, "%s unix request socket %s",
+		 pmGetProgname(), localSocketPath);
 	return buffer;
     }
 
@@ -892,8 +890,8 @@ __pmServerRequestPortString(int fd, char *buffer, size_t sz)
 	ReqPortInfo *rp = &reqPorts[i];
 	for (j = 0; j < FAMILIES; j++) {
 	    if (fd == rp->fds[j]) {
-		snprintf(buffer, sz, "%s %s request socket %s",
-			pmProgname, RequestFamilyString(j), rp->address);
+		pmsprintf(buffer, sz, "%s %s request socket %s",
+			pmGetProgname(), RequestFamilyString(j), rp->address);
 		return buffer;
 	    }
 	}
@@ -978,18 +976,14 @@ __pmSecureServerHandshake(int fd, int flags, __pmHashCtl *attrs)
 {
     (void)fd;
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_AUTH)
+    if (pmDebugOptions.auth)
 	fprintf(stderr, "%s:__pmSecureServerHandshake: flags=%d: ", __FILE__, flags);
-#endif
 
     /* for things that require a secure server, return -EOPNOTSUPP */
     if ((flags & (PDU_FLAG_SECURE | PDU_FLAG_SECURE_ACK | PDU_FLAG_COMPRESS
 		   | PDU_FLAG_AUTH)) != 0) {
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_AUTH)
+	if (pmDebugOptions.auth)
 	    fprintf(stderr, "not allowed\n");
-#endif
 	return -EOPNOTSUPP;
     }
 
@@ -998,10 +992,8 @@ __pmSecureServerHandshake(int fd, int flags, __pmHashCtl *attrs)
      * provided we've connected on a unix domain socket
      */
     if ((flags & PDU_FLAG_CREDS_REQD) != 0 && __pmHashSearch(PCP_ATTR_USERID, attrs) != NULL) {
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_AUTH)
+	if (pmDebugOptions.auth)
 	    fprintf(stderr, "ok\n");
-#endif
 	return 0;
     }
     /* remove all of the known good flags */
@@ -1011,10 +1003,8 @@ __pmSecureServerHandshake(int fd, int flags, __pmHashCtl *attrs)
 	return 0;
 
     /* any remaining flags are unexpected */
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_AUTH)
+    if (pmDebugOptions.auth)
 	fprintf(stderr, "bad\n");
-#endif
     return PM_ERR_IPC;
 }
 

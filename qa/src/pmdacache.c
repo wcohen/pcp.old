@@ -10,7 +10,7 @@ main(int argc, char **argv)
     int	sts;
     int c;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "Cc:D:dh:LSs:")) != EOF) {
 	switch (c) {
@@ -29,15 +29,13 @@ main(int argc, char **argv)
 	    fputc('\n', stderr);
 	    break;
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case 'd':
@@ -84,7 +82,7 @@ main(int argc, char **argv)
     }
 
     if (errflag) {
-	fprintf(stderr, "Usage: %s ...\n", pmProgname);
+	fprintf(stderr, "Usage: %s ...\n", pmGetProgname());
 	fprintf(stderr, "options:\n");
 	fprintf(stderr, "-C             cull all\n");
 	fprintf(stderr, "-c inst        cull one\n");

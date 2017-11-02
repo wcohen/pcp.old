@@ -40,7 +40,7 @@ MetricList::toString(const SbColor &color, QString &str)
     char buf[48];
 
     const float *values = color.getValue();
-    sprintf(buf, "rgbi:%f/%f/%f", values[0], values[1], values[2]);
+    pmsprintf(buf, sizeof(buf), "rgbi:%f/%f/%f", values[0], values[1], values[2]);
     str = buf;
 }
 
@@ -190,7 +190,7 @@ MetricList::traverse(const char *str)
     sts = pmParseMetricSpec((char *)str, 0, (char *)0, &theMetric, &msg);
     if (sts < 0) {
 	pmprintf("%s: Error: Unable to parse metric spec:\n%s\n", 
-		 pmProgname, msg);
+		 pmGetProgname(), msg);
 	free(msg);
 	return sts;
 	/*NOTREACHED*/
@@ -220,7 +220,7 @@ MetricList::traverse(const char *str)
 		sts = -1;
 	    else if (sts < 0)
 		pmprintf("%s: Error: %s%c%s: %s\n",
-			 pmProgname, 
+			 pmGetProgname(), 
 			 group->context()->source().sourceAscii(),
 			 type == PM_CONTEXT_ARCHIVE ? '/' : ':',
 			 theMetric->metric,

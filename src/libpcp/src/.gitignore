@@ -1,5 +1,8 @@
 GNUlocaldefs
 check.done
+sort_r.h
+jsmn.h
+jsmn.c
 getdate.h
 getdate.tab.?
 derive_parser.y
@@ -14,6 +17,7 @@ libpcp.3.dylib
 libpcp.dylib
 libpcp.dll
 libpcp.pc
+pmdbg.h
 *.gcda
 *.gcno
 *.gcov

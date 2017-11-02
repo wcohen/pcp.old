@@ -122,7 +122,7 @@ QmcSource::retryConnect(int type, QString &source)
 	    sts = pmGetArchiveLabel(&lp);
 	    if (sts < 0) {
 		pmprintf("%s: Unable to obtain log label for \"%s\": %s\n",
-			 pmProgname, (const char *)my.desc.toLatin1(),
+			 pmGetProgname(), (const char *)my.desc.toLatin1(),
 			 pmErrStr(sts));
 		my.host = "unknown?";
 		my.status = sts;
@@ -135,7 +135,7 @@ QmcSource::retryConnect(int type, QString &source)
 	    sts = pmGetArchiveEnd(&my.end);
 	    if (sts < 0) {
 		pmprintf("%s: Unable to determine end of \"%s\": %s\n",
-			 pmProgname, (const char *)my.desc.toLatin1(),
+			 pmGetProgname(), (const char *)my.desc.toLatin1(),
 			 pmErrStr(sts));
 		my.status = sts;
 		goto done;
@@ -146,7 +146,7 @@ QmcSource::retryConnect(int type, QString &source)
 	    my.end = my.start;
 	}
 
-	if (pmDebug & DBG_TRACE_PMC) {
+	if (pmDebugOptions.pmc) {
 	    QTextStream cerr(stderr);
 	    cerr << "QmcSource::QmcSource: Created context "
 		 << my.handles.last() << " to " << my.desc << endl;
@@ -156,7 +156,7 @@ QmcSource::retryConnect(int type, QString &source)
 	my.tz = pmNewContextZone();
 	if (my.tz < 0)
 	    pmprintf("%s: Warning: Unable to obtain timezone for %s: %s\n",
-		     pmProgname, (const char *)my.desc.toLatin1(),
+		     pmGetProgname(), (const char *)my.desc.toLatin1(),
 		     pmErrStr(my.tz));
 	else {
 	    sts = pmWhichZone(&tzs);
@@ -164,7 +164,7 @@ QmcSource::retryConnect(int type, QString &source)
 		my.timezone = tzs;
 	    else
 		pmprintf("%s: Warning: Unable to obtain timezone for %s: %s\n",
-			 pmProgname, (const char *)my.desc.toLatin1(),
+			 pmGetProgname(), (const char *)my.desc.toLatin1(),
 			 pmErrStr(sts));
 	}
 
@@ -173,12 +173,12 @@ QmcSource::retryConnect(int type, QString &source)
 	    if (sts < 0) {
 		pmprintf("%s: Warning: Unable to switch timezones."
 			 " Using timezone for %s: %s\n",
-			 pmProgname, (const char *)my.desc.toLatin1(),
+			 pmGetProgname(), (const char *)my.desc.toLatin1(),
 			 pmErrStr(sts));
 	    }	
 	}
     }
-    else if (pmDebug & DBG_TRACE_PMC) {
+    else if (pmDebugOptions.pmc) {
 	QTextStream cerr(stderr);
 	cerr << "QmcSource::QmcSource: Context to " << source
 	     << " failed: " << pmErrStr(my.status) << endl;
@@ -192,7 +192,7 @@ QmcSource::retryConnect(int type, QString &source)
 	if (sts < 0) {
 	    pmprintf("%s: Warning: Unable to switch contexts."
 		     " Using context to %s: %s\n",
-		     pmProgname, (const char *)my.desc.toLatin1(),
+		     pmGetProgname(), (const char *)my.desc.toLatin1(),
 		     pmErrStr(sts));
 	}
     }
@@ -279,7 +279,7 @@ QmcSource::getSource(int type, QString &source, int flags, bool matchHosts)
 	src = sourceList[i];
 	if (matchHosts && type == PM_CONTEXT_HOST) {
 	    if (src->type() == PM_CONTEXT_ARCHIVE && src->host() == source) {
-		if (pmDebug & DBG_TRACE_PMC) {
+		if (pmDebugOptions.pmc) {
 		    QTextStream cerr(stderr);
 		    cerr << "QmcSource::getSource: Matched host "
 			 << source << " to archive " << src->source()
@@ -289,7 +289,7 @@ QmcSource::getSource(int type, QString &source, int flags, bool matchHosts)
 	    }
 	}
 	else if (src->compare(type, source, flags)) {
-	    if (pmDebug & DBG_TRACE_PMC) {
+	    if (pmDebugOptions.pmc) {
 		QTextStream cerr(stderr);
 		cerr << "QmcSource::getSource: Matched " << source
 		     << " to source " << i << endl;
@@ -302,7 +302,7 @@ QmcSource::getSource(int type, QString &source, int flags, bool matchHosts)
 
     if (i == sourceList.size() && 
 	!(matchHosts == true && type == PM_CONTEXT_HOST)) {
-	if (pmDebug & DBG_TRACE_PMC) {
+	if (pmDebugOptions.pmc) {
 	    QTextStream cerr(stderr);
 	    if (type != PM_CONTEXT_LOCAL)
 		cerr << "QmcSource::getSource: Creating new source for "
@@ -314,7 +314,7 @@ QmcSource::getSource(int type, QString &source, int flags, bool matchHosts)
 	src = new QmcSource(type, source, flags);
     }
 
-    if (src == NULL && pmDebug & DBG_TRACE_PMC) {
+    if (src == NULL && pmDebugOptions.pmc) {
 	QTextStream cerr(stderr);
 	cerr << "QmcSource::getSource: Unable to map host "
 	     << source << " to an arch context" << endl;
@@ -336,7 +336,7 @@ QmcSource::dupContext()
 	if (sts >= 0) {
 	    sts = my.handles[0];
 	    my.dupFlag = true;
-	    if (pmDebug & DBG_TRACE_PMC) {
+	    if (pmDebugOptions.pmc) {
 		QTextStream cerr(stderr);
 		cerr << "QmcSource::dupContext: Using original context for "
 		     << my.desc << endl;
@@ -344,7 +344,7 @@ QmcSource::dupContext()
 	}
 	else
 	    pmprintf("%s: Error: Unable to switch to context for \"%s\": %s\n",
-		     pmProgname, (const char *)my.desc.toLatin1(),
+		     pmGetProgname(), (const char *)my.desc.toLatin1(),
 		     pmErrStr(sts));
     }
     else if (my.handles.size()) {
@@ -353,7 +353,7 @@ QmcSource::dupContext()
 	    sts = pmDupContext();
 	    if (sts >= 0) {
 		my.handles.append(sts);
-		if (pmDebug & DBG_TRACE_PMC) {
+		if (pmDebugOptions.pmc) {
 		    QTextStream cerr(stderr);
 		    cerr << "QmcSource::dupContext: " << my.desc
 			 << " duplicated, handle[" << my.handles.size() - 1
@@ -363,12 +363,12 @@ QmcSource::dupContext()
 	    else
 		pmprintf("%s: Error: "
 			 "Unable to duplicate context to \"%s\": %s\n",
-			 pmProgname, (const char *)my.desc.toLatin1(),
+			 pmGetProgname(), (const char *)my.desc.toLatin1(),
 			 pmErrStr(sts));
 	}
 	else
 	    pmprintf("%s: Error: Unable to switch to context for \"%s\": %s\n",
-		     pmProgname, (const char *)my.desc.toLatin1(),
+		     pmGetProgname(), (const char *)my.desc.toLatin1(),
 		     pmErrStr(sts));
     }
     // No active contexts, create a new context
@@ -376,7 +376,7 @@ QmcSource::dupContext()
 	sts = pmNewContext(my.type, sourceAscii());
 	if (sts >= 0) {
 	    my.handles.append(sts);
-	    if (pmDebug & DBG_TRACE_PMC) {
+	    if (pmDebugOptions.pmc) {
 		QTextStream cerr(stderr);
 		cerr << "QmcSource::dupContext: new context to " << my.desc
 		     << " created, handle = " << sts << endl;
@@ -384,7 +384,7 @@ QmcSource::dupContext()
 	}
     }
 
-    if (sts < 0 && pmDebug & DBG_TRACE_PMC) {
+    if (sts < 0 && pmDebugOptions.pmc) {
 	QTextStream cerr(stderr);
 	cerr << "QmcSource::dupContext: context to " << my.desc
 	     << " failed: " << pmErrStr(my.status) << endl;
@@ -404,7 +404,7 @@ QmcSource::delContext(int handle)
 	    break;
 
     if (i == my.handles.size()) {
-	if (pmDebug & DBG_TRACE_PMC) {
+	if (pmDebugOptions.pmc) {
 	    QTextStream cerr(stderr);
 	    cerr << "QmcSource::delContext: Attempt to delete " << handle
 		 << " from list for " << my.desc << ", but it is not listed"
@@ -419,7 +419,7 @@ QmcSource::delContext(int handle)
     // If this is a valid source, but no more contexts remain,
     // then we should delete ourselves
     if (my.handles.size() == 0 && my.status >= 0) {
-	if (pmDebug & DBG_TRACE_PMC) {
+	if (pmDebugOptions.pmc) {
 	    QTextStream cerr(stderr);
 	    cerr << "QmcSource::delContext: No contexts remain, removing "
 		 << my.desc << endl;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Red Hat.
+ * Copyright (c) 2013,2017 Red Hat.
  * Copyright (c) 1995,2004 Silicon Graphics, Inc.  All Rights Reserved.
  * 
  * This program is free software; you can redistribute it and/or modify it
@@ -75,13 +75,11 @@ opendso(char *dso, char *init, int domain)
 	    dispatch.comm.pmapi_version = ~dispatch.comm.pmapi_version;
 	    dispatch.comm.flags = 0;
 	    dispatch.status = 0;
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_PDU)
+	    if (pmDebugOptions.pdu)
 		fprintf(stderr, "DSO init %s->"PRINTF_P_PFX"%p() domain=%d challenge: pmda_interface=0x%x pmapi_version=%d\n",
 			init, initp, dispatch.domain,
 			dispatch.comm.pmda_interface,
 			(~dispatch.comm.pmapi_version) & 0xff);
-#endif
 	    dispatch.domain = domain;
 
 	    (*initp)(&dispatch);
@@ -110,14 +108,12 @@ opendso(char *dso, char *init, int domain)
 	    }
 
 	    if (dispatch.status == 0) {
-#ifdef PCP_DEBUG
-		if (pmDebug & DBG_TRACE_PDU) {
+		if (pmDebugOptions.pdu) {
 		    fprintf(stderr, "DSO has domain=%d", dispatch.domain);
 		    fprintf(stderr, " pmda_interface=%d pmapi_version=%d\n", 
 				dispatch.comm.pmda_interface,
 				dispatch.comm.pmapi_version);
 		}
-#endif
 		dsoname = strdup(dso);
 		connmode = CONN_DSO;
 		reset_profile();
@@ -169,16 +165,12 @@ dodso_desc(pmID pmid, pmDesc *desc)
 {
     int sts;
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_PDU)
+    if (pmDebugOptions.pdu)
 	fprintf(stderr, "DSO desc()\n");
-#endif
     sts = dispatch.version.any.desc(pmid, desc, dispatch.version.four.ext);
 
-#ifdef PCP_DEBUG
-    if (sts >= 0  && (pmDebug & DBG_TRACE_PDU))
+    if (sts >= 0  && (pmDebugOptions.pdu))
 	__pmPrintDesc(stdout, desc);
-#endif
 
     return sts;
 }/*dodso_desc*/
@@ -192,6 +184,7 @@ dodso(int pdu)
     pmDesc		desc;
     pmDesc		*desc_list = NULL;
     pmResult		*result;
+    pmLabelSet		*labelset = NULL;
     __pmInResult	*inresult;
     int			i;
     int			j;
@@ -238,10 +231,8 @@ dodso(int pdu)
             }
 	    sts = 0;
 	    if (profile_changed) {
-#ifdef PCP_DEBUG
-		if (pmDebug & DBG_TRACE_PDU)
+		if (pmDebugOptions.pdu)
 		    fprintf(stderr, "DSO profile()\n");
-#endif
 		sts = dispatch.version.any.profile(profile, dispatch.version.any.ext);
 		if (sts < 0)
 		    printf("Error: DSO profile() failed: %s\n", pmErrStr(sts));
@@ -249,10 +240,8 @@ dodso(int pdu)
 		    profile_changed = 0;
 	    }
 	    if (sts >= 0) {
-#ifdef PCP_DEBUG
-		if (pmDebug & DBG_TRACE_PDU)
+		if (pmDebugOptions.pdu)
 		    fprintf(stderr, "DSO fetch()\n");
-#endif
 		sts = dispatch.version.any.fetch(param.numpmid, param.pmidlist, 
 						&result, dispatch.version.any.ext);
 		if (sts >= 0) {
@@ -276,10 +265,8 @@ dodso(int pdu)
 
 	case PDU_INSTANCE_REQ:
 	    printf("pmInDom: %s\n", pmInDomStr(param.indom));
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_PDU)
+	    if (pmDebugOptions.pdu)
 		fprintf(stderr, "DSO instance()\n");
-#endif
 
 	    sts = dispatch.version.any.instance(param.indom, param.number, 
 						    param.name, &inresult,
@@ -319,10 +306,8 @@ dodso(int pdu)
 		return;
 	    }
 
-#ifdef PCP_DEBUG
-	    else if (pmDebug & DBG_TRACE_FETCH)
+	    else if (pmDebugOptions.fetch)
 		_dbDumpResult(stdout, result, desc_list);
-#endif
 	 
 	    sts = fillResult(result, desc.type);
 	    if (sts < 0) {
@@ -371,6 +356,49 @@ dodso(int pdu)
 		else
 		    printf("Error: DSO text() failed: %s\n", pmErrStr(sts));
 	    }
+	    break;
+
+	case PDU_LABEL_REQ:
+	    if (param.number & PM_LABEL_INDOM) {
+		printf("pmInDom: %s\n", pmInDomStr(param.indom));
+		i = param.indom;
+	    }
+	    else if (param.number & PM_LABEL_CLUSTER) {
+		printf("Cluster: %s\n", strcluster(param.pmid));
+		i = param.pmid;
+	    }
+	    else if (param.number & PM_LABEL_ITEM) {
+		printf("PMID: %s\n", pmIDStr(param.pmid));
+		i = param.pmid;
+	    }
+	    else if (param.number & PM_LABEL_INSTANCES) {
+		printf("Instances of pmInDom: %s\n", pmInDomStr(param.indom));
+		i = param.indom;
+	    }
+	    else /* param.number & (PM_LABEL_DOMAIN|PM_LABEL_CONTEXT) */
+		i = PM_IN_NULL;
+
+	    sts = dispatch.version.seven.label(i, param.number, &labelset, dispatch.version.any.ext);
+	    if (sts > 0) {
+		for (i = 0; i < sts; i++) {
+		    if (labelset[i].inst != PM_IN_NULL)
+			printf("[%3d] Labels inst: %d\n", i, labelset[i].inst);
+		    else
+			printf("Labels:\n");
+		    for (j = 0; j < labelset[i].nlabels; j++) {
+			pmLabel	*lp = &labelset[i].labels[j];
+			char *name = labelset[i].json + lp->name;
+			char *value = labelset[i].json + lp->value;
+			printf("    %.*s=%.*s\n", lp->namelen, name, lp->valuelen, value);
+		    }
+		}
+		pmFreeLabelSets(labelset, sts);
+	    }
+	    else if (sts == 0)
+		printf("Info: DSO label() returns 0\n");
+	    else
+		printf("Error: DSO label() failed: %s\n", pmErrStr(sts));
+
 	    break;
 
 	case PDU_PMNS_IDS:

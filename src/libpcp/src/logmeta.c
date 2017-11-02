@@ -23,7 +23,6 @@
 /* bytes for a length field in a header/trailer, or a string length field */
 #define LENSIZE	4
 
-#ifdef PCP_DEBUG
 static void
 StrTimeval(const __pmTimeval *tp)
 {
@@ -32,7 +31,6 @@ StrTimeval(const __pmTimeval *tp)
     else
 	__pmPrintTimeval(stderr, tp);
 }
-#endif
 
 /*
  * Return 1 if the indoms are the same, 0 otherwise.
@@ -96,14 +94,12 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":1", PM_FAULT_ALLOC);
     idp->buf = indom_buf;
     idp->allinbuf = allinbuf;
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_LOGMETA) {
+    if (pmDebugOptions.logmeta) {
 	char    strbuf[20];
 	fprintf(stderr, "addindom( ..., %s, ", pmInDomStr_r(indom, strbuf, sizeof(strbuf)));
 	StrTimeval((__pmTimeval *)tp);
 	fprintf(stderr, ", numinst=%d)\n", numinst);
     }
-#endif
 
     if ((hp = __pmHashSearch((unsigned int)indom, &lcp->l_hashindom)) == NULL) {
 	idp->next = NULL;
@@ -211,6 +207,133 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":1", PM_FAULT_ALLOC);
     return sts;
 }
 
+static int
+addlabel(__pmLogCtl *lcp, unsigned int type, unsigned int ident, int nsets,
+		pmLabelSet *labelsets, const __pmTimeval *tp)
+{
+    __pmLogLabelSet	*idp, *idp_prev;
+    __pmLogLabelSet	*idp_cached;
+    __pmHashNode	*hp;
+    __pmHashCtl		*l_hashtype;
+    pmLabelSet		*label;
+    int			timecmp;
+    int			sts;
+
+PM_FAULT_POINT("libpcp/" __FILE__ ":13", PM_FAULT_ALLOC);
+    if ((idp = (__pmLogLabelSet *)malloc(sizeof(__pmLogLabelSet))) == NULL)
+	return -oserror();
+    idp->stamp = *tp;		/* struct assignment */
+    idp->type = type;
+    idp->ident = ident;
+    idp->nsets = nsets;
+    idp->labelsets = labelsets;
+
+    if (pmDebugOptions.logmeta) {
+	fprintf(stderr, "addlabel( ..., %u, %u, ", type, ident);
+	StrTimeval((__pmTimeval *)tp);
+	fprintf(stderr, ", nsets=%d)\n", nsets);
+    }
+
+    if ((sts = __pmLogLookupLabel(lcp, type, ident, &label, NULL)) <= 0) {
+
+	idp->next = NULL;
+
+	if ((hp = __pmHashSearch(type, &lcp->l_hashlabels)) == NULL) {
+	    if ((l_hashtype = (__pmHashCtl *) calloc(1, sizeof(__pmHashCtl))) == NULL)
+		return -oserror();
+
+	    sts = __pmHashAdd(type, (void *)l_hashtype, &lcp->l_hashlabels);
+	    if (sts > 0) {
+		/* __pmHashAdd returns 1 for success, but we want 0. */
+		sts = 0;
+	    }
+	} else {
+	    l_hashtype = (__pmHashCtl *)hp->data;
+	}
+
+	sts = __pmHashAdd(ident, (void *)idp, l_hashtype);
+	if (sts > 0)
+	    sts = 0;
+	return sts;
+    }
+
+    if ((hp = __pmHashSearch(type, &lcp->l_hashlabels)) == NULL)
+	return PM_ERR_NOLABELS;
+
+    l_hashtype = (__pmHashCtl *)hp->data;
+
+    if ((hp = __pmHashSearch(ident, l_hashtype)) == NULL)
+	return PM_ERR_NOLABELS;
+
+    sts = 0;
+    idp_prev = NULL;
+    for (idp_cached = (__pmLogLabelSet *)hp->data; idp_cached; idp_cached = idp_cached->next) {
+	timecmp = __pmTimevalCmp(&idp_cached->stamp, &idp->stamp);
+
+	/*
+	 * If the time of the current cached item is before our time,
+	 * then insert here.
+	 */
+	if (timecmp < 0)
+	    break;
+
+	/*
+	 * The time of the current cached item is after our time.
+	 * Just keep looking.
+	 */
+	idp_prev = idp_cached;
+    }
+
+    /* Insert at the identified insertion point. */
+    if (idp_prev == NULL) {
+	idp->next = (__pmLogLabelSet *)hp->data;
+	hp->data = (void *)idp;
+    }
+    else {
+	idp->next = idp_prev->next;
+	idp_prev->next = idp;
+    }
+
+    return sts;
+}
+
+static int
+addtext(__pmLogCtl *lcp, unsigned int ident, unsigned int type, char *buffer)
+{
+    __pmHashNode	*hp;
+    __pmHashCtl		*l_hashtype;
+    char		*text;
+    int			sts;
+
+PM_FAULT_POINT("libpcp/" __FILE__ ":15", PM_FAULT_ALLOC);
+    if (pmDebug & DBG_TRACE_LOGMETA)
+	fprintf(stderr, "addtext( ..., %u, %u)", ident, type);
+
+    if ((sts = __pmLogLookupText(lcp, ident, type, &buffer)) < 0) {
+
+	if ((hp = __pmHashSearch(type, &lcp->l_hashtext)) == NULL) {
+	    if ((l_hashtype = (__pmHashCtl *)calloc(1, sizeof(__pmHashCtl))) == NULL)
+		return -oserror();
+
+	    sts = __pmHashAdd(type, (void *)l_hashtype, &lcp->l_hashtext);
+	    if (sts > 0) {
+		/* __pmHashAdd returns 1 for success, but we want 0. */
+		sts = 0;
+	    }
+	} else {
+	    l_hashtype = (__pmHashCtl *)hp->data;
+	}
+
+	if ((text = strdup(buffer)) == NULL)
+	    return -oserror();
+
+	if ((sts = __pmHashAdd(ident, (void *)text, l_hashtype)) > 0)
+	    sts = 0;
+    }
+
+    return sts;
+}
+
 /*
  * Load _all_ of the hashed pmDesc and __pmLogInDom structures from the metadata
  * log file -- used at the initialization (NewContext) of an archive.
@@ -254,12 +377,10 @@ __pmLogLoadMeta(__pmLogCtl *lcp)
                 sts = 0;
 		goto end;
             }
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_LOGMETA) {
+	    if (pmDebugOptions.logmeta) {
 		fprintf(stderr, "__pmLogLoadMeta: header read -> %d: expected: %d or len=%d\n",
 			n, (int)sizeof(__pmLogHdr), h.len);
 	    }
-#endif
 	    if (__pmFerror(f)) {
 		__pmClearerr(f);
 		sts = -oserror();
@@ -268,27 +389,23 @@ __pmLogLoadMeta(__pmLogCtl *lcp)
 		sts = PM_ERR_LOGREC;
 	    goto end;
 	}
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_LOGMETA) {
+	if (pmDebugOptions.logmeta) {
 	    fprintf(stderr, "__pmLogLoadMeta: record len=%d, type=%d @ offset=%d\n",
 		h.len, h.type, (int)(__pmFtell(f) - sizeof(__pmLogHdr)));
 	}
-#endif
 	rlen = h.len - (int)sizeof(__pmLogHdr) - (int)sizeof(int);
 	if (h.type == TYPE_DESC) {
-            numpmid++;
+	    numpmid++;
 PM_FAULT_POINT("libpcp/" __FILE__ ":2", PM_FAULT_ALLOC);
 	    if ((dp = (pmDesc *)malloc(sizeof(pmDesc))) == NULL) {
 		sts = -oserror();
 		goto end;
 	    }
 	    if ((n = (int)__pmFread(dp, 1, sizeof(pmDesc), f)) != sizeof(pmDesc)) {
-#ifdef PCP_DEBUG
-		if (pmDebug & DBG_TRACE_LOGMETA) {
+		if (pmDebugOptions.logmeta) {
 		    fprintf(stderr, "__pmLogLoadMeta: pmDesc read -> %d: expected: %d\n",
 			    n, (int)sizeof(pmDesc));
 		}
-#endif
 		if (__pmFerror(f)) {
 		    __pmClearerr(f);
 		    sts = -oserror();
@@ -353,12 +470,10 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":2", PM_FAULT_ALLOC);
 	    /* read in the names & store in PMNS tree ... */
 	    if ((n = (int)__pmFread(&numnames, 1, sizeof(numnames), f)) != 
 		sizeof(numnames)) {
-#ifdef PCP_DEBUG
-		if (pmDebug & DBG_TRACE_LOGMETA) {
+		if (pmDebugOptions.logmeta) {
 		    fprintf(stderr, "__pmLogLoadMeta: numnames read -> %d: expected: %d\n",
 			    n, (int)sizeof(numnames));
 		}
-#endif
 		if (__pmFerror(f)) {
 		    __pmClearerr(f);
 		    sts = -oserror();
@@ -375,12 +490,10 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":2", PM_FAULT_ALLOC);
 	    for (i = 0; i < numnames; i++) {
 		if ((n = (int)__pmFread(&len, 1, sizeof(len), f)) != 
 		    sizeof(len)) {
-#ifdef PCP_DEBUG
-		    if (pmDebug & DBG_TRACE_LOGMETA) {
+		    if (pmDebugOptions.logmeta) {
 			fprintf(stderr, "__pmLogLoadMeta: len name[%d] read -> %d: expected: %d\n",
 				i, n, (int)sizeof(len));
 		    }
-#endif
 		    if (__pmFerror(f)) {
 			__pmClearerr(f);
 			sts = -oserror();
@@ -395,12 +508,10 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":2", PM_FAULT_ALLOC);
 		}
 
 		if ((n = (int)__pmFread(name, 1, len, f)) != len) {
-#ifdef PCP_DEBUG
-		    if (pmDebug & DBG_TRACE_LOGMETA) {
+		    if (pmDebugOptions.logmeta) {
 			fprintf(stderr, "__pmLogLoadMeta: name[%d] read -> %d: expected: %d\n",
 				i, n, len);
 		    }
-#endif
 		    if (__pmFerror(f)) {
 			__pmClearerr(f);
 			sts = -oserror();
@@ -410,13 +521,11 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":2", PM_FAULT_ALLOC);
 		    goto end;
 		}
 		name[len] = '\0';
-#ifdef PCP_DEBUG
-		if (pmDebug & DBG_TRACE_LOGMETA) {
+		if (pmDebugOptions.logmeta) {
 		    char	strbuf[20];
 		    fprintf(stderr, "__pmLogLoadMeta: PMID: %s name: %s\n",
 			    pmIDStr_r(dp->pmid, strbuf, sizeof(strbuf)), name);
 		}
-#endif
 		/* Add the new PMNS node */
 		if ((sts = __pmAddPMNSNode(lcp->l_pmns, dp->pmid, name)) < 0) {
 		    /*
@@ -452,12 +561,10 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":3", PM_FAULT_ALLOC);
 		goto end;
 	    }
 	    if ((n = (int)__pmFread(tbuf, 1, rlen, f)) != rlen) {
-#ifdef PCP_DEBUG
-		if (pmDebug & DBG_TRACE_LOGMETA) {
+		if (pmDebugOptions.logmeta) {
 		    fprintf(stderr, "__pmLogLoadMeta: indom read -> %d: expected: %d\n",
 			    n, rlen);
 		}
-#endif
 		if (__pmFerror(f)) {
 		    __pmClearerr(f);
 		    sts = -oserror();
@@ -515,17 +622,169 @@ PM_FAULT_POINT("libpcp/" __FILE__ ":4", PM_FAULT_ALLOC);
 		    free(namelist);
 	    }
 	}
+	else if (h.type == TYPE_LABEL) {
+	    char		*tbuf;
+	    int			k;
+	    int			j;
+	    int			type;
+	    int			ident;
+	    int			nsets;
+	    int			inst;
+	    int			jsonlen;
+	    int			nlabels;
+	    __pmTimeval		stamp;
+	    pmLabelSet		*labelsets = NULL;
+
+PM_FAULT_POINT("libpcp/" __FILE__ ":11", PM_FAULT_ALLOC);
+	    if ((tbuf = (char *)malloc(rlen)) == NULL) {
+		sts = -oserror();
+		goto end;
+	    }
+	    if ((n = (int)__pmFread(tbuf, 1, rlen, f)) != rlen) {
+		if (pmDebugOptions.logmeta) {
+		    fprintf(stderr, "__pmLogLoadMeta: label read -> %d: expected: %d\n",
+			    n, rlen);
+		}
+		if (__pmFerror(f)) {
+		    __pmClearerr(f);
+		    sts = -oserror();
+		}
+		else
+		    sts = PM_ERR_LOGREC;
+		free(tbuf);
+		goto end;
+	    }
+
+	    k = 0;
+	    stamp = *((__pmTimeval *)&tbuf[k]);
+	    stamp.tv_sec = ntohl(stamp.tv_sec);
+	    stamp.tv_usec = ntohl(stamp.tv_usec);
+	    k += sizeof(stamp);
+
+	    type = ntohl(*((unsigned int*)&tbuf[k]));
+	    k += sizeof(type);
+
+	    ident = ntohl(*((unsigned int*)&tbuf[k]));
+	    k += sizeof(ident);
+
+	    nsets = *((unsigned int *)&tbuf[k]);
+	    nsets = ntohl(nsets);
+	    k += sizeof(nsets);
+
+	    if (nsets > 0 &&
+		(labelsets = (pmLabelSet *)calloc(nsets, sizeof(pmLabelSet))) == NULL) {
+		sts = -oserror();
+		free(tbuf);
+		goto end;
+	    }
+
+	    for (i = 0; i < nsets; i++) {
+		inst = *((unsigned int*)&tbuf[k]);
+		inst = ntohl(inst);
+		k += sizeof(inst);
+		labelsets[i].inst = inst;
+
+		jsonlen = ntohl(*((unsigned int*)&tbuf[k]));
+		k += sizeof(jsonlen);
+		labelsets[i].jsonlen = jsonlen;
+
+		if ((labelsets[i].json = (char *)malloc(jsonlen+1)) == NULL) {
+		    sts = -oserror();
+		    free(tbuf);
+		    goto end;
+		}
+
+		memmove((void *)labelsets[i].json, (void *)&tbuf[k], jsonlen);
+		labelsets[i].json[jsonlen] = '\0';
+		k += jsonlen;
+
+		/* label nlabels */
+		nlabels = ntohl(*((unsigned int *)&tbuf[k]));
+		k += sizeof(nlabels);
+		labelsets[i].nlabels = nlabels;
+
+		if (nlabels > 0 && 
+		    (labelsets[i].labels = (pmLabel *)calloc(nlabels, sizeof(pmLabel))) == NULL) {
+		    sts = -oserror();
+		    free(tbuf);
+		    goto end;
+		}
+
+		/* label pmLabels */
+		for (j = 0; j < nlabels; j++) {
+		    labelsets[i].labels[j] = *((pmLabel *)&tbuf[k]);
+		    __ntohpmLabel(&labelsets[i].labels[j]);
+		    k += sizeof(pmLabel);
+		}
+	    }
+	    free(tbuf);
+
+	    if ((sts = addlabel(lcp, type, ident, nsets, labelsets, &stamp)) < 0)
+		goto end;
+	}
+	else if (h.type == TYPE_TEXT) {
+	    char		*tbuf;
+	    int			type;
+	    int			ident;
+	    int			k;
+
+PM_FAULT_POINT("libpcp/" __FILE__ ":16", PM_FAULT_ALLOC);
+	    if ((tbuf = (char *)malloc(rlen)) == NULL) {
+		sts = -oserror();
+		goto end;
+	    }
+	    if ((n = (int)__pmFread(tbuf, 1, rlen, f)) != rlen) {
+		if (pmDebugOptions.logmeta) {
+		    fprintf(stderr, "__pmLogLoadMeta: text read -> %d: expected: %d\n",
+			    n, rlen);
+		}
+		if (__pmFerror(f)) {
+		    __pmClearerr(f);
+		    sts = -oserror();
+		}
+		else
+		    sts = PM_ERR_LOGREC;
+		free(tbuf);
+		goto end;
+	    }
+
+	    k = 0;
+	    type = ntohl(*((unsigned int *)&tbuf[k]));
+	    k += sizeof(type);
+	    if (!(type & (PM_TEXT_ONELINE|PM_TEXT_HELP))) {
+		if (pmDebugOptions.logmeta) {
+		    fprintf(stderr, "__pmLogLoadMeta: bad text type -> %x\n",
+			    type);
+		}
+		free(tbuf);
+		continue;
+	    }
+	    else if (type & PM_TEXT_INDOM)
+		ident = __ntohpmInDom(*((unsigned int *)&tbuf[k]));
+	    else if (type & PM_TEXT_PMID)
+		ident = __ntohpmID(*((unsigned int *)&tbuf[k]));
+	    else {
+		if (pmDebugOptions.logmeta) {
+		    fprintf(stderr, "__pmLogLoadMeta: bad text ident -> %x\n",
+			    type);
+		}
+		free(tbuf);
+		continue;
+	    }
+	    k += sizeof(ident);
+
+	    addtext(lcp, ident, type, (char *)&tbuf[k]);
+	    free(tbuf);
+	}
 	else
 	    __pmFseek(f, (long)rlen, SEEK_CUR);
 	n = (int)__pmFread(&check, 1, sizeof(check), f);
 	check = ntohl(check);
 	if (n != sizeof(check) || h.len != check) {
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_LOGMETA) {
+	    if (pmDebugOptions.logmeta) {
 		fprintf(stderr, "__pmLogLoadMeta: trailer read -> %d or len=%d: expected %d @ offset=%d\n",
 		    n, check, h.len, (int)(__pmFtell(f) - sizeof(check)));
 	    }
-#endif
 	    if (__pmFerror(f)) {
 		__pmClearerr(f);
 		sts = -oserror();
@@ -541,11 +800,9 @@ end:
 
     if (sts == 0) {
 	if (numpmid == 0) {
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_LOGMETA) {
+	    if (pmDebugOptions.logmeta) {
 		fprintf(stderr, "__pmLogLoadMeta: no metrics found?\n");
 	    }
-#endif
 	    sts = PM_ERR_LOGREC;
 	}
 	else
@@ -663,14 +920,12 @@ searchindom(__pmLogCtl *lcp, pmInDom indom, __pmTimeval *tp)
     __pmHashNode	*hp;
     __pmLogInDom	*idp;
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_LOGMETA) {
+    if (pmDebugOptions.logmeta) {
 	char	strbuf[20];
 	fprintf(stderr, "searchindom( ..., %s, ", pmInDomStr_r(indom, strbuf, sizeof(strbuf)));
 	StrTimeval(tp);
 	fprintf(stderr, ")\n");
     }
-#endif
 
     if ((hp = __pmHashSearch((unsigned int)indom, &lcp->l_hashindom)) == NULL)
 	return NULL;
@@ -683,27 +938,23 @@ searchindom(__pmLogCtl *lcp, pmInDom indom, __pmTimeval *tp)
 	     */
 	    if (__pmTimevalCmp(&idp->stamp, tp) <= 0)
 		break;
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_LOGMETA) {
+	    if (pmDebugOptions.logmeta) {
 		fprintf(stderr, "request @ ");
 		StrTimeval(tp);
 		fprintf(stderr, " is too early for indom @ ");
 		StrTimeval(&idp->stamp);
 		fputc('\n', stderr);
 	    }
-#endif
 	}
 	if (idp == NULL)
 	    return NULL;
     }
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_LOGMETA) {
+    if (pmDebugOptions.logmeta) {
 	fprintf(stderr, "success for indom @ ");
 	StrTimeval(&idp->stamp);
 	fputc('\n', stderr);
     }
-#endif
     return idp;
 }
 
@@ -779,6 +1030,212 @@ __pmLogNameInDom(__pmLogCtl *lcp, pmInDom indom, __pmTimeval *tp, int inst, char
     }
 
     return PM_ERR_INST_LOG;
+}
+
+/*
+ * scan the hash-of-hashes data structure to find a pmLabel,
+ * given an identifier and label type.
+ */
+int
+__pmLogLookupLabel(__pmLogCtl *lcp, unsigned int type, unsigned int ident,
+		pmLabelSet **label, const __pmTimeval *tp)
+{
+    __pmHashCtl		*label_hash;
+    __pmHashNode	*hp;
+    __pmLogLabelSet	*ls;
+
+    if ((hp = __pmHashSearch(type, &lcp->l_hashlabels)) == NULL)
+	return PM_ERR_NOLABELS;
+
+    label_hash = (__pmHashCtl *)hp->data;
+    if ((hp = __pmHashSearch(ident, label_hash)) == NULL)
+	return PM_ERR_NOLABELS;
+
+    ls = (__pmLogLabelSet *)hp->data;
+    if (tp != NULL) {
+	for ( ; ls != NULL; ls = ls->next) {
+	    if (__pmTimevalCmp(&ls->stamp, tp) <= 0)
+		break;
+	}
+	if (ls == NULL)
+	    return 0;
+    }
+    *label = ls->labelsets;
+    return ls->nsets;
+}
+
+int
+__pmLogPutLabel(__pmLogCtl *lcp, unsigned int type, unsigned int ident,
+		int nsets, pmLabelSet *labelsets, const __pmTimeval *tp)
+{
+    int		sts = 0;
+    int		i;
+    int		j;
+    int		len;
+    char	*ptr;
+    int		inst;
+    int		nlabels;
+    int		jsonlen;
+    int		convert;
+    pmLabel	label;
+    typedef struct {
+	__pmLogHdr	hdr;
+	__pmTimeval	stamp;
+	int		type;
+	int		ident;
+	int		nsets;
+	char		data[0];
+    } ext_t;
+    ext_t	*out;
+
+    len = (int)sizeof(ext_t);
+    for (i = 0; i < nsets; i++) {
+	len += sizeof(unsigned int);	/* instance identifier */
+	len += sizeof(int) + labelsets[i].jsonlen; /* json */
+	len += sizeof(int);		/* count or error code */
+	if (labelsets[i].nlabels > 0)
+	    len += (labelsets[i].nlabels * sizeof(pmLabel));
+    }
+    len += LENSIZE;
+
+PM_FAULT_POINT("libpcp/" __FILE__ ":12", PM_FAULT_ALLOC);
+    if ((out = (ext_t *)malloc(len)) == NULL)
+	return -oserror();
+
+    /* swab all output fields */
+    out->hdr.len = htonl(len);
+    out->hdr.type = htonl(TYPE_LABEL);
+    out->stamp.tv_sec = htonl(tp->tv_sec);
+    out->stamp.tv_usec = htonl(tp->tv_usec);
+    out->nsets = htonl(nsets);
+    out->type = htonl(type);
+    out->ident = htonl(ident);
+
+    ptr = (char *) &out->data;
+
+    for (i = 0; i < nsets; i++) {
+    	/* label inst */
+    	inst = htonl(labelsets[i].inst);
+	memmove((void *)ptr, (void *)&inst, sizeof(inst));
+	ptr += sizeof(inst);
+
+	/* label jsonlen */
+	jsonlen = labelsets[i].jsonlen;
+	convert = htonl(jsonlen);
+	memmove((void *)ptr, (void *)&convert, sizeof(jsonlen));
+	ptr += sizeof(jsonlen);
+
+	/* label string */
+	memmove((void *)ptr, (void *)labelsets[i].json, jsonlen);
+	ptr += jsonlen;
+
+	/* label nlabels */
+	nlabels = labelsets[i].nlabels;
+	convert = htonl(nlabels);
+	memmove((void *)ptr, (void *)&convert, sizeof(nlabels));
+	ptr += sizeof(nlabels);
+
+	/* label pmLabels */
+	for (j = 0; j < nlabels; j++) {
+	    label = labelsets[i].labels[j];
+	    __htonpmLabel(&label);
+	    memmove((void *)ptr, (void *)&label, sizeof(label));
+	    ptr += sizeof(label);
+	}
+    }
+
+    memmove((void *)ptr, &out->hdr.len, sizeof(out->hdr.len));
+
+    if ((sts = __pmFwrite(out, 1, len, lcp->l_mdfp)) != len) {
+	char	errmsg[PM_MAXERRMSGLEN];
+
+	pmprintf("__pmLogPutLabel(...,type=%d,ident=%d): write failed: returned %d expecting %d: %s\n",
+		type, ident, sts, len, osstrerror_r(errmsg, sizeof(errmsg)));
+	pmflush();
+	free(out);
+	return -oserror();
+    }
+    free(out);
+
+    return addlabel(lcp, type, ident, nsets, labelsets, tp);
+}
+
+/*
+ * scan the indirect hash data structure to find any help text,
+ * given an identifier (pmid/indom) and type (oneline/fulltext)
+ */
+int
+__pmLogLookupText(__pmLogCtl *lcp, unsigned int ident, unsigned int type,
+		char **buffer)
+{
+    __pmHashCtl		*text_hash;
+    __pmHashNode	*hp;
+
+    if ((hp = __pmHashSearch(type, &lcp->l_hashtext)) == NULL)
+	return PM_ERR_NOTHOST;	/* back-compat error code */
+
+    text_hash = (__pmHashCtl *)hp->data;
+    if ((hp = __pmHashSearch(ident, text_hash)) == NULL)
+	return PM_ERR_TEXT;
+
+    *buffer = (char *)hp->data;
+    return 0;
+}
+
+int
+__pmLogPutText(__pmLogCtl *lcp, unsigned int ident, unsigned int type,
+		char *buffer, int cached)
+{
+    int		sts;
+    int		len;
+    char	*ptr;
+    int		textlen;
+    typedef struct {
+	__pmLogHdr	hdr;
+	int		type;
+	int		ident;
+	char		data[0];
+    } ext_t;
+    ext_t	*out;
+
+    assert(type & (PM_TEXT_HELP|PM_TEXT_ONELINE));
+    assert(type & (PM_TEXT_PMID|PM_TEXT_INDOM));
+
+    textlen = strlen(buffer) + 1;
+    len = (int)sizeof(ext_t) + textlen + LENSIZE;
+
+PM_FAULT_POINT("libpcp/" __FILE__ ":14", PM_FAULT_ALLOC);
+    if ((out = (ext_t *)malloc(len)) == NULL)
+	return -oserror();
+
+    /* swab all output fields */
+    out->hdr.len = htonl(len);
+    out->hdr.type = htonl(TYPE_TEXT);
+    out->type = htonl(type);
+    out->ident = htonl(ident);
+
+    /* copy in the actual text (ascii) */
+    ptr = (char *) &out->data;
+    memmove((void *)ptr, buffer, textlen);
+
+    /* trailer length */
+    ptr += textlen;
+    memmove((void *)ptr, &out->hdr.len, sizeof(out->hdr.len));
+
+    if ((sts = __pmFwrite(out, 1, len, lcp->l_mdfp)) != len) {
+	char	errmsg[PM_MAXERRMSGLEN];
+
+	pmprintf("__pmLogPutText(...ident,=%d,type=%d): write failed: returned %d expecting %d: %s\n",
+		ident, type, sts, len, osstrerror_r(errmsg, sizeof(errmsg)));
+	pmflush();
+	free(out);
+	return -oserror();
+    }
+    free(out);
+
+    if (!cached)
+	return 0;
+    return addtext(lcp, ident, type, buffer);
 }
 
 int

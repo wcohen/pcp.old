@@ -19,7 +19,7 @@ main(int argc, char *argv[])
     char	*value;
     char	*usage = "[-D debug] [-o] configvar ...";
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "D:o")) != EOF) {
 	switch (c) {
@@ -28,15 +28,13 @@ main(int argc, char *argv[])
 	    mode = PM_RECOV_ERR;
 	    break;
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case '?':
@@ -47,7 +45,7 @@ main(int argc, char *argv[])
     }
 
     if (errflag || optind >= argc) {
-	fprintf(stderr, "Usage: %s %s\n", pmProgname, usage);
+	fprintf(stderr, "Usage: %s %s\n", pmGetProgname(), usage);
 	exit(1);
     }
 

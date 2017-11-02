@@ -26,20 +26,18 @@ main(int argc, char *argv[])
     char	*endnum;
     int		errflag = 0;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "D:hp:?")) != EOF) {
 	switch (c) {
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case 'h':	/* hang after accept */
@@ -49,7 +47,7 @@ main(int argc, char *argv[])
 	case 'p':
 	    port = (int)strtol(optarg, &endnum, 10);
 	    if (*endnum != '\0') {
-		fprintf(stderr, "%s: port argument must be a numeric internet port number\n", pmProgname);
+		fprintf(stderr, "%s: port argument must be a numeric internet port number\n", pmGetProgname());
 		exit(1);
 	    }
 	    break;
@@ -62,7 +60,7 @@ main(int argc, char *argv[])
     }
 
     if (errflag || optind != argc) {
-	fprintf(stderr, "Usage: %s [-D n] [-h] [-p port]\n", pmProgname);
+	fprintf(stderr, "Usage: %s [-D debugspec] [-h] [-p port]\n", pmGetProgname());
 	exit(1);
     }
 
@@ -100,7 +98,7 @@ main(int argc, char *argv[])
 
     newfd = accept(fd, (struct sockaddr *)0, 0);
     if (newfd < 0) {
-	fprintf(stderr, "%s: accept: %s\n", pmProgname, strerror(errno));
+	fprintf(stderr, "%s: accept: %s\n", pmGetProgname(), strerror(errno));
 	exit(1);
     }
 
@@ -120,7 +118,7 @@ main(int argc, char *argv[])
 	 * socket.
 	 */
 	if (errno != ECONNRESET)
-	    fprintf(stderr, "%s: read error: %s\n", pmProgname, pmErrStr(-errno));
+	    fprintf(stderr, "%s: read error: %s\n", pmGetProgname(), pmErrStr(-errno));
     }
 
     exit(0);

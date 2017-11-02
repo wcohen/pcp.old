@@ -59,8 +59,8 @@ command(pmOptions *opts, char *buffer)
 	start = skip_whitespace(skip_nonwhitespace(start));
 	finish = skip_nonwhitespace(start);
 	*finish = '\0';
-	if (pmDebug & DBG_TRACE_DESPERATE)
-	    fprintf(stderr, "%s: getopt command: '%s'\n", pmProgname, start);
+	if (pmDebugOptions.desperate)
+	    fprintf(stderr, "%s: getopt command: '%s'\n", pmGetProgname(), start);
 	if ((opts->short_options = strdup(start)) == NULL)
 	    __pmNoMem("short_options", strlen(start), PM_FATAL_ERR);
 	return 0;
@@ -68,20 +68,20 @@ command(pmOptions *opts, char *buffer)
 
     if (strncasecmp(start, "usage", sizeof("usage")-1) == 0) {
 	start = skip_whitespace(skip_nonwhitespace(start));
-	if (pmDebug & DBG_TRACE_DESPERATE)
-	    fprintf(stderr, "%s: usage command: '%s'\n", pmProgname, start);
+	if (pmDebugOptions.desperate)
+	    fprintf(stderr, "%s: usage command: '%s'\n", pmGetProgname(), start);
 	if ((opts->short_usage = strdup(start)) == NULL)
 	    __pmNoMem("short_usage", strlen(start), PM_FATAL_ERR);
 	return 0;
     }
 
     if (strncasecmp(start, "end", sizeof("end")-1) == 0) {
-	if (pmDebug & DBG_TRACE_DESPERATE)
-	    fprintf(stderr, "%s: end command\n", pmProgname);
+	if (pmDebugOptions.desperate)
+	    fprintf(stderr, "%s: end command\n", pmGetProgname());
 	return 1;
     }
 
-    fprintf(stderr, "%s: unrecognized command: '%s'\n", pmProgname, buffer);
+    fprintf(stderr, "%s: unrecognized command: '%s'\n", pmGetProgname(), buffer);
     return 0;
 }
 
@@ -108,8 +108,8 @@ append_text(pmOptions *opts, char *buffer, size_t length)
 {
     pmLongOptions text = PMAPI_OPTIONS_TEXT("");
 
-    if (pmDebug & DBG_TRACE_DESPERATE)
-	fprintf(stderr, "%s: append: '%s'\n", pmProgname, buffer);
+    if (pmDebugOptions.desperate)
+	fprintf(stderr, "%s: append: '%s'\n", pmGetProgname(), buffer);
     if ((text.message = strdup(buffer)) == NULL)
 	__pmNoMem("append_text", length, PM_FATAL_ERR);
     return append_option(opts, &text);
@@ -159,7 +159,7 @@ standard_options(pmOptions *opts, char *start)
     if (entry)
 	return append_option(opts, entry);
     fprintf(stderr, "%s: cannot find PCP option \"%s\", line %d ignored\n",
-		    pmProgname, start, lineno);
+		    pmGetProgname(), start, lineno);
     return -EINVAL;
 }
 
@@ -181,8 +181,8 @@ options(pmOptions *opts, char *buffer, size_t length)
      *     -L                   use a local context connection
      *     -X=N                 offset resulting values by N units
      */
-    if (pmDebug & DBG_TRACE_DESPERATE)
-	fprintf(stderr, "%s: parsing option: '%s'", pmProgname, buffer);
+    if (pmDebugOptions.desperate)
+	fprintf(stderr, "%s: parsing option: '%s'", pmGetProgname(), buffer);
 
     start = skip_whitespace(skip_nonwhitespace(buffer));
     finish = skip_nonwhitespace(start);
@@ -232,7 +232,7 @@ options(pmOptions *opts, char *buffer, size_t length)
 	if ((token = seek_character(token, '-')) == NULL ||
 	    (token - buffer >= length) || (token[1] != '-')) {
 	    fprintf(stderr, "%s: expected long option at \"%s\", line %d ignored\n",
-		    pmProgname, token, lineno);
+		    pmGetProgname(), token, lineno);
 	    return -EINVAL;
 	}
 	start = token + 2;	/* skip double-dash */
@@ -258,7 +258,7 @@ options(pmOptions *opts, char *buffer, size_t length)
     /* handle final two example cases above -- short options only */
     if (isspace((int)start[1])) {
 	fprintf(stderr, "%s: expected short option at \"%s\", line %d ignored\n",
-		pmProgname, start, lineno);
+		pmGetProgname(), start, lineno);
 	return -EINVAL;
     }
     option.long_opt = "";
@@ -320,7 +320,7 @@ setup(char *filename, pmOptions *opts)
 	fp = fdopen(STDIN_FILENO, "r");
     if (!fp) {
 	fprintf(stderr, "%s: cannot open %s for reading configuration\n",
-		pmProgname, filename? filename : "<stdin>");
+		pmGetProgname(), filename? filename : "<stdin>");
 	return -oserror();
     }
 
@@ -405,12 +405,10 @@ main(int argc, char **argv)
     while ((c = pmgetopt_r(argc, argv, &localopts)) != EOF) {
 	switch (c) {
 	case 'D':
-	    if ((c = __pmParseDebug(localopts.optarg)) < 0) {
-		pmprintf("%s: unrecognized debug flag specification (%s)\n",
-			pmProgname, localopts.optarg);
+	    if ((c = pmSetDebug(localopts.optarg)) < 0) {
+		pmprintf("%s: unrecognized debug options specification (%s)\n",
+			pmGetProgname(), localopts.optarg);
 		localopts.errors++;
-	    } else {
-		pmDebug |= c;
 	    }
 	    break;
 	case 'c':
@@ -437,11 +435,11 @@ main(int argc, char **argv)
 	exit(1);
     argc -= (localopts.optind - 1);
     argv += (localopts.optind - 1);
-    argv[0] = progname ? progname : pmProgname;
+    argv[0] = progname ? progname : pmGetProgname();
 
     if (usage) {
 	if (progname)
-	    pmProgname = progname;
+	    pmSetProgname(progname);
 	pmUsageMessage(&opts);
 	exit(1);
     }

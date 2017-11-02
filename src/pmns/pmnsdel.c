@@ -60,7 +60,7 @@ delpmns(__pmnsNode *base, char *name)
     if (np == NULL) {
 	/* no match ... */
 	fprintf(stderr, "%s: Error: metricpath \"%s\" not defined in the PMNS\n",
-		pmProgname, fullname);
+		pmGetProgname(), fullname);
 	exit(1);
     }
     else if (*tail == '\0') {
@@ -118,7 +118,7 @@ main(int argc, char **argv)
         pmnsfile[MAXPATHLEN-1]= '\0';
 
     } else {
-	snprintf(pmnsfile, sizeof(pmnsfile), "%s%c" "pmns" "%c" "root",
+	pmsprintf(pmnsfile, sizeof(pmnsfile), "%s%c" "pmns" "%c" "root",
 		pmGetConfig("PCP_VAR_DIR"), sep, sep);
     }
 
@@ -126,16 +126,14 @@ main(int argc, char **argv)
 	switch (c) {
 
 	case 'd':	/* duplicate PMIDs are OK */
-	    fprintf(stderr, "%s: Warning: -d deprecated, duplicate PMNS names allowed by default\n", pmProgname);
+	    fprintf(stderr, "%s: Warning: -d deprecated, duplicate PMNS names allowed by default\n", pmGetProgname());
 	    break;
 
-	case 'D':	/* debug flag */
-	    if ((sts = __pmParseDebug(opts.optarg)) < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-			pmProgname, opts.optarg);
+	case 'D':	/* debug options */
+	    if ((sts = pmSetDebug(opts.optarg)) < 0) {
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+			pmGetProgname(), opts.optarg);
 		opts.errors++;
-	    } else {
-		pmDebug |= sts;
 	    }
 	    break;
 
@@ -158,7 +156,7 @@ main(int argc, char **argv)
 
     if ((sts = pmLoadASCIINameSpace(pmnsfile, 1)) < 0) {
 	fprintf(stderr, "%s: Error: pmLoadASCIINameSpace(%s, 1): %s\n",
-		pmProgname, pmnsfile, pmErrStr(sts));
+		pmGetProgname(), pmnsfile, pmErrStr(sts));
 	exit(1);
     }
 
@@ -187,10 +185,10 @@ main(int argc, char **argv)
     __pmSetSignalHandler(SIGINT, SIG_IGN);
     __pmSetSignalHandler(SIGTERM, SIG_IGN);
 
-    snprintf(outfname, sizeof(outfname), "%s.new", pmnsfile);
+    pmsprintf(outfname, sizeof(outfname), "%s.new", pmnsfile);
     if ((outf = fopen(outfname, "w")) == NULL) {
 	fprintf(stderr, "%s: Error: cannot open PMNS file \"%s\" for writing: %s\n",
-		pmProgname, outfname, osstrerror());
+		pmGetProgname(), outfname, osstrerror());
 	exit(1);
     }
     if (stat(pmnsfile, &sbuf) == 0) {
@@ -201,7 +199,7 @@ main(int argc, char **argv)
 #if defined(HAVE_CHOWN)
 	if (chown(outfname, sbuf.st_uid, sbuf.st_gid) < 0)
 	    fprintf(stderr, "%s: chown(%s, ...) failed: %s\n",
-		    pmProgname, outfname, osstrerror());
+		    pmGetProgname(), outfname, osstrerror());
 #endif
     }
 
@@ -211,7 +209,7 @@ main(int argc, char **argv)
     /* rename the PMNS */
     if (rename2(outfname, pmnsfile) == -1) {
 	fprintf(stderr, "%s: cannot rename \"%s\" to \"%s\": %s\n",
-		pmProgname, outfname, pmnsfile, osstrerror());
+		pmGetProgname(), outfname, pmnsfile, osstrerror());
 	/* remove the new PMNS */
 	unlink(outfname);
 	exit(1);

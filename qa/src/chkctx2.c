@@ -41,43 +41,34 @@ main(int argc, char **argv)
     pmResult	*resp;
     pmDesc	desc;
     int		handle;
-#ifdef PCP_DEBUG
-    static char	*debug = "[-D N] ";
-#else
-    static char	*debug = "";
-#endif
-    static char	*usage = "[-a archive] [-h hostname] [-L] [-n namespace]";
+    static char	*usage = "[-a archive] [-D debugspec] [-h hostname] [-L] [-n namespace]";
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "a:D:h:Ln:")) != EOF) {
 	switch (c) {
 
 	case 'a':	/* archive name */
 	    if (type != 0) {
-		fprintf(stderr, "%s: at most one of -a, -h and -L allowed\n", pmProgname);
+		fprintf(stderr, "%s: at most one of -a, -h and -L allowed\n", pmGetProgname());
 		errflag++;
 	    }
 	    type = PM_CONTEXT_ARCHIVE;
 	    host = optarg;
 	    break;
 
-#ifdef PCP_DEBUG
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
-#endif
 
 	case 'h':	/* hostname for PMCD to contact */
 	    if (type != 0) {
-		fprintf(stderr, "%s: at most one of -a, -h and -L allowed\n", pmProgname);
+		fprintf(stderr, "%s: at most one of -a, -h and -L allowed\n", pmGetProgname());
 		errflag++;
 	    }
 	    host = optarg;
@@ -86,7 +77,7 @@ main(int argc, char **argv)
 
 	case 'L':	/* local mode, no PMCD */
 	    if (type != 0) {
-		fprintf(stderr, "%s: at most one of -a, -h and -L allowed\n", pmProgname);
+		fprintf(stderr, "%s: at most one of -a, -h and -L allowed\n", pmGetProgname());
 		errflag++;
 	    }
 	    host = NULL;
@@ -105,12 +96,12 @@ main(int argc, char **argv)
     }
 
     if (errflag) {
-	fprintf(stderr, "Usage: %s %s%s\n", pmProgname, debug, usage);
+	fprintf(stderr, "Usage: %s %s\n", pmGetProgname(), usage);
 	exit(1);
     }
 
     if ((sts = pmLoadASCIINameSpace(namespace, 1)) < 0) {
-	printf("%s: Cannot load namespace from \"%s\": %s\n", pmProgname, namespace, pmErrStr(sts));
+	printf("%s: Cannot load namespace from \"%s\": %s\n", pmGetProgname(), namespace, pmErrStr(sts));
 	exit(1);
     }
     if ((sts = pmLookupName(2, namelist, metrics)) < 0) {

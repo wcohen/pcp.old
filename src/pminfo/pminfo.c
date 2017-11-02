@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 Red Hat.
+ * Copyright (c) 2013-2017 Red Hat.
  * Copyright (c) 1995-2001,2003 Silicon Graphics, Inc.  All Rights Reserved.
  * 
  * This program is free software; you can redistribute it and/or modify it
@@ -41,6 +41,7 @@ static pmLongOptions longopts[] = {
     { "desc",     0, 'd', 0, "get and print metric description" },
     { "fetch",    0, 'f', 0, "fetch and print values for all instances" },
     { "fetchall", 0, 'F', 0, "fetch and print values for non-enumerable indoms" },
+    { "labels",   0, 'l', 0, "print metric value labels (metadata)" },
     { "pmid",     0, 'm', 0, "print PMID" },
     { "fullpmid", 0, 'M', 0, "print PMID in verbose format" },
     { "oneline",  0, 't', 0, "get and display (terse) oneline text" },
@@ -54,7 +55,7 @@ static pmLongOptions longopts[] = {
 
 static pmOptions opts = {
     .flags = PM_OPTFLAG_STDOUT_TZ,
-    .short_options = "a:b:c:dD:Ffh:K:LMmN:n:O:tTvVxzZ:?",
+    .short_options = "a:b:c:CdD:Ffh:K:lLMmN:n:O:tTvVxzZ:?",
     .long_options = longopts,
     .short_usage = "[options] [metricname | pmid | indom]...",
     .override = myoverrides,
@@ -63,6 +64,7 @@ static pmOptions opts = {
 static int	p_mid;		/* Print metric IDs of leaf nodes */
 static int	p_fullmid;	/* Print verbose metric IDs of leaf nodes */
 static int	p_desc;		/* Print descriptions for metrics */
+static int	p_label;	/* Print labels for metrics, indoms and values */
 static int	p_oneline;	/* fetch oneline text? */
 static int	p_help;		/* fetch help text? */
 static int	p_value;	/* pmFetch and print value(s)? */
@@ -91,10 +93,10 @@ myoverrides(int opt, pmOptions *opts)
 }
 
 /*
- * Cache all of the most recently requested pmInDom
+ * Cache all of the most recently requested instance names for a given pmInDom
  */
 static char *
-lookup(pmInDom indom, int inst)
+lookup_indom_names(pmInDom indom, int inst)
 {
     static pmInDom	last = PM_INDOM_NULL;
     static int		numinst = -1;
@@ -117,6 +119,98 @@ lookup(pmInDom indom, int inst)
     }
 
     return NULL;
+}
+
+/*
+ * Cache all of the most recently requested labels for a given pmInDom
+ */
+static pmLabelSet *
+lookup_indom_labels(pmInDom indom)
+{
+    static pmInDom	last = PM_INDOM_NULL;
+    static pmLabelSet	*labels;
+
+    if (indom != last) {
+	if (labels)
+	    pmFreeLabelSets(labels, 1);
+	labels = NULL;
+	pmGetInDomLabels(indom, &labels);
+	last = indom;
+    }
+    return labels;
+}
+
+/*
+ * Cache all of the most recently requested labels for a given pmID item
+ */
+static pmLabelSet *
+lookup_cluster_labels(pmID pmid)
+{
+    static pmID		last = PM_ID_NULL;
+    static pmLabelSet	*labels;
+
+    if (pmid_domain(pmid) != pmid_domain(last) ||
+	pmid_cluster(pmid) != pmid_cluster(last)) {
+	if (labels)
+	    pmFreeLabelSets(labels, 1);
+	labels = NULL;
+	pmGetClusterLabels(pmid, &labels);
+	last = pmid;
+    }
+    return labels;
+}
+/*
+ * Cache all of the most recently requested labels for a given pmID item
+ */
+static pmLabelSet *
+lookup_item_labels(pmID pmid)
+{
+    static pmID		last = PM_ID_NULL;
+    static pmLabelSet	*labels;
+
+    if (pmid != last) {
+	if (labels)
+	    pmFreeLabelSets(labels, 1);
+	labels = NULL;
+	pmGetItemLabels(pmid, &labels);
+	last = pmid;
+    }
+    return labels;
+}
+
+/*
+ * Cache all of the most recently requested labels for a given domain
+ */
+static pmLabelSet *
+lookup_domain_labels(int domain)
+{
+    static int		last = -1;
+    static pmLabelSet	*labels;
+
+    if (domain != last) {
+	if (labels)
+	    pmFreeLabelSets(labels, 1);
+	labels = NULL;
+	pmGetDomainLabels(domain, &labels);
+	last = domain;
+    }
+    return labels;
+}
+
+/*
+ * Cache the global labels for the current PMAPI context
+ */
+static pmLabelSet *
+lookup_context_labels(void)
+{
+    static pmLabelSet	*labels;
+    static int		setup;
+
+    if (!setup) {
+	pmGetContextLabels(&labels);
+	setup = 1;
+    }
+    return labels;
 }
 
 /* 
@@ -142,7 +236,7 @@ mydump(pmDesc *dp, pmValueSet *vsp, char *indent)
     for (j = 0; j < vsp->numval; j++) {
 	pmValue	*vp = &vsp->vlist[j];
 	if (dp->indom != PM_INDOM_NULL) {
-	    if ((p = lookup(dp->indom, vp->inst)) == NULL) {
+	    if ((p = lookup_indom_names(dp->indom, vp->inst)) == NULL) {
 		if (p_force) {
 		    /* the instance disappeared; ignore it */
 		    printf("    inst [%d \"%s\"]\n", vp->inst, "DISAPPEARED");
@@ -273,8 +367,8 @@ myeventdump(pmValueSet *vsp, int inst, int highres)
 	pmHighResResult	**hr;
 
 	if ((nrecords = pmUnpackHighResEventRecords(vsp, inst, &hr)) < 0) {
-	    fprintf(stderr, "pmUnpackHighResEventRecords: %s\n",
-		    pmErrStr(nrecords));
+	    fprintf(stderr, "%s: pmUnpackHighResEventRecords: %s\n",
+		    pmGetProgname(), pmErrStr(nrecords));
 	    return;
 	}
 	setup_event_derived_metrics();
@@ -293,7 +387,8 @@ myeventdump(pmValueSet *vsp, int inst, int highres)
 	pmResult	**res;
 
 	if ((nrecords = pmUnpackEventRecords(vsp, inst, &res)) < 0) {
-	    fprintf(stderr, "pmUnpackEventRecords: %s\n", pmErrStr(nrecords));
+	    fprintf(stderr, "%s: pmUnpackEventRecords: %s\n",
+			pmGetProgname(), pmErrStr(nrecords));
 	    return;
 	}
 	setup_event_derived_metrics();
@@ -361,6 +456,77 @@ myoneline(unsigned int ident, int type)
 }
 
 static void
+myindomlabels(pmInDom indom)
+{
+    pmLabelSet	*labels[3] = {0}; /* context+domain+indom */
+    char	buf[PM_MAXLABELJSONLEN];
+    int		sts;
+
+    labels[0] = lookup_context_labels();
+    labels[1] = lookup_domain_labels(pmInDom_domain(indom));
+    labels[2] = lookup_indom_labels(indom);
+    sts = pmMergeLabelSets(labels, 3, buf, sizeof(buf), NULL, NULL);
+
+    if (sts > 0)
+	printf("    labels %s\n", buf);
+    else if (sts < 0)
+	fprintf(stderr, "%s: indom %s labels merge failed: %s\n",
+		pmGetProgname(), pmInDomStr(indom), pmErrStr(sts));
+}
+
+static void
+myinstslabels(pmDesc *dp, pmLabelSet **sets, int nsets, char *buffer, int buflen)
+{
+    pmLabelSet	*ilabels = NULL;
+    char	*iname;
+    int		i, n, sts;
+
+    if ((sts = n = pmGetInstancesLabels(dp->indom, &ilabels)) > 0) {
+	for (i = 0; i < n; i++) {
+	    if ((iname = lookup_indom_names(dp->indom, ilabels[i].inst)) < 0)
+		continue;
+	    /* merge all the labels down to each leaf instance */
+	    sets[nsets-1] = &ilabels[i];
+	    if ((sts = pmMergeLabelSets(sets, nsets, buffer, buflen,
+					NULL, NULL)) > 0)
+		printf("    inst [%d or \"%s\"] labels %s\n",
+			ilabels[i].inst, iname, buffer);
+	    else if (sts < 0)
+		fprintf(stderr, "%s: %s instances labels merge failed: %s\n",
+			pmGetProgname(), pmInDomStr(dp->indom), pmErrStr(sts));
+	}
+	pmFreeLabelSets(ilabels, n);
+    } else if (sts < 0) {
+	fprintf(stderr, "%s: pmGetInstancesLabels[%s] failed: %s\n",
+		pmGetProgname(), pmInDomStr(dp->indom), pmErrStr(sts));
+    }
+}
+
+static void
+mylabels(pmDesc *dp)
+{
+    pmLabelSet	*labels[6] = {0}; /* context+domain+indom+cluster+item+insts */
+    char	buf[PM_MAXLABELJSONLEN];
+    int		sts = 0;
+
+    labels[0] = lookup_context_labels();
+    labels[1] = lookup_domain_labels(pmid_domain(dp->pmid));
+    labels[2] = lookup_indom_labels(dp->indom);
+    labels[3] = lookup_cluster_labels(dp->pmid);
+    labels[4] = lookup_item_labels(dp->pmid);
+    if (dp->indom != PM_INDOM_NULL) {
+	myinstslabels(dp, labels, 6, buf, sizeof(buf));
+	return;
+    }
+    sts = pmMergeLabelSets(labels, 5, buf, sizeof(buf), NULL, NULL);
+    if (sts > 0)
+	printf("    labels %s\n", buf);
+    else if (sts < 0)
+	fprintf(stderr, "%s: metric %s labels merge failed: %s\n",
+		pmGetProgname(), pmIDStr(dp->pmid), pmErrStr(sts));
+}
+
+static void
 report(void)
 {
     int		i;
@@ -399,10 +565,10 @@ report(void)
 	}
     }
 
-    if (p_value || verify) {
+    if (p_value || p_label || verify) {
 	if (opts.context == PM_CONTEXT_ARCHIVE) {
 	    if ((sts = pmSetMode(PM_MODE_FORW, &opts.origin, 0)) < 0) {
-		fprintf(stderr, "%s: pmSetMode failed: %s\n", pmProgname, pmErrStr(sts));
+		fprintf(stderr, "%s: pmSetMode failed: %s\n", pmGetProgname(), pmErrStr(sts));
 		exit(1);
 	    }
 	}
@@ -415,14 +581,14 @@ report(void)
 
     for (i = 0; i < batchidx; i++) {
 
-	if (p_desc || p_value || verify) {
+	if (p_desc || p_value || p_label || verify) {
 	    if ((sts = pmLookupDesc(pmidlist[i], &desc)) < 0) {
 		printf("%s: pmLookupDesc: %s\n", namelist[i], pmErrStr(sts));
 		continue;
 	    }
 	}
 
-	if (p_desc || p_help || p_value)
+	if (p_desc || p_help || p_value || p_label)
 	    /* Not doing verify, output separator  */
 	    putchar('\n');
 
@@ -441,7 +607,7 @@ report(void)
 			}
 			if (opts.context == PM_CONTEXT_ARCHIVE) {
 			    if ((sts = pmSetMode(PM_MODE_FORW, &opts.origin, 0)) < 0) {
-				fprintf(stderr, "%s: pmSetMode failed: %s\n", pmProgname, pmErrStr(sts));
+				fprintf(stderr, "%s: pmSetMode failed: %s\n", pmGetProgname(), pmErrStr(sts));
 				exit(1);
 			    }
 			}
@@ -493,6 +659,8 @@ report(void)
 	    myhelptext(pmidlist[i], PM_TEXT_PMID);
 	if (p_value)
 	    mydump(&desc, vsp, NULL);
+	if (p_label)
+	    mylabels(&desc);
     }
 
     if (result != NULL) {
@@ -520,7 +688,7 @@ dometric(const char *name)
 
     namelist[batchidx]= strdup(name);
     if (namelist[batchidx] == NULL) {
-	fprintf(stderr, "%s: namelist string malloc: %s\n", pmProgname, osstrerror());
+	fprintf(stderr, "%s: namelist string malloc: %s\n", pmGetProgname(), osstrerror());
 	exit(1);
     }
 
@@ -552,6 +720,8 @@ doindom(pmInDom indom)
     if (p_oneline)
 	myoneline(indom, PM_TEXT_INDOM);
     putchar('\n');
+    if (p_label)
+	myindomlabels(indom);
     if (p_help)
 	myhelptext(indom, PM_TEXT_INDOM);
     return 0;
@@ -583,7 +753,7 @@ main(int argc, char **argv)
 	    case 'b':		/* batchsize */
 		batchsize = (int)strtol(opts.optarg, &endnum, 10);
 		if (*endnum != '\0') {
-		    pmprintf("%s: -b requires numeric argument\n", pmProgname);
+		    pmprintf("%s: -b requires numeric argument\n", pmGetProgname());
 		    opts.errors++;
 		}
 		break;
@@ -592,7 +762,7 @@ main(int argc, char **argv)
 		sts = pmLoadDerivedConfig(opts.optarg);
 		if (sts < 0) {
 		    fprintf(stderr, "%s: derived configuration(s) error: %s\n",
-			    pmProgname, pmErrStr(sts));
+			    pmGetProgname(), pmErrStr(sts));
 		    /* errors are not necessarily fatal ... */
 		}
 		break;
@@ -611,6 +781,12 @@ main(int argc, char **argv)
 
 	    case 'f':
 		p_value = 1;
+		need_context = 1;
+		need_pmid = 1;
+		break;
+
+	    case 'l':
+		p_label = 1;
 		need_context = 1;
 		need_pmid = 1;
 		break;
@@ -669,17 +845,16 @@ main(int argc, char **argv)
 	batchsize = 1;
 
     if (verify)
-	p_desc = p_mid = p_fullmid = p_help = p_oneline = p_value = p_force = 0;
-
+	p_desc = p_mid = p_fullmid = p_help = p_oneline = p_value = p_force = p_label = 0;
 
 
     if ((namelist = (char **)malloc(batchsize * sizeof(char *))) == NULL) {
-	fprintf(stderr, "%s: namelist malloc: %s\n", pmProgname, osstrerror());
+	fprintf(stderr, "%s: namelist malloc: %s\n", pmGetProgname(), osstrerror());
 	exit(1);
     }
 
     if ((pmidlist = (pmID *)malloc(batchsize * sizeof(pmID))) == NULL) {
-	fprintf(stderr, "%s: pmidlist malloc: %s\n", pmProgname, osstrerror());
+	fprintf(stderr, "%s: pmidlist malloc: %s\n", pmGetProgname(), osstrerror());
 	exit(1);
     }
 
@@ -702,13 +877,13 @@ main(int argc, char **argv)
 	if ((sts = pmNewContext(opts.context, source)) < 0) {
 	    if (opts.context == PM_CONTEXT_HOST)
 		fprintf(stderr, "%s: Cannot connect to PMCD on host \"%s\": %s\n",
-			pmProgname, source, pmErrStr(sts));
+			pmGetProgname(), source, pmErrStr(sts));
 	    else if (opts.context == PM_CONTEXT_LOCAL)
 		fprintf(stderr, "%s: Cannot make standalone connection on localhost: %s\n",
-			pmProgname, pmErrStr(sts));
+			pmGetProgname(), pmErrStr(sts));
 	    else
 		fprintf(stderr, "%s: Cannot open archive \"%s\": %s\n",
-			pmProgname, source, pmErrStr(sts));
+			pmGetProgname(), source, pmErrStr(sts));
 	    exit(1);
 	}
 	ctxid = sts;

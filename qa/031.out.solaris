@@ -11,13 +11,16 @@ children of "pmcd" ...
     control             <s = 1>
     cputime             <s = 1>
     datasize            <s = 0>
+    labels              <s = 0>
     numagents           <s = 0>
     numclients          <s = 0>
     openfds             <s = 0>
     pdu_in              <s = 1>
     pdu_out             <s = 1>
+    pid                 <s = 0>
     pmie                <s = 1>
     pmlogger            <s = 1>
+    seqnum              <s = 0>
     simabi              <s = 0>
     timezone            <s = 0>
     version             <s = 0>

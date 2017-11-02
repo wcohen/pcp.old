@@ -22,19 +22,14 @@ main(int argc, char **argv)
     char	*archive = "foo";
     char	*host = "localhost";
     char	*namespace = PM_NS_DEFAULT;
-#ifdef PCP_DEBUG
-    static char	*debug = "[-D N]";
-#else
-    static char	*debug = "";
-#endif
-    static char	*usage = "[-D N] [-L] [-h host] [-a archive] [-n namespace] [-v] [-i iterations]";
+    static char	*usage = "[-D debugspec] [-L] [-h host] [-a archive] [-n namespace] [-v] [-i iterations]";
     int		niter = 100;
     int		contype = PM_CONTEXT_HOST;
     unsigned long first_memusage;
     unsigned long last_memusage = 0;
     unsigned long memusage;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "Li:h:a:D:n:tv")) != EOF) {
 	switch (c) {
@@ -55,18 +50,14 @@ main(int argc, char **argv)
 	    contype = PM_CONTEXT_ARCHIVE;
 	    break;
 
-#ifdef PCP_DEBUG
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
-#endif
 
 	case 'n':	/* alternative name space file */
 	    namespace = optarg;
@@ -88,13 +79,13 @@ main(int argc, char **argv)
     }
 
     if (errflag) {
-	printf("Usage: %s %s%s\n", pmProgname, debug, usage);
+	printf("Usage: %s %s\n", pmGetProgname(), usage);
 	exit(1);
     }
 
     if (namespace != PM_NS_DEFAULT) {
 	if ((sts = pmLoadASCIINameSpace(namespace, 1)) < 0) {
-	    printf("%s: Cannot load namespace from \"%s\": %s\n", pmProgname, namespace, pmErrStr(sts));
+	    printf("%s: Cannot load namespace from \"%s\": %s\n", pmGetProgname(), namespace, pmErrStr(sts));
 	    exit(1);
 	}
     }
@@ -103,19 +94,19 @@ main(int argc, char **argv)
 	switch (contype) {
 	case PM_CONTEXT_LOCAL:
 	    if ((c = pmNewContext(PM_CONTEXT_LOCAL, NULL)) < 0) {
-		printf("%s: Cannot create local context: %s\n", pmProgname, pmErrStr(c));
+		printf("%s: Cannot create local context: %s\n", pmGetProgname(), pmErrStr(c));
 		exit(1);
 	    }
 	    break;
 	case PM_CONTEXT_ARCHIVE:
 	    if ((c = pmNewContext(PM_CONTEXT_ARCHIVE, archive)) < 0) {
-		printf("%s: Cannot connect to archive \"%s\": %s\n", pmProgname, archive, pmErrStr(c));
+		printf("%s: Cannot connect to archive \"%s\": %s\n", pmGetProgname(), archive, pmErrStr(c));
 		exit(1);
 	    }
 	    break;
 	case PM_CONTEXT_HOST:
 	    if ((c = pmNewContext(PM_CONTEXT_HOST, host)) < 0) {
-		printf("%s: Cannot connect to host \"%s\": %s\n", pmProgname, host, pmErrStr(c));
+		printf("%s: Cannot connect to host \"%s\": %s\n", pmGetProgname(), host, pmErrStr(c));
 		exit(1);
 	    }
 	    break;

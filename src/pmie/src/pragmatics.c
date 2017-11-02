@@ -46,9 +46,9 @@ findsource(const char *host, const char *hconn)
     static char	buf[MAXPATHLEN+MAXHOSTNAMELEN+30];
 
     if (archives)
-        snprintf(buf, sizeof(buf), "archive %s (host %s)", hconn, host);
+        pmsprintf(buf, sizeof(buf), "archive %s (host %s)", hconn, host);
     else
-	snprintf(buf, sizeof(buf), "pmcd %s (host %s)", hconn, host);
+	pmsprintf(buf, sizeof(buf), "pmcd %s (host %s)", hconn, host);
 
     return buf;
 }
@@ -69,7 +69,7 @@ newContext(Symbol *host, const char *hconn, int is_temp)
     if (archives) {
         if ((sts = pmNewContext(PM_CONTEXT_ARCHIVE, hconn)) < 0) {
             fprintf(stderr, "%s: cannot open archive %s\n",
-                    pmProgname, hconn);
+                    pmGetProgname(), hconn);
             fprintf(stderr, "pmNewContext: %s\n", pmErrStr(sts));
             exit(1);
         }
@@ -79,18 +79,18 @@ newContext(Symbol *host, const char *hconn, int is_temp)
 	    if (sts == -ECONNREFUSED)
 		fprintf(stderr, "%s: warning - pmcd "
 			"via %s does not respond\n",
-			pmProgname, hconn);
+			pmGetProgname(), hconn);
 	    else if (sts == PM_ERR_PERMISSION)
 		fprintf(stderr, "%s: warning - pmcd via %s does not "
 			"permit delivery of metrics to the local host\n",
-			pmProgname, hconn);
+			pmGetProgname(), hconn);
 	    else if (sts == PM_ERR_CONNLIMIT)
 		fprintf(stderr, "%s: warning - pmcd "
 			"via %s has exceeded its connection limit\n",
-			pmProgname, hconn);
+			pmGetProgname(), hconn);
 	    else
 		fprintf(stderr, "%s: warning - pmcd via %s is unreachable\n", 
-			pmProgname, hconn);
+			pmGetProgname(), hconn);
 	}
 	sts = -1;
     }
@@ -291,15 +291,13 @@ findFetch(Host *h, Metric *m)
 
 	    __pmtimevalFromReal(start, &tv);
 	    if ((sts = pmSetMode(tmp_mode, &tv, tmp_ival)) < 0) {
-		fprintf(stderr, "%s: pmSetMode failed: %s\n", pmProgname,
+		fprintf(stderr, "%s: pmSetMode failed: %s\n", pmGetProgname(),
 			pmErrStr(sts));
 		exit(1);
 	    }
-#if PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL1) {
+	    if (pmDebugOptions.appl1) {
 		fprintf(stderr, "findFetch: fetch=0x%p host=0x%p delta=%.6f handle=%d\n", f, h, h->task->delta, f->handle);
 	    }
-#endif
 	}
 	f->next = NULL;
 	f->prev = NULL;
@@ -358,7 +356,7 @@ findProfile(Fetch *f, Metric *m)
 
     /* add instances required by Metric to Profile */
     if ((sts = pmUseContext(f->handle)) < 0) {
-	fprintf(stderr, "%s: pmUseContext failed: %s\n", pmProgname,
+	fprintf(stderr, "%s: pmUseContext failed: %s\n", pmGetProgname(),
 		pmErrStr(sts));
 	exit(1);
     }
@@ -370,7 +368,7 @@ findProfile(Fetch *f, Metric *m)
     if (m->specinst == 0 && p->need_all == 0) {
 	sts = pmDelProfile(p->indom, 0, (int *)0);
 	if (sts < 0) {
-	    fprintf(stderr, "%s: pmDelProfile failed: %s\n", pmProgname,
+	    fprintf(stderr, "%s: pmDelProfile failed: %s\n", pmGetProgname(),
 		    pmErrStr(sts));
 	    exit(1);
 	}
@@ -383,7 +381,7 @@ findProfile(Fetch *f, Metric *m)
 	sts = 0;
 
     if (sts < 0) {
-	fprintf(stderr, "%s: pmAddProfile failed: %s\n", pmProgname,
+	fprintf(stderr, "%s: pmAddProfile failed: %s\n", pmGetProgname(),
 		pmErrStr(sts));
 	exit(1);
     }
@@ -412,8 +410,7 @@ bundle(Task *t, Expr *x)
 		waitMetric(m);
 	    m++;
 	}
-#if PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL1) {
+	if (pmDebugOptions.appl1) {
  	    fprintf(stderr, "bundle: task " PRINTF_P_PFX "%p nth=%d prev=" PRINTF_P_PFX "%p next=" PRINTF_P_PFX "%p delta=%.3f nrules=%d\n",
  		t, t->nth, t->prev, t->next, t->delta, t->nrules+1);
 	    __dumpExpr(1, x);
@@ -423,7 +420,6 @@ bundle(Task *t, Expr *x)
 		m++;
 	    }
 	}
-#endif
     }
     else {
 	if (x->arg1) {
@@ -501,7 +497,7 @@ initArchive(Archive *a)
     if ((sts = pmNewContext(PM_CONTEXT_ARCHIVE, a->fname)) < 0) {
 	fprintf(stderr, "%s: cannot open archive %s\n"
 		"pmNewContext failed: %s\n",
-		pmProgname, a->fname, pmErrStr(sts));
+		pmGetProgname(), a->fname, pmErrStr(sts));
 	return 0;
     }
     handle = sts;
@@ -509,7 +505,7 @@ initArchive(Archive *a)
     tmp = pmGetContextHostName(handle);
     if (strlen(tmp) == 0) {
 	fprintf(stderr, "%s: pmGetContextHostName(%d) failed\n",
-	    pmProgname, handle);
+	    pmGetProgname(), handle);
 	return 0;
     }
     if ((a->hname = strdup(tmp)) == NULL)
@@ -519,7 +515,7 @@ initArchive(Archive *a)
     if ((sts = pmGetArchiveLabel(&label)) < 0) {
 	fprintf(stderr, "%s: cannot read label from archive %s\n"
 			"pmGetArchiveLabel failed: %s\n", 
-			pmProgname, a->fname, pmErrStr(sts));
+			pmGetProgname(), a->fname, pmErrStr(sts));
 	pmDestroyContext(handle);
 	return 0;
     }
@@ -527,7 +523,7 @@ initArchive(Archive *a)
     if ((sts = pmGetArchiveEnd(&tv)) < 0) {
 	fprintf(stderr, "%s: archive %s is corrupted\n"
 		"pmGetArchiveEnd failed: %s\n",
-		pmProgname, a->fname, pmErrStr(sts));
+		pmGetProgname(), a->fname, pmErrStr(sts));
 	pmDestroyContext(handle);
 	return 0;
     }
@@ -538,7 +534,7 @@ initArchive(Archive *a)
     while (b) {
 	if (strcmp(a->hname, b->hname) == 0) {
 	    fprintf(stderr, "%s: Error: archive %s not legal - archive %s is already open "
-		    "for host %s\n", pmProgname, a->fname, b->fname, b->hname);
+		    "for host %s\n", pmGetProgname(), a->fname, b->fname, b->hname);
 	    pmDestroyContext(handle);
 	    return 0;
 	}
@@ -570,21 +566,21 @@ zoneInit(void)
     if (timeZone) {			/* TZ from timezone string */
 	if ((sts = pmNewZone(timeZone)) < 0)
 	    fprintf(stderr, "%s: cannot set timezone to %s\n"
-		    "pmNewZone failed: %s\n", pmProgname, timeZone,
+		    "pmNewZone failed: %s\n", pmGetProgname(), timeZone,
 		    pmErrStr(sts));
     } 
     else if (hostZone) { /* TZ from live host or archive */
 	if ((handle = pmNewContext(archives ? PM_CONTEXT_ARCHIVE : PM_CONTEXT_HOST, dfltHostConn)) < 0)
 	    fprintf(stderr, "%s: cannot set timezone from %s\n"
-		    "pmNewContext failed: %s\n", pmProgname,
+		    "pmNewContext failed: %s\n", pmGetProgname(),
 		    dfltHostConn, pmErrStr(handle));
 	else if ((sts = pmNewContextZone()) < 0)
 	    fprintf(stderr, "%s: cannot set timezone from %s\n"
-		    "pmNewContextZone failed: %s\n", pmProgname,
+		    "pmNewContextZone failed: %s\n", pmGetProgname(),
 		    dfltHostConn, pmErrStr(sts));
 	else
 	    fprintf(stdout, "%s: timezone set to local timezone from %s\n",
-		    pmProgname, dfltHostConn);
+		    pmGetProgname(), dfltHostConn);
 	if (handle >= 0)
 	    pmDestroyContext(handle);
     }
@@ -650,7 +646,7 @@ initMetric(Metric *m)
     if ((sts = pmLookupName(1, &mname, &m->desc.pmid)) < 0) {
 	fprintf(stderr, "%s: metric %s not in namespace for %s\n"
 		"pmLookupName failed: %s\n",
-		pmProgname, mname, findsource(hname, hconn), pmErrStr(sts));
+		pmGetProgname(), mname, findsource(hname, hconn), pmErrStr(sts));
 	ret = 0;
 	goto end;
     }
@@ -659,7 +655,7 @@ initMetric(Metric *m)
     if ((sts = pmLookupDesc(m->desc.pmid, &m->desc)) < 0) {
 	fprintf(stderr, "%s: metric %s not currently available from %s\n"
 		"pmLookupDesc failed: %s\n",
-		pmProgname, mname, findsource(hname, hconn), pmErrStr(sts));
+		pmGetProgname(), mname, findsource(hname, hconn), pmErrStr(sts));
 	ret = 0;
 	goto end;
     }
@@ -669,12 +665,12 @@ initMetric(Metric *m)
 	m->desc.type == PM_TYPE_EVENT ||
 	m->desc.type == PM_TYPE_HIGHRES_EVENT ||
 	m->desc.type == PM_TYPE_UNKNOWN) {
-	fprintf(stderr, "%s: metric %s has inappropriate type\n", pmProgname, mname);
+	fprintf(stderr, "%s: metric %s has inappropriate type\n", pmGetProgname(), mname);
 	ret = -1;
     }
     else if (m->desc.indom == PM_INDOM_NULL) {
 	if (m->specinst != 0) {
-	    fprintf(stderr, "%s: metric %s has no instances\n", pmProgname, mname);
+	    fprintf(stderr, "%s: metric %s has no instances\n", pmGetProgname(), mname);
 	    ret = -1;
 	}
 	else
@@ -756,8 +752,7 @@ initMetric(Metric *m)
 		}
 	    }
 
-#if PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL1) {
+	    if (pmDebugOptions.appl1) {
 		int	numinst;
 		fprintf(stderr, "initMetric: %s from %s: instance domain specinst=%d\n",
 			mname, hname, m->specinst);
@@ -772,7 +767,6 @@ initMetric(Metric *m)
 		    fprintf(stderr, " \"%s\"\n", m->inames[i]);
 		}
 	    }
-#endif
 	    if (sts > 0) {
 		/*
 		 * pmGetInDom or pmGetInDomArchive returned some instances
@@ -845,12 +839,12 @@ reinitMetric(Metric *m)
 	m->desc.type == PM_TYPE_EVENT ||
 	m->desc.type == PM_TYPE_HIGHRES_EVENT ||
 	m->desc.type == PM_TYPE_UNKNOWN) {
-	fprintf(stderr, "%s: metric %s has inappropriate type\n", pmProgname, mname);
+	fprintf(stderr, "%s: metric %s has inappropriate type\n", pmGetProgname(), mname);
 	ret = -1;
     }
     else if (m->desc.indom == PM_INDOM_NULL) {
 	if (m->specinst != 0) {
-	    fprintf(stderr, "%s: metric %s has no instances\n", pmProgname, mname);
+	    fprintf(stderr, "%s: metric %s has no instances\n", pmGetProgname(), mname);
 	    ret = -1;
 	}
 	else
@@ -917,8 +911,7 @@ reinitMetric(Metric *m)
 		}
 	    }
 
-#if PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL1) {
+	    if (pmDebugOptions.appl1) {
 		int	numinst;
 		fprintf(stderr, "reinitMetric: %s from %s: instance domain specinst=%d\n",
 			mname, hname, m->specinst);
@@ -934,7 +927,6 @@ reinitMetric(Metric *m)
 		    fprintf(stderr, " \"%s\"\n", m->inames[i]);
 		}
 	    }
-#endif
 	    if (sts > 0) {
 		/*
 		 * pmGetInDom or pmGetInDomArchive returned some instances
@@ -988,12 +980,10 @@ reinitMetric(Metric *m)
 		x->op == CND_MATCH || x->op == CND_NOMATCH) {
 		instFetchExpr(x);
 		findEval(x);
-#if PCP_DEBUG
-		if (pmDebug & DBG_TRACE_APPL1) {
+		if (pmDebugOptions.appl1) {
 		    fprintf(stderr, "reinitMetric: re-shaped ...\n");
 		    dumpExpr(x);
 		}
-#endif
 	    }
 	    if (x->parent) {
 		x = x->parent;
@@ -1113,7 +1103,14 @@ taskFetch(Task *t)
 	    if (! h->down) {
 		pmUseContext(f->handle);
 		if ((sts = pmFetch(f->npmids, f->pmids, &f->result)) < 0) {
-		    if (! archives) {
+		    if (archives) {
+			if (sts == PM_ERR_LOGREC) {
+			    fprintf(stderr, "%s: pmFetch failed: %s\n", pmGetProgname(),
+				    pmErrStr(sts));
+			    exit(1);
+			}
+		    }
+		    else {
 			__pmNotifyErr(LOG_ERR, "pmFetch from %s failed: %s\n",
 				symName(f->host->name), pmErrStr(sts));
 			host_state_changed(symName(f->host->conn), STATE_LOSTCONN);

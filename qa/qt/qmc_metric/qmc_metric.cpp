@@ -18,10 +18,10 @@ changeConf(const char* str)
     char	name[MAXPATHLEN];
     FILE	*fp;
     
-    sprintf(name, "%s/pmdas/simple/simple.conf", pmGetConfig("PCP_VAR_DIR"));
+    pmsprintf(name, sizeof(name), "%s/pmdas/simple/simple.conf", pmGetConfig("PCP_VAR_DIR"));
     fp = fopen(name, "w");
     if (fp == NULL) {
-	cerr << pmProgname << ": /var/pcp/pmdas/simple/simple.conf: "
+	cerr << pmGetProgname() << ": /var/pcp/pmdas/simple/simple.conf: "
 	     << strerror(errno) << endl;
 	exit(1);
 	/*NOTREACHED*/
@@ -37,21 +37,17 @@ main(int argc, char* argv[])
     int		sts = 0;
     int		c;
 
-    pmProgname = basename(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "D:?")) != EOF) {
 	switch (c) {
 	case 'D':
-	    sts = __pmParseDebug(optarg);
+	    sts = pmSetDebug(optarg);
             if (sts < 0) {
-		pmprintf("%s: unrecognized debug flag specification (%s)\n",
-			 pmProgname, optarg);
+		pmprintf("%s: unrecognized debug options specification (%s)\n",
+			 pmGetProgname(), optarg);
                 sts = 1;
             }
-            else {
-                pmDebug |= sts;
-		sts = 0;
-	    }
             break;
 	case '?':
 	default:
@@ -61,7 +57,7 @@ main(int argc, char* argv[])
     }
 
     if (sts) {
-	pmprintf("Usage: %s\n", pmProgname);
+	pmprintf("Usage: %s\n", pmGetProgname());
 	pmflush();
 	exit(1);
         /*NOTREACHED*/
@@ -120,7 +116,7 @@ main(int argc, char* argv[])
 
     if (bogus_metric->status() >= 0) {
 	pmprintf("%s: Error: bogus.metric was not invalid!\n",
-		 pmProgname);
+		 pmGetProgname());
 	pmflush();
 	sts = 1;
     }
@@ -131,7 +127,7 @@ main(int argc, char* argv[])
     
     if (bogus_inst->status() >= 0) {
 	pmprintf("%s: Error: kernel.all.load[2] was not invalid!\n",
-		 pmProgname);
+		 pmGetProgname());
 	pmflush();
 	sts = 1;
     }

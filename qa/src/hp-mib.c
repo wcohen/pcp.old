@@ -74,30 +74,21 @@ main(int argc, char **argv)
     int		*all_inst;
     char	**all_names;
     int		(*int_cmp)() = int_compare;
-#ifdef PCP_DEBUG
-    static char	*debug = "[-D N]";
-#else
-    static char	*debug = "";
-#endif
-    static char	*usage = " [-n namespace]";
+    static char	*usage = "[-D debugspec] [-n namespace]";
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "D:n:")) != EOF) {
 	switch (c) {
-#ifdef PCP_DEBUG
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
-#endif
 
 	case 'n':	/* alternative name space file */
 	    namespace = optarg;
@@ -111,7 +102,7 @@ main(int argc, char **argv)
     }
 
     if (errflag) {
-	fprintf(stderr, "Usage: %s %s%s\n", pmProgname, debug, usage);
+	fprintf(stderr, "Usage: %s %s\n", pmGetProgname(), usage);
 	exit(1);
     }
 
@@ -125,16 +116,16 @@ main(int argc, char **argv)
      * [Note: these steps only have to be done once on startup]
      */
     if ((sts = pmLoadASCIINameSpace(namespace, 1)) < 0) {
-	printf("%s: Cannot load namespace from \"%s\": %s\n", pmProgname, namespace, pmErrStr(sts));
+	printf("%s: Cannot load namespace from \"%s\": %s\n", pmGetProgname(), namespace, pmErrStr(sts));
 	exit(1);
     }
     if ((sts = pmLookupName(NMETRICS, metrics, pmids)) < 0) {
-	printf("%s: %s\n", pmProgname, pmErrStr(sts));
+	printf("%s: %s\n", pmGetProgname(), pmErrStr(sts));
 	exit(1);
     }
     putenv("PMDA_LOCAL_PROC=");
     if ((sts = pmNewContext(PM_CONTEXT_LOCAL, NULL)) < 0) {
-	printf("%s: Cannot make local connection: %s\n", pmProgname, pmErrStr(sts));
+	printf("%s: Cannot make local connection: %s\n", pmGetProgname(), pmErrStr(sts));
 	exit(1);
     }
     if ((sts = pmLookupDesc(pmids[1], &desc)) < 0) {
@@ -151,12 +142,12 @@ main(int argc, char **argv)
     if (desc.indom != PM_INDOM_NULL) {
 	all_n = pmGetInDom(desc.indom, &all_inst, &all_names);
 	if (all_n < 0) {
-	    printf("%s: pmGetInDom: %s\n", pmProgname, pmErrStr(all_n));
+	    printf("%s: pmGetInDom: %s\n", pmGetProgname(), pmErrStr(all_n));
 	    exit(1);
 	}
     }
     else {
-	printf("%s: botch: metric %s (%s) should have an instance domain\n", pmProgname, metrics[1], pmIDStr(pmids[1]));
+	printf("%s: botch: metric %s (%s) should have an instance domain\n", pmGetProgname(), metrics[1], pmIDStr(pmids[1]));
 	exit(1);
     }
 
@@ -178,7 +169,7 @@ main(int argc, char **argv)
      */
     sts = pmFetch(NMETRICS, pmids, &result);
     if (sts < 0) {
-	printf("%s: fetch all %d instances : %s\n", pmProgname, all_n, pmErrStr(sts));
+	printf("%s: fetch all %d instances : %s\n", pmGetProgname(), all_n, pmErrStr(sts));
 	exit(1);
     }
 
@@ -193,7 +184,7 @@ main(int argc, char **argv)
     free(all_names);
     pmFreeResult(result);
     if ((sts = pmWhichContext()) < 0) {
-	printf("%s: pmWhichContext: %s\n", pmProgname, pmErrStr(sts));
+	printf("%s: pmWhichContext: %s\n", pmGetProgname(), pmErrStr(sts));
 	exit(1);
     }
     pmDestroyContext(sts);

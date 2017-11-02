@@ -12,7 +12,7 @@
 ** visualized for the user.
 ** 
 ** Copyright (C) 2000-2012 Gerlof Langeveld
-** Copyright (C) 2015-2016 Red Hat.
+** Copyright (C) 2015-2017 Red Hat.
 **
 ** This program is free software; you can redistribute it and/or modify it
 ** under the terms of the GNU General Public License as published by the
@@ -136,6 +136,7 @@ unsigned long 	sampcnt;
 int		linelen  = 80;
 char		screen;
 char		acctreason;	/* accounting not active (return val) 	*/
+char		hotprocflag;
 char		rawreadflag;
 char		rawwriteflag;
 char		*rawname;
@@ -280,7 +281,7 @@ main(int argc, char *argv[])
 
 	if ( (p = getenv("HOME")) )
 	{
-		snprintf(path, sizeof(path), "%s/.atoprc", p);
+		pmsprintf(path, sizeof(path), "%s/.atoprc", p);
 		path[sizeof(path)-1] = '\0';
 		readrc(path, 0);
 	}
@@ -295,7 +296,7 @@ main(int argc, char *argv[])
 	** check if we are supposed to behave as 'atopsar'
 	** i.e. system statistics only
 	*/
-	if (strcmp(pmProgname, "pcp-atopsar") == 0)
+	if (strcmp(pmGetProgname(), "pcp-atopsar") == 0)
 		return atopsar(argc, argv);
 
 	/* 
@@ -315,13 +316,16 @@ main(int argc, char *argv[])
 		{
 			if (c == 0)
 			{
-				__pmGetLongOptions(&opts);
+				if (opts.index == 0)
+				    hotprocflag++;
+				else		/* a regular PCP long option  */
+				    __pmGetLongOptions(&opts);
 				continue;
 			}
 			switch (c)
 			{
 			   case '?':		/* usage wanted ?             */
-				prusage(pmProgname);
+				prusage(pmGetProgname(), &opts);
 				break;
 
 			   case 'V':		/* version wanted ?           */
@@ -360,14 +364,14 @@ main(int argc, char *argv[])
 
                            case 'P':		/* parseable output?          */
 				if ( !parsedef(opts.optarg) )
-					prusage(pmProgname);
+					prusage(pmGetProgname(), &opts);
 
 				vis.show_samp = parseout;
 				break;
 
                            case 'L':		/* line length                */
 				if ( !numeric(opts.optarg) )
-					prusage(pmProgname);
+					prusage(pmGetProgname(), &opts);
 
 				linelen = atoi(opts.optarg);
 				break;
@@ -389,7 +393,7 @@ main(int argc, char *argv[])
 			{
 				pmprintf(
 			"%s: %s option not in pmParseInterval(3) format:\n%s\n",
-					pmProgname, arg, endnum);
+					pmGetProgname(), arg, endnum);
 				free(endnum);
 				opts.errors++;
 			}
@@ -398,9 +402,9 @@ main(int argc, char *argv[])
 			{
 				arg = argv[opts.optind];
 				if (!numeric(arg))
-					prusage(pmProgname);
+					prusage(pmGetProgname(), &opts);
 				if ((opts.samples = atoi(arg)) < 1)
-					prusage(pmProgname);
+					prusage(pmGetProgname(), &opts);
 			}
 		}
 	}
@@ -411,7 +415,7 @@ main(int argc, char *argv[])
 	__pmEndOptions(&opts);
 
 	if (opts.errors)
-		prusage(pmProgname);
+		prusage(pmGetProgname(), &opts);
 
 	if (opts.samples)
 		nsamples = opts.samples;
@@ -723,9 +727,9 @@ engine(void)
 ** print usage of this command
 */
 void
-prusage(char *myname)
+prusage(char *myname, pmOptions *opts)
 {
-	printf("Usage: %s [-flags] [interval [samples]]\n",
+	printf("Usage: %s [-flags] [--pcp-flags] [interval [samples]]\n",
 					myname);
 	printf("\t\tor\n");
 	printf("Usage: %s -w  file  [-S] [-%c] [interval [samples]]\n",
@@ -744,12 +748,19 @@ prusage(char *myname)
 
 	(*vis.show_usage)();
 
+	if (opts)
+	{
+		printf("\n");
+		printf("\tspecific flags for PCP (long options only):\n");
+		show_pcp_usage(opts);
+	}
+
 	printf("\n");
 	printf("\tspecific flags for raw logfiles:\n");
 	printf("\t  -w  write raw data to PCP archive folio\n");
 	printf("\t  -r  read  raw data from PCP archive folio\n");
 	printf("\t  -S  finish %s automatically before midnight "
-	                "(i.s.o. #samples)\n", pmProgname);
+	                "(i.s.o. #samples)\n", pmGetProgname());
 	printf("\t  -b  begin showing data from specified time\n");
 	printf("\t  -e  finish showing data after specified time\n");
 	printf("\n");
@@ -758,10 +769,10 @@ prusage(char *myname)
 	printf("\n");
 	printf("If the interval-value is zero, a new sample can be\n");
 	printf("forced manually by sending signal USR1"
-			" (kill -USR1 %s-pid)\n", pmProgname);
+			" (kill -USR1 %s-pid)\n", pmGetProgname());
 	printf("or with the keystroke '%c' in interactive mode.\n", MSAMPNEXT);
 	printf("\n");
-	printf("Please refer to the man-page of '%s' for more details.\n", pmProgname);
+	printf("Please refer to the man-page of '%s' for more details.\n", pmGetProgname());
 
 	cleanstop(1);
 }

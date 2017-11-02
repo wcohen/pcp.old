@@ -277,40 +277,86 @@ PCP_CALL extern void __pmNotifyErr(int, const char *, ...) __PM_PRINTFLIKE(2,3);
 
 /*
  * These are for debugging only (but are present in the shipped libpcp)
+ * ... this is the old_style
  */
 PCP_DATA extern int pmDebug;
-#define DBG_TRACE_PDU		(1<<0)	/* PDU send and receive */
-#define DBG_TRACE_FETCH		(1<<1)	/* dump pmFetch results */
-#define DBG_TRACE_PROFILE	(1<<2)	/* trace profile changes */
-#define DBG_TRACE_VALUE		(1<<3)	/* metric value conversions */
-#define DBG_TRACE_CONTEXT	(1<<4)	/* trace PMAPI context changes */
-#define DBG_TRACE_INDOM		(1<<5)	/* instance domain operations */
-#define DBG_TRACE_PDUBUF	(1<<6)	/* PDU buffer management */
-#define DBG_TRACE_LOG		(1<<7)	/* generic archive log operations */
-#define DBG_TRACE_LOGMETA	(1<<8)	/* meta data in archives */
-#define DBG_TRACE_OPTFETCH	(1<<9)	/* optFetch tracing */
-#define DBG_TRACE_AF		(1<<10)	/* trace async timer events */
-#define DBG_TRACE_APPL0		(1<<11)	/* reserved for applications */
-#define DBG_TRACE_APPL1		(1<<12)	/* reserved for applications */
-#define DBG_TRACE_APPL2		(1<<13)	/* reserved for applications */
-#define DBG_TRACE_PMNS		(1<<14)	/* PMNS operations */
-#define DBG_TRACE_LIBPMDA	(1<<15)	/* libpcp_pmda */
-#define DBG_TRACE_TIMECONTROL	(1<<16)	/* time control api */
-#define DBG_TRACE_PMC		(1<<17)	/* metrics class */
-#define DBG_TRACE_DERIVE	(1<<18)	/* derived metrics */
-#define DBG_TRACE_LOCK		(1<<19) /* lock tracing */
-#define DBG_TRACE_INTERP	(1<<20)	/* interpolate mode for archives */
-#define DBG_TRACE_CONFIG	(1<<21) /* configuration parameters */
-#define DBG_TRACE_PMAPI		(1<<22) /* PMAPI call tracing */
-#define DBG_TRACE_FAULT		(1<<23) /* fault injection tracing */
-#define DBG_TRACE_AUTH		(1<<24) /* authentication tracing */
-#define DBG_TRACE_DISCOVERY	(1<<25) /* service discovery tracing */
-#define DBG_TRACE_ATTR		(1<<26) /* all connection attributes */
-#define DBG_TRACE_HTTP		(1<<27) /* trace HTTP operations */
-/* not yet allocated, bits (1<<28) ... (1<<29) */
-#define DBG_TRACE_DESPERATE	(1<<30) /* verbose/desperate level */
+#define DBG_TRACE_PDU		(1<<0)	/* see pdu option below */
+#define DBG_TRACE_FETCH		(1<<1)	/* see fetch option below */
+#define DBG_TRACE_PROFILE	(1<<2)	/* see profile option below */
+#define DBG_TRACE_VALUE		(1<<3)	/* see value option below */
+#define DBG_TRACE_CONTEXT	(1<<4)	/* see context option below */
+#define DBG_TRACE_INDOM		(1<<5)	/* see indom option below */
+#define DBG_TRACE_PDUBUF	(1<<6)	/* see pdubuf option below */
+#define DBG_TRACE_LOG		(1<<7)	/* see log option below */
+#define DBG_TRACE_LOGMETA	(1<<8)	/* see logmeta option below */
+#define DBG_TRACE_OPTFETCH	(1<<9)	/* see optfetch option below */
+#define DBG_TRACE_AF		(1<<10)	/* see af option below */
+#define DBG_TRACE_APPL0		(1<<11)	/* see appl0 option below */
+#define DBG_TRACE_APPL1		(1<<12)	/* see appl1 option below */
+#define DBG_TRACE_APPL2		(1<<13)	/* see appl2 option below */
+#define DBG_TRACE_PMNS		(1<<14)	/* see pmns option below */
+#define DBG_TRACE_LIBPMDA	(1<<15)	/* see libpmda option below */
+#define DBG_TRACE_TIMECONTROL	(1<<16)	/* see timecontrol option below */
+#define DBG_TRACE_PMC		(1<<17)	/* see pmc option below */
+#define DBG_TRACE_DERIVE	(1<<18)	/* see derive option below */
+#define DBG_TRACE_LOCK		(1<<19) /* see lock option below */
+#define DBG_TRACE_INTERP	(1<<20)	/* see interp option below */
+#define DBG_TRACE_CONFIG	(1<<21) /* see config option below */
+#define DBG_TRACE_PMAPI		(1<<22) /* see pmapi option below */
+#define DBG_TRACE_FAULT		(1<<23) /* see fault option below */
+#define DBG_TRACE_AUTH		(1<<24) /* see auth option below */
+#define DBG_TRACE_DISCOVERY	(1<<25) /* see discovery option below */
+#define DBG_TRACE_ATTR		(1<<26) /* see attr option below */
+#define DBG_TRACE_HTTP		(1<<27) /* see http option below */
+/* not yet, and never will be, allocated, bits (1<<28) ... (1<<29) */
+#define DBG_TRACE_DESPERATE	(1<<30) /* see desperate option below */
+
+/*
+ * New style ...
+ * Note that comments are important ... these are extracted and
+ * built into pmdbg.h.
+ */
+typedef struct {
+    int	pdu;		/* PDU traffic at the Xmit and Recv level */
+    int	fetch;		/* Results from pmFetch */
+    int	profile;	/* Changes and xmits for instance profile */
+    int	value;		/* Metric value extraction and conversion */
+    int	context;	/* Changes to PMAPI contexts */
+    int	indom;		/* Low-level instance profile xfers */
+    int	pdubuf;		/* PDU buffer operations */
+    int	log;		/* Archive log manipulations */
+    int	logmeta;	/* Archive metadata operations */
+    int	optfetch;	/* optFetch magic */
+    int	af;		/* Asynchronous event scheduling */
+    int	appl0;		/* Application-specific flag 0 */
+    int	appl1;		/* Application-specific flag 1 */
+    int	appl2;		/* Application-specific flag 2 */
+    int	pmns;		/* PMNS operations */
+    int	libpmda;	/* PMDA callbacks into libpcp_pmda */
+    int	timecontrol;	/* Time control API */
+    int	pmc;		/* Metrics class operations */
+    int	derive;		/* Derived metrics functionality */
+    int	lock;		/* Synchronization and lock tracing */
+    int	interp;		/* Interpolate mode for archives */
+    int	config;		/* Configuration parameters */
+    int	pmapi;		/* PMAPI call tracing */
+    int	fault;		/* Fault injection tracing */
+    int	auth;		/* Authentication tracing */
+    int	discovery;	/* Service discovery tracing */
+    int	attr;		/* Connection attribute handling */
+    int	http;		/* Trace HTTP operations in libpcp_web */
+    int	desperate;	/* Verbose/Desperate level (developers only) */
+/* new ones start here, no DBG_TRACE_xxx macro and no backwards compatibility */
+    int	deprecated;	/* Report use of deprecated services */
+    int	exec;	 	/* __pmProcessExec and related calls */
+    int labels;		/* Metric label metadata operations */
+    int series;		/* Time series tracing */
+} pmdebugoptions_t;
+
+PCP_DATA extern pmdebugoptions_t	pmDebugOptions;
 
 PCP_CALL extern int __pmParseDebug(const char *);
+PCP_CALL extern void __pmSetDebugBits(int);
 PCP_CALL extern void __pmDumpResult(FILE *, const pmResult *);
 PCP_CALL extern void __pmDumpHighResResult(FILE *, const pmHighResResult *);
 PCP_CALL extern void __pmPrintStamp(FILE *, const struct timeval *);
@@ -320,18 +366,16 @@ PCP_CALL extern void __pmPrintTimeval(FILE *, const __pmTimeval *);
 PCP_CALL extern void __pmPrintDesc(FILE *, const pmDesc *);
 PCP_CALL extern void __pmFreeResultValues(pmResult *);
 PCP_CALL extern char *__pmPDUTypeStr_r(int, char *, int);
-PCP_CALL extern const char *__pmPDUTypeStr(int);			/* NOT thread-safe */
+PCP_CALL extern const char *__pmPDUTypeStr(int);	/* NOT thread-safe */
 PCP_CALL extern void __pmDumpNameSpace(FILE *, int);
 PCP_CALL extern void __pmDumpNameNode(FILE *, __pmnsNode *, int);
 PCP_CALL extern void __pmDumpStack(FILE *);
 PCP_DATA extern int __pmLogReads;
 
-#ifdef PCP_DEBUG
 PCP_CALL extern void __pmDumpIDList(FILE *, int, const pmID *);
 PCP_CALL extern void __pmDumpNameList(FILE *, int, char **);
 PCP_CALL extern void __pmDumpStatusList(FILE *, int, const int *);
 PCP_CALL extern void __pmDumpNameAndStatusList(FILE *, int, char **, int *);
-#endif
 
 /*
  * Logs and archives of performance metrics (not to be confused
@@ -476,22 +520,19 @@ typedef struct {
     __pmHashCtl	l_hashindom;	/* instance domain hashed access */
     __pmHashCtl	l_hashrange;	/* ptr to first and last value in log for */
 				/* each metric */
+    __pmHashCtl	l_hashlabels;	/* maps the various metadata label types */
+    __pmHashCtl l_hashtext;	/* maps the various help text types */
     int		l_minvol;	/* (when reading) lowest known volume no. */
     int		l_maxvol;	/* (when reading) highest known volume no. */
     int		l_numseen;	/* (when reading) size of l_seen */
     int		*l_seen;	/* (when reading) volumes opened OK */
-    __pmLogLabel	l_label;	/* (when reading) log label */
+    __pmLogLabel l_label;	/* (when reading) log label */
     __pm_off_t	l_physend;	/* (when reading) offset to physical EOF */
 				/*                for last volume */
     __pmTimeval	l_endtime;	/* (when reading) timestamp at logical EOF */
     int		l_numti;	/* (when reading) no. temporal index entries */
     __pmLogTI	*l_ti;		/* (when reading) temporal index */
     __pmnsTree	*l_pmns;        /* namespace from meta data */
-    /*
-     * This was added to the ABI in order to support multiple archives
-     * in a single context. In order to maintain ABI compatibility it must
-     * be at the end of this structure.
-     */
     int		l_multi;	/* part of a multi-archive context */
 } __pmLogCtl;
 
@@ -551,6 +592,32 @@ PCP_CALL extern void __pmFreeProfile(__pmProfile *);
 PCP_CALL extern __pmInDomProfile *__pmFindProfile(pmInDom, const __pmProfile *);
 PCP_CALL extern int __pmInProfile(pmInDom, const __pmProfile *, int);
 PCP_CALL extern void __pmFreeInResult(__pmInResult *);
+
+/*
+ * Internal interfaces for metadata labels (name:value pairs).
+ */
+static inline int
+pmlabel_extrinsic(pmLabel *lp)
+{
+    return (lp->flags & PM_LABEL_OPTIONAL) != 0;
+}
+
+static inline int
+pmlabel_intrinsic(pmLabel *lp)
+{
+    return (lp->flags & PM_LABEL_OPTIONAL) == 0;
+}
+
+PCP_CALL extern int __pmAddLabels(pmLabelSet **, const char *, int);
+PCP_CALL extern int __pmMergeLabels(const char *, const char *, char *, int);
+PCP_CALL extern int __pmParseLabels(const char *, int, pmLabel *, int, char *, int *);
+PCP_CALL extern int __pmParseLabelSet(const char *, int, int, pmLabelSet **);
+
+PCP_CALL extern int __pmGetContextLabels(pmLabelSet **);
+PCP_CALL extern int __pmGetDomainLabels(int, const char *, pmLabelSet **);
+
+PCP_CALL extern void __pmDumpLabelSet(FILE *, const pmLabelSet *);
+PCP_CALL extern void __pmDumpLabelSets(FILE *, const pmLabelSet *, int);
 
 /*
  * Version and capabilities information for PDU exchanges
@@ -897,6 +964,7 @@ typedef struct {
 #define PDU_FLAG_NO_NSS_INIT	(1U<<5)
 #define PDU_FLAG_CONTAINER	(1U<<6)
 #define PDU_FLAG_CERT_REQD	(1U<<7)
+#define PDU_FLAG_LABEL		(1U<<8)
 
 /* Credential CVERSION PDU elements look like this */
 typedef struct {
@@ -962,7 +1030,9 @@ PCP_CALL extern void __pmCountPDUBuf(int, int *, int *);
 #define PDU_PMNS_TRAVERSE	0x7010
 #define PDU_ATTR		0x7011
 #define PDU_AUTH		PDU_ATTR
-#define PDU_FINISH		0x7011
+#define PDU_LABEL_REQ		0x7012
+#define PDU_LABEL		0x7013
+#define PDU_FINISH		0x7013
 #define PDU_MAX		 	(PDU_FINISH - PDU_START)
 
 /*
@@ -1022,6 +1092,10 @@ PCP_CALL extern int __pmSendAuth(int, int, int, const char *, int);
 PCP_CALL extern int __pmDecodeAuth(__pmPDU *, int *, char **, int *);
 PCP_CALL extern int __pmSendAttr(int, int, int, const char *, int);
 PCP_CALL extern int __pmDecodeAttr(__pmPDU *, int *, char **, int *);
+PCP_CALL extern int __pmSendLabelReq(int, int, int, int);
+PCP_CALL extern int __pmDecodeLabelReq(__pmPDU *, int *, int *);
+PCP_CALL extern int __pmSendLabel(int, int, int, int, pmLabelSet *, int);
+PCP_CALL extern int __pmDecodeLabel(__pmPDU *, int *, int *, pmLabelSet **, int *);
 
 #if defined(HAVE_64BIT_LONG)
 
@@ -1063,12 +1137,14 @@ bozo - unknown size of long !!!
 /*
  * For the help text PDUs, the type (PM_TEXT_ONELINE or PM_TEXT_HELP)
  * is 'or'd with the following to encode the request for a PMID or
- * a pmInDom ...
+ * a pmInDom.  Default is to fallback to ONELINE if HELP unavailable;
+ * the (internal) PM_TEXT_DIRECT flag disables this behaviour.
  * Note the values must therefore be (a) bit fields and (b) different
  *	to the public macros PM_TEXT_* in pmapi.h 
  */
 #define PM_TEXT_PMID	4
 #define PM_TEXT_INDOM	8
+#define PM_TEXT_DIRECT	16
 
 /*
  * no mem today, my love has gone away ....
@@ -1079,11 +1155,8 @@ PCP_CALL extern void __pmNoMem(const char *, size_t, int);
 
 /*
  * Startup handling:
- * set program name, as used in __pmNotifyErr() ... default is "pcp"
  * set default user for __pmSetProcessIdentity() ... default is "pcp"
  */
-PCP_DATA extern char *pmProgname;
-PCP_CALL extern int __pmSetProgname(const char *);
 PCP_CALL extern int __pmGetUsername(char **);
 
 /*
@@ -1137,16 +1210,61 @@ typedef struct __pmLogInDom {
 } __pmLogInDom;
 
 /*
+ * __pmLogLabelSet is used to hold the sets of labels for the label
+ * hierarchy in memory.  Only in the case of instances will it have
+ * multiple labelsets.  For all other (higher) hierarchy levels, a
+ * single labelset suffices (nsets == 1, and nlabels >= 0).  Also,
+ * in memory labelsets are linked together in reverse chronological
+ * order (just like the __pmLogInDom structure above).
+ * -- externally we write these as
+ *	timestamp
+ *	type (int - PM_LABEL_* types)
+ *	ident (int - PM_IN_NULL, domain, indom, pmid)
+ *	nsets (int - usually 1, except for instances)
+ *	jsonb offset (int - offset to jsonb start)
+ *	labelset[0] ... labelset[numsets-1]
+ *	jsonb table (strings, concatenated)
+ *
+ * -- with each labelset array entry as
+ *	inst (int)
+ *	nlabels (int)
+ *	jsonb offset (int)
+ *	jsonb length (int)
+ *	label[0] ... label[nlabels-1] (struct pmLabel)
+ */
+
+typedef struct __pmLogLabelSet {
+    struct __pmLogLabelSet *next;
+    __pmTimeval		stamp;
+    int			type;
+    int			ident;
+    int			nsets;
+    pmLabelSet		*labelsets;
+} __pmLogLabelSet;
+
+/*
+ * __pmLogText is used to hold the metric and instance domain help text
+ * internally, for help text associated with an archive context.
+ */
+typedef struct __pmLogText {
+    int			type;	/* oneline/full and pmid/indom */
+    int			ident;	/* metric or indom identifier */
+    char		*text;
+} __pmLogText;
+
+/*
  * record header in the metadata log file ... len (by itself) also is
  * used as a trailer
  */
-typedef struct {
+typedef struct __pmLogHdr {
     int		len;	/* record length, includes header and trailer */
     int		type;	/* see TYPE_* #defines below */
 } __pmLogHdr;
 
 #define TYPE_DESC	1	/* header, pmDesc, trailer */
 #define TYPE_INDOM	2	/* header, __pmLogInDom, trailer */
+#define TYPE_LABEL	3	/* header, __pmLogLabelSet, trailer */
+#define TYPE_TEXT	4	/* header, __pmLogText, trailer */
 
 PCP_CALL extern void __pmLogPutIndex(const __pmLogCtl *, const __pmTimeval *);
 
@@ -1183,6 +1301,11 @@ PCP_CALL extern int __pmLogPutInDom(__pmLogCtl *, pmInDom, const __pmTimeval *, 
 PCP_CALL extern int __pmLogGetInDom(__pmLogCtl *, pmInDom, __pmTimeval *, int **, char ***);
 PCP_CALL extern int __pmLogLookupInDom(__pmLogCtl *, pmInDom, __pmTimeval *, const char *);
 PCP_CALL extern int __pmLogNameInDom(__pmLogCtl *, pmInDom, __pmTimeval *, int, char **);
+
+PCP_CALL extern int __pmLogLookupLabel(__pmLogCtl *, unsigned int, unsigned int, pmLabelSet **, const __pmTimeval *);
+PCP_CALL extern int __pmLogPutLabel(__pmLogCtl *, unsigned int, unsigned int, int, pmLabelSet *, const __pmTimeval *);
+PCP_CALL extern int __pmLogLookupText(__pmLogCtl *, unsigned int , unsigned int, char **);
+PCP_CALL extern int __pmLogPutText(__pmLogCtl *, unsigned int , unsigned int, char *, int);
 
 PCP_CALL extern int __pmLogPutResult(__pmLogCtl *, __pmPDU *);
 PCP_CALL extern int __pmLogPutResult2(__pmLogCtl *, __pmPDU *);
@@ -1417,6 +1540,21 @@ PCP_CALL extern int __pmProcessDataSize(unsigned long *);
 PCP_CALL extern int __pmProcessRunTimes(double *, double *);
 PCP_CALL extern int __pmSetProcessIdentity(const char *);
 
+/* __pmProcessExec and friends ... replacementes for system(3) and popen(3) */
+typedef struct __pmExecCtl __pmExecCtl_t;		/* opaque handle */
+PCP_CALL extern int __pmProcessAddArg(__pmExecCtl_t **, const char *);
+PCP_CALL extern int __pmProcessUnpickArgs(__pmExecCtl_t **, const char *);
+#define PM_EXEC_TOSS_NONE	0
+#define PM_EXEC_TOSS_STDIN	1
+#define PM_EXEC_TOSS_STDOUT	2
+#define PM_EXEC_TOSS_STDERR	4
+#define PM_EXEC_TOSS_ALL	7
+#define PM_EXEC_NOWAIT		0
+#define PM_EXEC_WAIT		1
+PCP_CALL extern int __pmProcessExec(__pmExecCtl_t **, int, int);
+PCP_CALL extern int __pmProcessPipe(__pmExecCtl_t **, const char *, int, FILE **);
+PCP_CALL extern int __pmProcessPipeClose(FILE *);
+
 /*
  * platform independent memory mapped file handling
  */
@@ -1646,6 +1784,8 @@ PCP_CALL extern int __pmDiscoverServicesWithOptions(const char *,
 					   const volatile sig_atomic_t *,
 					   char ***);
 
+
+PCP_CALL extern void __pmDumpDebug(FILE *);
 
 #ifdef __cplusplus
 }

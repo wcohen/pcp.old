@@ -1,0 +1,49 @@
+diff --git a/src/pmdas/json/pmdajson.python b/src/pmdas/json/pmdajson.python
+index 7d67246..f26ba75 100644
+--- a/src/pmdas/json/pmdajson.python
++++ b/src/pmdas/json/pmdajson.python
+@@ -492,7 +494,7 @@ class JsonSource(object):
+         self.__array_indexes.clear()
+         for (dummy, metric_info) in iteritems(self.__metrics):
+             # Skip non-arrays.
+-            if metric_info.index_pointer == None:
++            if metric_info.index_pointer is None:
+                 continue
+ 
+             try:
+@@ -643,7 +645,7 @@ class JsonSource(object):
+                     del metric_info
+                     continue
+                 if value == "instant" or value == "instantaneous":
+-                   metric_info.sem = c_api.PM_SEM_INSTANT
++                    metric_info.sem = c_api.PM_SEM_INSTANT
+                 elif value == "counter":
+                     metric_info.sem = c_api.PM_SEM_COUNTER
+                 elif value == "discrete":
+@@ -675,7 +677,7 @@ class JsonSource(object):
+ 
+             # Make sure we have everything we need. If not, just skip
+             # this metric.
+-            if not metric_info.valid() or metric_info.pointer == None:
++            if not metric_info.valid() or metric_info.pointer is None:
+                 self.log("Metadata doesn't have required"
+                          " information for the following entry: %s"
+                          % metric_info.name)
+@@ -910,7 +912,7 @@ class JsonSource(object):
+                     del metric_info
+                     continue
+                 if value == "instant" or value == "instantaneous":
+-                   metric_info.sem = c_api.PM_SEM_INSTANT
++                    metric_info.sem = c_api.PM_SEM_INSTANT
+                 elif value == "counter":
+                     metric_info.sem = c_api.PM_SEM_COUNTER
+                 elif value == "discrete":
+@@ -942,7 +944,7 @@ class JsonSource(object):
+ 
+             # Make sure we have everything we need. If not, just skip
+             # this metric.
+-            if not metric_info.valid() or metric_info.pointer == None:
++            if not metric_info.valid() or metric_info.pointer is None:
+                 self.log("Metadata doesn't have required"
+                          " information for the following entry: %s"
+                          % metric_info.name)

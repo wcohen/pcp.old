@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2016 Red Hat.
+ * Copyright (c) 2012-2017 Red Hat.
  * Copyright (c) 1995-2000,2003,2004 Silicon Graphics, Inc.  All Rights Reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
@@ -178,16 +178,16 @@ socket_ownership(char *sockname)
 		username, pmErrStr_r(-oserror(), errmsg, sizeof(errmsg)));
 
     sts = chmod(sockname, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-    if (sts == -1 && (pmDebug & DBG_TRACE_LIBPMDA))
+    if (sts == -1 && pmDebugOptions.libpmda)
 	__pmNotifyErr(LOG_WARNING, "__pmdaOpenUnix: chmod(%s,...) failed: %s\n",
 			sockname, osstrerror());
     if (pw != NULL) {
 	sts = chown(sockname, pw->pw_uid, pw->pw_gid);
-	if (sts == -1 && (pmDebug & DBG_TRACE_LIBPMDA))
+	if (sts == -1 && pmDebugOptions.libpmda)
 	    __pmNotifyErr(LOG_WARNING, "__pmdaOpenUnix: chown(%s, ...) failed: %s\n",
 			    sockname, osstrerror());
     }
-    else if (pmDebug & DBG_TRACE_LIBPMDA)
+    else if (pmDebugOptions.libpmda)
 	    __pmNotifyErr(LOG_WARNING, "__pmdaOpenUnix: chown(%s, ...) skipped\n",
 			    sockname);
 }
@@ -385,12 +385,10 @@ pmdaGetOptions(int argc, char *const *argv, pmdaOptions *opts, pmdaInterface *di
 	    break;
 
 	case 'D':
-	    if ((sts = __pmParseDebug(opts->optarg)) < 0) {
-		pmprintf("%s: unrecognized debug flag specification (%s)\n",
+	    if ((sts = pmSetDebug(opts->optarg)) < 0) {
+		pmprintf("%s: unrecognized debug options specification (%s)\n",
 			pmda->e_name, opts->optarg);
 		opts->errors++;
-	    } else {
-		pmDebug |= sts;
 	    }
 	    break;
 
@@ -518,7 +516,7 @@ pmdaRehash(pmdaExt *pmda, pmdaMetric *metrics, int nmetrics)
     }
     if (m == pmda->e_nmetrics) {
 	pmda->e_flags |= PMDA_EXT_FLAG_HASHED;
-	if (pmDebug & DBG_TRACE_LIBPMDA)
+	if (pmDebugOptions.libpmda)
 	    __pmNotifyErr(LOG_DEBUG, "pmdaRehash: PMDA %s: successful rebuild\n",
 			pmda->e_name);
     }
@@ -544,7 +542,7 @@ pmdaDirect(pmdaExt *pmda, pmdaMetric *metrics, int nmetrics)
 
 	pmda->e_direct = 0;
 	if ((pmda->e_flags & PMDA_EXT_FLAG_DIRECT) ||
-	    (pmDebug & DBG_TRACE_LIBPMDA))
+	    pmDebugOptions.libpmda)
 	    __pmNotifyErr(LOG_WARNING, "pmdaDirect: PMDA %s: "
 		"Direct mapping for metrics disabled @ metrics[%d] %s\n",
 		pmda->e_name, m,
@@ -654,8 +652,7 @@ pmdaInit(pmdaInterface *dispatch, pmdaIndom *indoms, int nindoms,
 		for (i = 0; i < pmda->e_nindoms; i++) {
 		    indomp = (__pmInDom_int *)&(pmda->e_indoms[i].it_indom);
 		    if (indomp->serial == mindomp->serial) {
-#ifdef PCP_DEBUG
-			if (pmDebug & DBG_TRACE_LIBPMDA) {
+			if (pmDebugOptions.libpmda) {
 			    char	strbuf[20];
 			    char	st2buf[20];
 			    __pmNotifyErr(LOG_DEBUG, 
@@ -664,7 +661,6 @@ pmdaInit(pmdaInterface *dispatch, pmdaIndom *indoms, int nindoms,
 				    pmIDStr_r(pmda->e_metrics[m].m_desc.pmid, strbuf, sizeof(strbuf)), m,
 				    pmInDomStr_r(pmda->e_indoms[i].it_indom, st2buf, sizeof(st2buf)), i);
 			}
-#endif
 			break;
 		    }
 		}
@@ -688,20 +684,16 @@ pmdaInit(pmdaInterface *dispatch, pmdaIndom *indoms, int nindoms,
 	    __pmNotifyErr(LOG_WARNING, "pmdaInit: PMDA %s: Unable to open help text file(s) from \"%s\": %s\n",
 		    pmda->e_name, pmda->e_helptext, pmErrStr(pmda->e_help));
 	}
-#ifdef PCP_DEBUG
-	else if (pmDebug & DBG_TRACE_LIBPMDA) {
+	else if (pmDebugOptions.libpmda) {
 	    __pmNotifyErr(LOG_DEBUG, "pmdaInit: PMDA %s: help file %s opened\n", pmda->e_name, pmda->e_helptext);
 	}
-#endif
     }
     else {
 	if (dispatch->version.two.text == pmdaText)
 	    __pmNotifyErr(LOG_WARNING, "pmdaInit: PMDA %s: No help text file specified for pmdaText", pmda->e_name); 
-#ifdef PCP_DEBUG
 	else
-	    if (pmDebug & DBG_TRACE_LIBPMDA)
+	    if (pmDebugOptions.libpmda)
 		__pmNotifyErr(LOG_DEBUG, "pmdaInit: PMDA %s: No help text path specified", pmda->e_name);
-#endif
     }
 
     /*
@@ -717,8 +709,7 @@ pmdaInit(pmdaInterface *dispatch, pmdaIndom *indoms, int nindoms,
     else
 	pmdaDirect(pmda, metrics, nmetrics);
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_LIBPMDA) {
+    if (pmDebugOptions.libpmda) {
     	__pmNotifyErr(LOG_INFO, "name        = %s\n", pmda->e_name);
         __pmNotifyErr(LOG_INFO, "domain      = %d\n", dispatch->domain);
         if (dispatch->comm.flags)
@@ -730,7 +721,6 @@ pmdaInit(pmdaInterface *dispatch, pmdaIndom *indoms, int nindoms,
 		(pmda->e_flags & PMDA_EXT_FLAG_HASHED) ? "hashed" :
 		(pmda->e_direct ? "direct" : "linear"));
     }
-#endif
 
     dispatch->status = pmda->e_status;
 }
@@ -832,12 +822,10 @@ pmdaConnect(pmdaInterface *dispatch)
 	    pmda->e_infd = fileno(stdin);
 	    pmda->e_outfd = fileno(stdout);
 
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_LIBPMDA) {
+	    if (pmDebugOptions.libpmda) {
 	    	__pmNotifyErr(LOG_DEBUG, "pmdaConnect: PMDA %s: opened pipe to pmcd, infd = %d, outfd = %d\n",
 			     pmda->e_name, pmda->e_infd, pmda->e_outfd);
 	    }
-#endif
 	    break;
 
 	case pmdaInet:
@@ -845,12 +833,10 @@ pmdaConnect(pmdaInterface *dispatch)
 	    __pmdaOpenInet(pmda->e_sockname, pmda->e_port, &(pmda->e_infd), 
 			   &(pmda->e_outfd));
 
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_LIBPMDA) {
+	    if (pmDebugOptions.libpmda) {
 	    	__pmNotifyErr(LOG_DEBUG, "pmdaConnect: PMDA %s: opened inet connection, infd = %d, outfd = %d\n",
 			     pmda->e_name, pmda->e_infd, pmda->e_outfd);
 	    }
-#endif
 
 	    break;
 
@@ -859,12 +845,10 @@ pmdaConnect(pmdaInterface *dispatch)
 	    __pmdaOpenIPv6(pmda->e_sockname, pmda->e_port, &(pmda->e_infd), 
 			   &(pmda->e_outfd));
 
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_LIBPMDA) {
+	    if (pmDebugOptions.libpmda) {
 	    	__pmNotifyErr(LOG_DEBUG, "pmdaConnect: PMDA %s: opened ipv6 connection, infd = %d, outfd = %d\n",
 			     pmda->e_name, pmda->e_infd, pmda->e_outfd);
 	    }
-#endif
 
 	    break;
 
@@ -872,12 +856,10 @@ pmdaConnect(pmdaInterface *dispatch)
 
 	    __pmdaOpenUnix(pmda->e_sockname, &(pmda->e_infd), &(pmda->e_outfd));
 
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_LIBPMDA) {
+	    if (pmDebugOptions.libpmda) {
 	    	__pmNotifyErr(LOG_DEBUG, "pmdaConnect: PMDA %s: Opened unix connection, infd = %d, outfd = %d\n",
 			     pmda->e_name, pmda->e_infd, pmda->e_outfd);
 	    }
-#endif
 
 	    break;
 	default:
@@ -926,6 +908,9 @@ __pmdaSetup(pmdaInterface *dispatch, int version, const char *name)
     dispatch->comm.pmapi_version = PMAPI_VERSION;
     dispatch->comm.flags = 0;
 
+    if (HAVE_V_SEVEN(version)) {
+	dispatch->version.seven.label = pmdaLabel;
+    }
     if (HAVE_V_SIX(version)) {
 	dispatch->version.six.attribute = pmdaAttribute;
     }
@@ -966,12 +951,7 @@ __pmdaSetup(pmdaInterface *dispatch, int version, const char *name)
     }
     extp->dispatch = dispatch;
     pmda->e_ext = (void *)extp;
-
     pmdaSetResultCallBack(dispatch, __pmFreeResultValues);
-    pmdaSetFetchCallBack(dispatch, (pmdaFetchCallBack)0);
-    pmdaSetCheckCallBack(dispatch, (pmdaCheckCallBack)0);
-    pmdaSetDoneCallBack(dispatch, (pmdaDoneCallBack)0);
-    pmdaSetEndContextCallBack(dispatch, (pmdaEndContextCallBack)0);
 }
 
 /*
@@ -1028,11 +1008,9 @@ pmdaOpenLog(pmdaInterface *dispatch)
 
     __pmOpenLog(dispatch->version.any.ext->e_name, 
 		dispatch->version.any.ext->e_logfile, stderr, &c);
-#ifdef PCP_DEBUG
-    if ((pmDebug & DBG_TRACE_LIBPMDA) && (pmDebug & DBG_TRACE_DESPERATE)) {
+    if (pmDebugOptions.libpmda && pmDebugOptions.desperate) {
 	setlinebuf(stderr);
     }
-#endif
 }
 
 /*

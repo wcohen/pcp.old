@@ -168,7 +168,7 @@ mounts_config_file_check(void)
     static int  last_error;
     int sep = __pmPathSeparator();
 
-    snprintf(mypath, sizeof(mypath), "%s%c" "mounts" "%c" "mounts.conf",
+    pmsprintf(mypath, sizeof(mypath), "%s%c" "mounts" "%c" "mounts.conf",
 		pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
     if (stat(mypath, &statbuf) == -1) {
 	if (oserror() != last_error) {
@@ -237,7 +237,7 @@ mounts_grab_config_info(void)
     int mount_number = 0;
     int sep = __pmPathSeparator();
 
-    snprintf(mypath, sizeof(mypath), "%s%c" "mounts" "%c" "mounts.conf",
+    pmsprintf(mypath, sizeof(mypath), "%s%c" "mounts" "%c" "mounts.conf",
 		pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
     if ((fp = fopen(mypath, "r")) == NULL) {
 	__pmNotifyErr(LOG_ERR, "fopen on %s failed: %s\n",
@@ -460,7 +460,7 @@ mounts_init(pmdaInterface *dp)
 {
     if (isDSO) {
 	int sep = __pmPathSeparator();
-	snprintf(mypath, sizeof(mypath), "%s%c" "mounts" "%c" "help",
+	pmsprintf(mypath, sizeof(mypath), "%s%c" "mounts" "%c" "help",
 		pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
 	pmdaDSO(dp, PMDA_INTERFACE_2, "mounts DSO", mypath);
     } else {
@@ -505,12 +505,12 @@ main(int argc, char **argv)
     pmdaInterface	desc;
 
     isDSO = 0;
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
     __pmGetUsername(&username);
 
-    snprintf(mypath, sizeof(mypath), "%s%c" "mounts" "%c" "help",
+    pmsprintf(mypath, sizeof(mypath), "%s%c" "mounts" "%c" "help",
 		pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
-    pmdaDaemon(&desc, PMDA_INTERFACE_2, pmProgname, MOUNTS,
+    pmdaDaemon(&desc, PMDA_INTERFACE_2, pmGetProgname(), MOUNTS,
 		"mounts.log", mypath);
 
     pmdaGetOptions(argc, argv, &opts, &desc);

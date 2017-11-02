@@ -143,23 +143,18 @@ parse_args(int argc, char **argv)
     extern int	optind;
     int		errflag = 0;
     int		c;
-    static char	*usage = "[-bcLmv] [-a archive] [-h host] [-n namespace] [-s 1|2]";
+    static char	*usage = "[-bcLmv] [-a archive] [-D debugspec] [-h host] [-n namespace] [-s 1|2]";
     char	*endnum;
     int		sts;
-#ifdef PCP_DEBUG
-    static char	*debug = "[-D <dbg>]";
-#else
-    static char	*debug = "";
-#endif
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "a:D:h:iLmn:s:vbc")) != EOF) {
 	switch (c) {
 	case 'a':	/* archive name for context */
             if (context_type != 0) {
 	        fprintf(stderr, "%s: at most one of -a, -h and -L allowed\n",
-                        pmProgname);
+                        pmGetProgname());
 		errflag++;
 	    }
 	    context_type = PM_CONTEXT_ARCHIVE;
@@ -174,21 +169,19 @@ parse_args(int argc, char **argv)
 	    root_children = 1;
 	    break;
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case 'h':	/* context_namename for live context */
             if (context_type != 0) {
 	        fprintf(stderr, "%s: at most one of -a, -h and -L allowed\n",
-                        pmProgname);
+                        pmGetProgname());
 		errflag++;
 	    }
 	    context_type = PM_CONTEXT_HOST;
@@ -201,7 +194,7 @@ parse_args(int argc, char **argv)
 	case 'L':	/* LOCAL context */
             if (context_type != 0) {
 	        fprintf(stderr, "%s: at most one of -a, -h and -L allowed\n",
-                        pmProgname);
+                        pmGetProgname());
 		errflag++;
 	    }
 	    context_type = PM_CONTEXT_LOCAL;
@@ -223,7 +216,7 @@ parse_args(int argc, char **argv)
 	case 's':	/* pmns style */
 	    pmns_style = (int)strtol(optarg, &endnum, 10);
 	    if (*endnum != '\0') {
-		printf("%s: -s requires numeric argument\n", pmProgname);
+		printf("%s: -s requires numeric argument\n", pmGetProgname());
 		errflag++;
 	    }
 	    break;
@@ -236,7 +229,7 @@ parse_args(int argc, char **argv)
     }
 
     if (errflag) {
-	printf("Usage: %s %s%s\n", pmProgname, debug, usage);
+	printf("Usage: %s %s\n", pmGetProgname(), usage);
 	exit(1);
     }
 }
@@ -251,7 +244,7 @@ load_namespace(char *namespace)
     _op++;
     if ((sts = pmLoadASCIINameSpace(namespace, 1)) < 0) {
 	_err++;
-	printf("%s: Cannot load namespace from \"%s\": %s\n", pmProgname, namespace, pmErrStr(sts));
+	printf("%s: Cannot load namespace from \"%s\": %s\n", pmGetProgname(), namespace, pmErrStr(sts));
 	exit(1);
     }
     gettimeofday(&now, (struct timezone *)0);
@@ -284,7 +277,7 @@ test_api(void)
     if ((sts = pmNewContext(context_type, context_name)) < 0) {
 	_err++;
 	printf("%s: Error in creating %s context for \"%s\": %s\n", 
-	       pmProgname, 
+	       pmGetProgname(), 
 	       context_type == PM_CONTEXT_HOST ? "host" :
 	       context_type == PM_CONTEXT_ARCHIVE ? "archive" :
 	       "local", 
@@ -312,13 +305,11 @@ test_api(void)
 	}
     }
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL0) {
+    if (pmDebugOptions.appl0) {
       for (i = 0; i < numpmid; i++) {
         printf("%s: id[%d] = %d\n", namelist[i], i, midlist[i]);
       }
     }
-#endif
 
     /* Set mode for archive so that an indom can be retrieved 
      * if necessary.

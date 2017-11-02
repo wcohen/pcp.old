@@ -92,17 +92,12 @@ main(int argc, char **argv)
     int		errflag = 0;
     char	*archive = "foo";
     char	*namespace = PM_NS_DEFAULT;
-#ifdef PCP_DEBUG
-    static char	*debug = "[-D N]";
-#else
-    static char	*debug = "";
-#endif
-    static char	*usage = "[-D N] [-a archive] [-n namespace] [-v]";
+    static char	*usage = "[-D debugspec] [-a archive] [-n namespace] [-v]";
     int		i;
     pmLogLabel	loglabel;
     pmLogLabel	duplabel;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "a:D:n:v")) != EOF) {
 	switch (c) {
@@ -111,18 +106,14 @@ main(int argc, char **argv)
 	    archive = optarg;
 	    break;
 
-#ifdef PCP_DEBUG
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
-#endif
 
 	case 'n':	/* alternative name space file */
 	    namespace = optarg;
@@ -140,33 +131,33 @@ main(int argc, char **argv)
     }
 
     if (errflag) {
-	printf("Usage: %s %s%s\n", pmProgname, debug, usage);
+	printf("Usage: %s %s\n", pmGetProgname(), usage);
 	exit(1);
     }
 
     if (namespace != PM_NS_DEFAULT && (sts = pmLoadASCIINameSpace(namespace, 1)) < 0) {
-	printf("%s: Cannot load namespace from \"%s\": %s\n", pmProgname, namespace, pmErrStr(sts));
+	printf("%s: Cannot load namespace from \"%s\": %s\n", pmGetProgname(), namespace, pmErrStr(sts));
 	exit(1);
     }
 
     if ((ctx[0] = pmNewContext(PM_CONTEXT_ARCHIVE, archive)) < 0) {
-	printf("%s: Cannot connect to archive \"%s\": %s\n", pmProgname, archive, pmErrStr(ctx[0]));
+	printf("%s: Cannot connect to archive \"%s\": %s\n", pmGetProgname(), archive, pmErrStr(ctx[0]));
 	exit(1);
     }
     if ((sts = pmGetArchiveLabel(&loglabel)) < 0) {
-	printf("%s: pmGetArchiveLabel(%d): %s\n", pmProgname, ctx[0], pmErrStr(sts));
+	printf("%s: pmGetArchiveLabel(%d): %s\n", pmGetProgname(), ctx[0], pmErrStr(sts));
 	exit(1);
     }
     if ((sts = pmSetMode(PM_MODE_INTERP, &loglabel.ll_start, 5)) < 0) {
-	printf("%s: pmSetMode: %s\n", pmProgname, pmErrStr(sts));
+	printf("%s: pmSetMode: %s\n", pmGetProgname(), pmErrStr(sts));
 	exit(1);
     }
     if ((ctx[1] = pmDupContext()) < 0) {
-	printf("%s: Cannot dup context: %s\n", pmProgname, pmErrStr(ctx[1]));
+	printf("%s: Cannot dup context: %s\n", pmGetProgname(), pmErrStr(ctx[1]));
 	exit(1);
     }
     if ((sts = pmGetArchiveLabel(&duplabel)) < 0) {
-	printf("%s: pmGetArchiveLabel(%d): %s\n", pmProgname, ctx[1], pmErrStr(sts));
+	printf("%s: pmGetArchiveLabel(%d): %s\n", pmGetProgname(), ctx[1], pmErrStr(sts));
 	exit(1);
     }
     if (loglabel.ll_magic != duplabel.ll_magic ||

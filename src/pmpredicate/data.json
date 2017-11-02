@@ -1,0 +1,11 @@
+{
+	"hotprocdata": [
+	{
+		"inst": "sda",
+		"disk.dev.aveq": 1421204,
+		"disk.dev.total_rawactive": 1417786,
+		"disk.dev.blktotal": 234263418,
+		"disk.dev.total_bytes": 117131709
+	}
+	]
+}

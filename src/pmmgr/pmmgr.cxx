@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016 Red Hat.
+ * Copyright (c) 2013-2017 Red Hat.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -74,23 +74,6 @@ sh_quote(const string& input)
 }
 
 
-// A little class that impersonates an ostream to the extent that it can
-// take << streaming operations.  It batches up the bits into an internal
-// stringstream until it is destroyed; then flushes to the original ostream.
-class obatched
-{
-private:
-  ostream& o;
-  stringstream stro;
-public:
-  obatched(ostream& oo): o(oo) {}
-  ~obatched() { o << stro.str(); o.flush(); }
-  operator ostream& () { return stro; }
-  template <typename T> ostream& operator << (const T& t) { stro << t; return stro; }
-};
-
-
-
 // Print a string to cout/cerr progress reports, similar to the
 // stuff produced by __pmNotifyErr
 ostream&
@@ -103,7 +86,7 @@ timestamp(ostream &o)
   if (now2)
     now2[19] = '\0'; // overwrite " YYYY \n"
 
-  return o << "[" << (now2 ? now2 : "") << "] " << pmProgname << "("
+  return o << "[" << (now2 ? now2 : "") << "] " << pmGetProgname() << "("
 	   << getpid()
 #ifdef HAVE_PTHREAD_H
 #ifdef IS_LINUX
@@ -119,25 +102,25 @@ timestamp(ostream &o)
 
 
 // Lightweight wrapper for pthread_mutex_t, incl. nonlocking non-pthread backup implementation
-struct lock_t {
+struct my_lock_t {
 #if HAVE_PTHREAD_H
 private:
   pthread_mutex_t _lock;
 public:
-  lock_t() { pthread_mutex_init(& this->_lock, NULL); }
-  ~lock_t() { pthread_mutex_destroy (& this->_lock); }
+  my_lock_t() { pthread_mutex_init(& this->_lock, NULL); }
+  ~my_lock_t() { pthread_mutex_destroy (& this->_lock); }
   void lock() { pthread_mutex_lock (& this->_lock); }
   void unlock() { pthread_mutex_unlock (& this->_lock); }
 #else
 public:
-  lock_t() {}
-  ~lock_t() {}
+  my_lock_t() {}
+  ~my_lock_t() {}
   void lock() {}
   void unlock() {}
 #endif
 private:
-  lock_t(const lock_t&); // make uncopyable
-  lock_t& operator=(lock_t const&); // make unassignable
+  my_lock_t(const my_lock_t&); // make uncopyable
+  my_lock_t& operator=(my_lock_t const&); // make unassignable
 };
 
 
@@ -145,12 +128,31 @@ private:
 struct locker
 {
 public:
-  locker(lock_t *_m): m(_m) { m->lock(); }
+  locker(my_lock_t *_m): m(_m) { m->lock(); }
   ~locker() { m->unlock(); }
 private:
-  lock_t* m;
+  my_lock_t* m;
 };
 
+
+
+// A little class that impersonates an ostream to the extent that it can
+// take << streaming operations.  It batches up the bits into an internal
+// stringstream until it is destroyed; then flushes to the original ostream.
+class my_lock_t;
+class obatched
+{
+private:
+  ostream& o;
+  stringstream stro;
+  static my_lock_t lock;
+public:
+  obatched(ostream& oo): o(oo) { }
+  ~obatched() { locker do_not_cross_the_streams(& obatched::lock); o << stro.str(); o.flush(); }
+  operator ostream& () { return stro; }
+  template <typename T> ostream& operator << (const T& t) { stro << t; return stro; }
+};
+my_lock_t obatched::lock; // just the one, since cout/cerr iostreams are not thread-safe
 
 
 extern "C" void *
@@ -167,7 +169,7 @@ pmmgr_daemon_poll_thread (void* a)
 int
 pmmgr_configurable::wrap_system(const std::string& cmd)
 {
-  if (pmDebug & DBG_TRACE_APPL1)
+  if (pmDebugOptions.appl1)
     timestamp(obatched(cout)) << "running " << cmd << endl;
 
   int pid = fork();
@@ -207,6 +209,45 @@ pmmgr_configurable::wrap_system(const std::string& cmd)
 }
 
 
+// A wrapper for something like popen(3), but responding quicker to
+// interrupts and standardizing tracing.
+string
+pmmgr_configurable::wrap_popen(const std::string& cmd)
+{
+  string output;
+  
+  if (pmDebug & DBG_TRACE_APPL1)
+    timestamp(obatched(cout)) << "pipe-running " << cmd << endl;
+
+  FILE* f = popen(cmd.c_str(), "r");
+  if (f == NULL)
+    {
+      timestamp(obatched(cerr)) << "failed to popen " << cmd << endl;
+      return output;
+    }
+
+  // Block, collecting all stdout from the child process.
+  // Expecting only quick & small snippets.
+  while (!quit)
+    {
+      char buf[1024];
+      size_t rc = fread(buf, 1, sizeof(buf), f);
+      output += string(buf,rc);
+      if (feof(f) || ferror(f))
+        break;
+    }
+
+  int status = pclose(f);
+  //timestamp(obatched(cout)) << "done status=" << status << endl;
+  if (status != 0)
+    timestamp(obatched(cerr)) << "popen(" << cmd << ") failed: rc=" << status << endl;
+
+  if (pmDebug & DBG_TRACE_APPL1)
+    timestamp(obatched(cout)) << "collected " << output << endl;
+
+  return output;
+}
+
 
 // ------------------------------------------------------------------------
 
@@ -231,8 +272,11 @@ pmmgr_configurable::get_config_multi(const string& file) const
       lines.push_back(line);
     if (! f.good())
       break;
+    // NB: an empty line is not necessarily a problem
+    #if 0
     if (line == "")
       timestamp(obatched(cerr)) << "file '" << file << "' parse warning: empty line ignored" << endl;
+    #endif
   }
 
   return lines;
@@ -277,7 +321,7 @@ pmmgr_configurable::timestamp(ostream& o) const
 // as it represents siply a parsing of a pcp metric-description string.
 
 static std::map<std::string,pmMetricSpec*> parsed_metric_cache;
-static lock_t parsed_metric_cache_lock;
+static my_lock_t parsed_metric_cache_lock;
 
 pmMetricSpec*
 pmmgr_job_spec::parse_metric_spec (const string& spec) const
@@ -479,7 +523,7 @@ struct pmcd_search_task
   // Single BKL to protect all shared data.  This should be sufficient
   // since the bulk of the time of the search threads should be
   // blocked in the network stack (attempting connections).
-  lock_t lock;
+  my_lock_t lock;
 
   pmmgr_job_spec *job; // reentrant/const members called from multiple threads
   set<pcp_context_spec>::const_iterator new_specs_iterator; // pointer into same
@@ -532,7 +576,7 @@ pmmgr_pmcd_search_thread (void *a)
 struct pmcd_choice_container_search_task
 {
   // Single BKL
-  lock_t lock;
+  my_lock_t lock;
 
   bool subtarget_containers; // RO: cached spec->get_config_exists()
 
@@ -689,11 +733,37 @@ pmmgr_job_spec::poll()
       free ((void*) urls);
     }
 
+  // probe kubernetes pods; assume they may be running pmcd at default port
+  if (get_config_exists ("target-kubectl-pod"))
+    {
+      string target_kubectl_pod = get_config_single("target-kubectl-pod");
+      string kubectl_cmd = "kubectl get pod -o " + sh_quote("jsonpath={.items[*].status.podIP}") +" "+ target_kubectl_pod;
+      string ips_str = wrap_popen(kubectl_cmd);
+      istringstream ips(ips_str);
+      while(ips.good())
+        {
+          string ip;
+          ips >> ip;
+          if (ip != "")
+            new_specs.insert(ip);
+        }
+    }
+
   // fallback to logging the local server, if nothing else is configured/discovered
   if (target_hosts.size() == 0 &&
-      target_discovery.size() == 0)
+      target_discovery.size() == 0 &&
+      !get_config_exists ("target-kubectl-pod"))
     new_specs.insert("local:");
 
+  if (pmDebug & DBG_TRACE_APPL1)
+    {
+      timestamp(obatched(cout)) << "poll targets" << endl;
+      for (set<string>::const_iterator it = new_specs.begin();
+           it != new_specs.end();
+           ++it)
+        timestamp(obatched(cout)) << *it << endl;
+    }
+  
   // phase 2: move previously-identified targets over, so we can tell who
   // has come or gone
   const map<pmmgr_hostid,pcp_context_spec> old_known_targets = known_targets;
@@ -739,7 +809,7 @@ pmmgr_job_spec::poll()
   parallel_do (min(num_threads, (int)t2.input->size()), &pmmgr_pmcd_choice_container_search_thread, &t2);
   assert (t2.input_iterator == t2.input_end);
 
-  if (pmDebug & DBG_TRACE_APPL1)
+  if (pmDebugOptions.appl1)
       {
 	  timestamp(obatched(cout)) << "poll results" << endl;
 	  for (map<pmmgr_hostid,pcp_context_spec>::const_iterator it = known_targets.begin();
@@ -987,7 +1057,7 @@ pmmgr_daemon::~pmmgr_daemon() // NB: possibly launched in a detached thread
 	// not dead yet ... try again a little harder
 	(void) kill ((pid_t) pid, SIGKILL);
       }
-      if (pmDebug & DBG_TRACE_APPL1)
+      if (pmDebugOptions.appl1)
 	timestamp(obatched(cout)) << "daemon pid " << pid << " killed" << endl;
     }
 }
@@ -1006,7 +1076,7 @@ void pmmgr_daemon::poll()
       rc = kill ((pid_t) pid, 0);
       if (rc < 0)
 	{
-	  if (pmDebug & DBG_TRACE_APPL0)
+	  if (pmDebugOptions.appl0)
 	    timestamp(obatched(cout)) << "daemon pid " << pid << " found dead" << endl;
 	  pid = 0;
 	  // we will try again immediately
@@ -1051,7 +1121,7 @@ void pmmgr_daemon::poll()
       // Enforce exec on even these shells.
       commandline = string("exec ") + commandline;
 
-      if (pmDebug & DBG_TRACE_APPL1)
+      if (pmDebugOptions.appl1)
 	timestamp(obatched(cout)) << "fork/exec sh -c " << commandline << endl;
       pid = fork();
       if (pid == 0) // child process
@@ -1069,7 +1139,7 @@ void pmmgr_daemon::poll()
 	}
       else // congratulations!	we're apparently a parent
 	{
-	  if (pmDebug & DBG_TRACE_APPL0)
+	  if (pmDebugOptions.appl0)
 	    timestamp(obatched(cout)) << "daemon pid " << pid << " started: " << commandline << endl;
 	}
     }
@@ -1118,6 +1188,7 @@ pmmgr_pmlogger_daemon::daemon_command_line()
 
   // collect -h direction
   pmlogger_options += " -h " + sh_quote(spec);
+  pmlogger_options += " -H " + sh_quote(hostid);
 
   // hard-code -r to report metrics & expected disk usage rate
   pmlogger_options += " -r";
@@ -1194,7 +1265,7 @@ pmmgr_pmlogger_daemon::daemon_command_line()
 
       // Find prior archives by globbing for archive-*.index files,
       // to exclude reduced-archives (if any).  (*.index files are
-      // optional as per pcp-archive.5, but pmlogger_merge.sh relies
+      // optional as per pmlogger(5), but pmlogger_merge(1) relies
       // on it.)
       vector<string> mergeable_archives; // those to merge
       glob_t the_blob;
@@ -1289,7 +1360,7 @@ pmmgr_pmlogger_daemon::daemon_command_line()
 
 		  if (label.ll_start.tv_sec >= prior_period_end) // archive too new?
 		    {
-		      if (pmDebug & DBG_TRACE_APPL1)
+		      if (pmDebugOptions.appl1)
 			timestamp(obatched(cout)) << "skipping merge of too-new archive " << base_name << endl;
 		      pmDestroyContext (ctx);
 		      continue;
@@ -1305,7 +1376,7 @@ pmmgr_pmlogger_daemon::daemon_command_line()
 
 		  if (archive_end.tv_sec < prior_period_start) // archive too old?
 		    {
-		      if (pmDebug & DBG_TRACE_APPL1)
+		      if (pmDebugOptions.appl1)
 			timestamp(obatched(cout)) << "skipping merge of too-old archive " << base_name << endl;
 		      pmDestroyContext (ctx);
 		      continue; // skip; gc later
@@ -1499,7 +1570,7 @@ pmmgr_pmlogger_daemon::logans_run_archive_glob(const std::string& glob_pattern,
               timestamp(obatched(cerr)) << "stat '" << the_blob.gl_pathv[i] << "' error; skipping cleanup" << endl;
               continue; // likely nothing can be done to this one
             }
-          if (pmDebug & DBG_TRACE_APPL1)
+          if (pmDebugOptions.appl1)
             timestamp(obatched(cout)) << "contemplating deletion of archive " << base_name
                                       << " (" << foo.st_mtime << "+" << retention_tv.tv_sec
                                       << " < " << now_tv.tv_sec << ")"
@@ -1702,15 +1773,11 @@ int main (int argc, char *argv[])
       switch (c)
 	{
 	case 'D': // undocumented
-	  if ((c = __pmParseDebug(opts.optarg)) < 0)
+	  if ((c = pmSetDebug(opts.optarg)) < 0)
 	    {
-	      pmprintf("%s: unrecognized debug flag specification (%s)\n",
-		       pmProgname, opts.optarg);
+	      pmprintf("%s: unrecognized debug options specification (%s)\n",
+		       pmGetProgname(), opts.optarg);
 	      opts.errors++;
-	    }
-	  else
-	    {
-	      pmDebug |= c;
 	    }
 	  break;
 
@@ -1719,17 +1786,17 @@ int main (int argc, char *argv[])
 	  break;
 
 	case 'v':
-	    if ((pmDebug & DBG_TRACE_APPL0) == 0)
-		pmDebug |= DBG_TRACE_APPL0;
+	    if (pmDebugOptions.appl0 == 0)
+		pmSetDebug("appl0");
 	    else
-		pmDebug |= DBG_TRACE_APPL1;
+		pmSetDebug("appl1");
 	  break;
 
 	case 'p':
 	  polltime = atoi(opts.optarg);
 	  if (polltime <= 0)
 	    {
-	      pmprintf("%s: poll time too short\n", pmProgname);
+	      pmprintf("%s: poll time too short\n", pmGetProgname());
 	      opts.errors++;
 	    }
 	  break;
@@ -1761,7 +1828,7 @@ int main (int argc, char *argv[])
   // NB: A failure from this call is of no significance: pmmgr is not
   // required to be run as uid pcp or root, so must not fail for the
   // mere inability to write into /var/run/pcp.
-  (void) __pmServerCreatePIDFile(pmProgname, 0);
+  (void) __pmServerCreatePIDFile(pmGetProgname(), 0);
 
 #ifndef IS_MINGW
     /* lose root privileges if we have them */

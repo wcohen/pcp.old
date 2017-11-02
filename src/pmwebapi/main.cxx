@@ -40,7 +40,7 @@ unsigned exit_p;		/* counted by SIG* handler */
 static __pmServerPresence *presence;
 unsigned multithread = 0;       /* set by -M option */
 unsigned graphite_timestep = 60;  /* set by -i option */
-unsigned graphite_archivedir = 0; /* set by -I option */
+unsigned graphite_hostcache = 0; /* set by -J option */
 string logfile = "";		/* set by -l option */
 string fatalfile = "/dev/tty";	/* fatal messages at startup go here */
 
@@ -58,7 +58,7 @@ mhd_notify_error (struct MHD_Connection *connection, int rc)
     struct MHD_Response *resp;
 
     (void) pmErrStr_r (rc, pmmsg, sizeof (pmmsg));
-    (void) snprintf (error_message, sizeof (error_message), "PMWEBD error, code %d: %s", rc,
+    (void) pmsprintf (error_message, sizeof (error_message), "PMWEBD error, code %d: %s", rc,
                      pmmsg);
     resp = MHD_create_response_from_buffer (strlen (error_message), error_message,
                                             MHD_RESPMEM_MUST_COPY);
@@ -250,7 +250,7 @@ mhd_respond (void *cls, struct MHD_Connection *connection, const char *url0,
             return pmgraphite_respond (connection, mhd_cc->params, url_tokens, url);
         }
         // graphite dashboard idiosyncracy; note absence of /graphite top level
-        else if (graphite_p && (method == "GET" || method == "POST") && 
+        else if (graphite_p && (method == "GET" || method == "POST") &&
                  ((url1 == "metrics" && url2 == "find") ||
                   (url1 == "render"))) {
             url_tokens.insert (url_tokens.begin() + 1 /* empty #0 */,
@@ -389,6 +389,7 @@ server_dump_configuration ()
 
     clog << "\tGraphite API " << (graphite_p ? "enabled" : "disabled") << endl;
     clog << "\tGraphite API name encoding " << (graphite_encode ? "long" : "short") << endl;
+    clog << "\tGraphite API metric naming " << (graphite_hostcache ? "hostname-based" : "file-based") << endl;
     clog << "\tGraphite API Cairo graphics rendering "
 #ifdef HAVE_CAIRO
          << "compiled-in"
@@ -487,6 +488,7 @@ longopts[] = {
     {"graphite-noencode", 0, 'X', 0, "don't encode special characters that are now allowed by graphite"},
     {"graphite-timestamp", 1, 'i', "SEC", "minimum graphite timestep (s) [default 60]"},
     {"graphite-archivedir", 0, 'I', 0, "prefer archive directories [default OFF]"},
+    {"graphite-host", 0, 'J', 0, "prefer hostname as metric component [default OFF]"},
     PMAPI_OPTIONS_HEADER ("Context options"),
     {"timeout", 1, 't', "SEC", "max time (seconds) for PMAPI polling [default 300]"},
     {"context", 1, 'c', "NUM", "set next permanent-binding context number"},
@@ -541,7 +543,7 @@ main (int argc, char *argv[])
     __pmGetUsername (&username_str);
     __pmServerSetFeature (PM_SERVER_FEATURE_DISCOVERY);
 
-    opts.short_options = "A:a:c:CD:h:Ll:NM:Pp:R:Gi:It:U:vx:d:SX46?";
+    opts.short_options = "A:a:c:CD:h:Ll:NM:Pp:R:GJi:It:U:vx:d:SX46?";
     opts.long_options = longopts;
     opts.override = option_overrides;
 
@@ -554,7 +556,7 @@ main (int argc, char *argv[])
         case 'p':
             port = (int) strtol (opts.optarg, &endptr, 0);
             if (*endptr != '\0' || port < 0 || port > 65535) {
-                pmprintf ("%s: invalid port number %s\n", pmProgname, opts.optarg);
+                pmprintf ("%s: invalid port number %s\n", pmGetProgname(), opts.optarg);
                 opts.errors++;
             }
             break;
@@ -562,7 +564,7 @@ main (int argc, char *argv[])
         case 't':
             maxtimeout = strtoul (opts.optarg, &endptr, 0);
             if (*endptr != '\0') {
-                pmprintf ("%s: invalid timeout %s\n", pmProgname, opts.optarg);
+                pmprintf ("%s: invalid timeout %s\n", pmGetProgname(), opts.optarg);
                 opts.errors++;
             }
             break;
@@ -582,13 +584,18 @@ main (int argc, char *argv[])
         case 'i':
             graphite_timestep = atoi (opts.optarg);
             if (graphite_timestep <= 0) {
-                pmprintf ("%s: timestep too small %s\n", pmProgname, opts.optarg);
+                pmprintf ("%s: timestep too small %s\n", pmGetProgname(), opts.optarg);
                 opts.errors++;
             }
             break;
 
         case 'I':
-            graphite_archivedir = 1;
+            pmprintf ("%s: %s option ignored\n", pmGetProgname(), opts.optarg);
+            /* graphite_archivedir = 1; */
+            break;
+
+        case 'J':
+            graphite_hostcache = 1;
             break;
 
         case 'A':
@@ -619,7 +626,7 @@ main (int argc, char *argv[])
         case 'c':
             perm_context = strtoul (opts.optarg, &endptr, 0);
             if (*endptr != '\0' || perm_context >= INT_MAX) {
-                pmprintf ("%s: invalid context number %s\n", pmProgname, opts.optarg);
+                pmprintf ("%s: invalid context number %s\n", pmGetProgname(), opts.optarg);
                 opts.errors++;
             }
             break;
@@ -700,12 +707,12 @@ main (int argc, char *argv[])
     }
 
     if (!permissive && localmode) {
-        pmprintf ( "%s: non-permissive and local-context modes are mutually exclusive\n", pmProgname);
+        pmprintf ( "%s: non-permissive and local-context modes are mutually exclusive\n", pmGetProgname());
         opts.errors++;
     }
 
     if (permissive && __pmServerHasFeature (PM_SERVER_FEATURE_CREDS_REQD)) {
-        pmprintf ( "%s: permissive and mandatory authentication modes are mutually exclusive\n", pmProgname);
+        pmprintf ( "%s: permissive and mandatory authentication modes are mutually exclusive\n", pmGetProgname());
         opts.errors++;
     }
 
@@ -785,7 +792,7 @@ main (int argc, char *argv[])
         }
     }
 
-    timestamp (clog) << pmProgname << endl;
+    timestamp (clog) << pmGetProgname() << endl;
     server_dump_request_ports (d4 != NULL, d6 != NULL, port);
     server_dump_configuration ();
 
@@ -801,6 +808,10 @@ main (int argc, char *argv[])
 
     /* Setup randomness for calls to random() */
     pmweb_init_random_seed ();
+
+    /* Scan all of our graphite archives. */
+    if (graphite_p)
+        ac_refresh_all(0);
 
     // A place to track utilization
     /* Block indefinitely. */
@@ -874,5 +885,9 @@ main (int argc, char *argv[])
     }
 
     pmweb_shutdown (d4, d6);
+    // clean up graphite archive cache
+    if (graphite_p)
+        ac_refresh_all (0);
+    
     return 0;
 }

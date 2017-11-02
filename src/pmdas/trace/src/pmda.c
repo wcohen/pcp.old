@@ -58,7 +58,7 @@ Options:\n\
   -T period   time over which samples are considered (default 60 seconds)\n\
   -U units    export observation values using the given units\n\
   -V units    export counter values using the given units\n",
-	      pmProgname);
+	      pmGetProgname());
     exit(1);
 }
 
@@ -99,15 +99,13 @@ parseAuth(char *spec)
     if (strncasecmp(spec, "disallow:", 9) == 0) {
 	p = squash(&spec[9], &offset);
 	if (p == NULL || p[0] == '\0') {
-	    fprintf(stderr, "%s: invalid disallow (%s)\n", pmProgname, spec);
+	    fprintf(stderr, "%s: invalid disallow (%s)\n", pmGetProgname(), spec);
 	    if (p)
 	    	free(p);
 	    return -1;
 	}
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL0)
+	if (pmDebugOptions.appl0)
 	    fprintf(stderr, "deny: host '%s'\n", p);
-#endif
 	denyops = TR_OP_SEND;
 	if (__pmAccAddHost(p, specops, denyops, 0) < 0)
 	    __pmNotifyErr(LOG_ERR, "failed to add authorisation (%s)", p);
@@ -116,7 +114,7 @@ parseAuth(char *spec)
     else if (strncasecmp(spec, "allow:", 6) == 0) {
 	p = squash(&spec[6], &offset);
 	if (p == NULL || p[0] == '\0') {
-	    fprintf(stderr, "%s: invalid allow (%s)\n", pmProgname, spec);
+	    fprintf(stderr, "%s: invalid allow (%s)\n", pmGetProgname(), spec);
 	    if (p)
 	    	free(p);
 	    return -1;
@@ -124,22 +122,20 @@ parseAuth(char *spec)
 	offset += 7;
 	maxconn = (int)strtol(&spec[offset], &endnum, 10);
 	if (*endnum != '\0' || maxconn < 0) {
-	    fprintf(stderr, "%s: bogus max connection in '%s'\n", pmProgname,
+	    fprintf(stderr, "%s: bogus max connection in '%s'\n", pmGetProgname(),
 		    &spec[offset]);
 	    free(p);
 	    return -1;
 	}
-#ifdef PCP_DEBUG
-	if (pmDebug & DBG_TRACE_APPL0)
+	if (pmDebugOptions.appl0)
 	    fprintf(stderr, "allow: host '%s', maxconn=%d\n", p, maxconn);
-#endif
 	denyops = TR_OP_NONE;
 	if (__pmAccAddHost(p, specops, denyops, maxconn) < 0)
 	    __pmNotifyErr(LOG_ERR, "failed to add authorisation (%s)", p);
 	free(p);
     }
     else {
-	fprintf(stderr, "%s: access spec is invalid (%s)\n", pmProgname, spec);
+	fprintf(stderr, "%s: access spec is invalid (%s)\n", pmGetProgname(), spec);
 	return -1;
     }
     return 0;
@@ -154,12 +150,12 @@ main(int argc, char **argv)
     int			sep = __pmPathSeparator();
     int			c = 0;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
     __pmGetUsername(&username);
 
-    snprintf(mypath, sizeof(mypath), "%s%c" "trace" "%c" "help",
+    pmsprintf(mypath, sizeof(mypath), "%s%c" "trace" "%c" "help",
 		pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
-    pmdaDaemon(&dispatch, PMDA_INTERFACE_2, pmProgname, TRACE,
+    pmdaDaemon(&dispatch, PMDA_INTERFACE_2, pmGetProgname(), TRACE,
 		"trace.log", mypath);
 
     /* need - port, as well as time interval and time span for averaging */
@@ -182,14 +178,14 @@ main(int argc, char **argv)
 	case 'N':
 	    rbufsize = (int)strtol(optarg, &endnum, 10);
 	    if (*endnum != '\0' || rbufsize < 1) {
-		fprintf(stderr, "%s: -N requires a positive number.\n", pmProgname);
+		fprintf(stderr, "%s: -N requires a positive number.\n", pmGetProgname());
 		err++;
 	    }
 	    break;
 	case 'T':
 	    if (pmParseInterval(optarg, &timespan, &endnum) < 0) {
 		fprintf(stderr, "%s: -T requires a time interval: %s\n",
-			pmProgname, endnum);
+			pmGetProgname(), endnum);
 		free(endnum);
 		err++;
 	    }
@@ -214,9 +210,7 @@ main(int argc, char **argv)
     interval.tv_usec = (long)((timespan.tv_sec % rbufsize) * 1000000);
     rbufsize++;		/* reserve space for the `working' buffer */
 
-#ifdef PCP_DEBUG
     debuglibrary(pmDebug);
-#endif
 
     pmdaOpenLog(&dispatch);
     __pmSetProcessIdentity(username);

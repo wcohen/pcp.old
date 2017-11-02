@@ -120,15 +120,13 @@ map_stats(void)
     } *smstat;
     
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL0) {
-    	fprintf(stderr, "%s: map_stats: Entering:\n", pmProgname);
-    	fprintf(stderr, "%s: map_stats:   Check: ptr       = " PRINTF_P_PFX "%p\n", pmProgname, ptr);
-    	fprintf(stderr, "%s: map_stats:   Check: statsfile = " PRINTF_P_PFX "%p\n", pmProgname, statsfile);
+    if (pmDebugOptions.appl0) {
+    	fprintf(stderr, "%s: map_stats: Entering:\n", pmGetProgname());
+    	fprintf(stderr, "%s: map_stats:   Check: ptr       = " PRINTF_P_PFX "%p\n", pmGetProgname(), ptr);
+    	fprintf(stderr, "%s: map_stats:   Check: statsfile = " PRINTF_P_PFX "%p\n", pmGetProgname(), statsfile);
     	if (statsfile != NULL)
-    	    fprintf(stderr, "%s: map_stats:                    = %s\n", pmProgname, statsfile);
+    	    fprintf(stderr, "%s: map_stats:                    = %s\n", pmGetProgname(), statsfile);
     }
-#endif
 
     if (statsfile == NULL || stat(statsfile, &statbuf) < 0) {
 	/* if sendmail not collecting stats this is expected */
@@ -138,23 +136,19 @@ map_stats(void)
 	    close(fd);
 	    ptr = NULL;
 	    notified &= ~MAPSTATS_NOTV2STRUCT;
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL0) {
-	    	fprintf(stderr, "%s: map_stats: (Maybe) stat() < 0; pmunmap() called\n", pmProgname);
+	    if (pmDebugOptions.appl0) {
+	    	fprintf(stderr, "%s: map_stats: (Maybe) stat() < 0; pmunmap() called\n", pmGetProgname());
 	    }
-#endif
 	}
 	return;
     }
 
-#ifdef PCP_DEBUG
-    if (pmDebug & DBG_TRACE_APPL0) {
-	fprintf(stderr, "%s: map_stats: Check: statbuf.st_ino =     %lu\n", pmProgname, (unsigned long)statbuf.st_ino);
-	fprintf(stderr, "%s: map_stats: Check: statbuf.st_dev =     %lu\n", pmProgname, (unsigned long)statbuf.st_dev);
-	fprintf(stderr, "%s: map_stats: Check: laststatbuf.st_ino = %lu\n", pmProgname, (unsigned long)laststatbuf.st_ino);
-	fprintf(stderr, "%s: map_stats: Check: laststatbuf.st_dev = %lu\n", pmProgname, (unsigned long)laststatbuf.st_dev);
+    if (pmDebugOptions.appl0) {
+	fprintf(stderr, "%s: map_stats: Check: statbuf.st_ino =     %lu\n", pmGetProgname(), (unsigned long)statbuf.st_ino);
+	fprintf(stderr, "%s: map_stats: Check: statbuf.st_dev =     %lu\n", pmGetProgname(), (unsigned long)statbuf.st_dev);
+	fprintf(stderr, "%s: map_stats: Check: laststatbuf.st_ino = %lu\n", pmGetProgname(), (unsigned long)laststatbuf.st_ino);
+	fprintf(stderr, "%s: map_stats: Check: laststatbuf.st_dev = %lu\n", pmGetProgname(), (unsigned long)laststatbuf.st_dev);
     }
-#endif
     if (statbuf.st_ino != laststatbuf.st_ino ||
 	statbuf.st_dev != laststatbuf.st_dev ||
 	ptr == NULL) {
@@ -177,23 +171,21 @@ map_stats(void)
 	    close(fd);
 	    ptr = NULL;
 	    notified &= ~MAPSTATS_NOTV2STRUCT;
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL0) {
-	    	fprintf(stderr, "%s: map_stats: statbuf.st_[dev|ido] changed; pmunmap() called\n", pmProgname);
+	    if (pmDebugOptions.appl0) {
+	    	fprintf(stderr, "%s: map_stats: statbuf.st_[dev|ido] changed; pmunmap() called\n", pmGetProgname());
 	    }
-#endif
 	}
 
 	if ((fd = open(statsfile, O_RDONLY)) < 0) {
 	    __pmNotifyErr(LOG_WARNING, "%s: map_stats: cannot open(\"%s\",...): %s",
-			pmProgname, statsfile, osstrerror());
+			pmGetProgname(), statsfile, osstrerror());
 	    return;
 	}
 	ptr = __pmMemoryMap(fd, statbuf.st_size, 0);
 	if (ptr == NULL) {
 	    if (!(notified & MAPSTATS_MAPFAIL)) {
 		__pmNotifyErr(LOG_ERR, "%s: map_stats: memmap of %s failed: %s",
-			    pmProgname, statsfile, osstrerror());
+			    pmGetProgname(), statsfile, osstrerror());
     	    }
 	    close(fd);
 	    ptr = NULL;
@@ -203,11 +195,9 @@ map_stats(void)
 
 	laststatbuf = statbuf;		/* struct assignment */
 	notified &= ~(MAPSTATS_NULL | MAPSTATS_MAPFAIL);
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL0) {
-	    	fprintf(stderr, "%s: map_stats: mmap() called, succeeded\n", pmProgname);
+	    if (pmDebugOptions.appl0) {
+	    	fprintf(stderr, "%s: map_stats: mmap() called, succeeded\n", pmGetProgname());
 	    }
-#endif
 
 	/*  Check for a statistics file from sendmail(1) 8.x: */
 	smstat = (struct smstat_s *)ptr;
@@ -215,22 +205,20 @@ map_stats(void)
 	  smstat->stat_version != STAT_VERSION) {
 	    if (! (notified & MAPSTATS_NOTV2STRUCT)) {
 	    	__pmNotifyErr(LOG_WARNING, "%s: map_stats: cannot find magic number in file %s; assuming version 1 format",
-			pmProgname, statsfile);
-#ifdef PCP_DEBUG
-		if (pmDebug & DBG_TRACE_APPL0) {
-		    fprintf(stderr, "%s: map_stats: smstat_s contents:\n", pmProgname);
-		    fprintf(stderr, "%s: map_stats:   Version 2 format:\n", pmProgname);
-		    fprintf(stderr, "%s: map_stats:     Check: stat_magic =   0x%x\n", pmProgname, smstat->stat_magic);
-		    fprintf(stderr, "%s: map_stats:     Check: stat_version = 0x%x\n", pmProgname, smstat->stat_version);
-		    fprintf(stderr, "%s: map_stats:     Check: stat_itime =   %s", pmProgname, ctime(&(smstat->stat_itime)));
-		    fprintf(stderr, "%s: map_stats:     Check: stat_size =    %d\n", pmProgname, smstat->stat_size);
+			pmGetProgname(), statsfile);
+		if (pmDebugOptions.appl0) {
+		    fprintf(stderr, "%s: map_stats: smstat_s contents:\n", pmGetProgname());
+		    fprintf(stderr, "%s: map_stats:   Version 2 format:\n", pmGetProgname());
+		    fprintf(stderr, "%s: map_stats:     Check: stat_magic =   0x%x\n", pmGetProgname(), smstat->stat_magic);
+		    fprintf(stderr, "%s: map_stats:     Check: stat_version = 0x%x\n", pmGetProgname(), smstat->stat_version);
+		    fprintf(stderr, "%s: map_stats:     Check: stat_itime =   %s", pmGetProgname(), ctime(&(smstat->stat_itime)));
+		    fprintf(stderr, "%s: map_stats:     Check: stat_size =    %d\n", pmGetProgname(), smstat->stat_size);
 		    
 		    /* We're being difficult here... using smstat_s the wrong way! */
-		    fprintf(stderr, "%s: map_stats:   Version 1 format:\n", pmProgname);
-		    fprintf(stderr, "%s: map_stats:     Check: stat_itime =   %s", pmProgname, ctime((time_t *)&(smstat->stat_magic)));
-		    fprintf(stderr, "%s: map_stats:     Check: stat_size =    %d\n", pmProgname, *((short *)&(smstat->stat_version)));
+		    fprintf(stderr, "%s: map_stats:   Version 1 format:\n", pmGetProgname());
+		    fprintf(stderr, "%s: map_stats:     Check: stat_itime =   %s", pmGetProgname(), ctime((time_t *)&(smstat->stat_magic)));
+		    fprintf(stderr, "%s: map_stats:     Check: stat_size =    %d\n", pmGetProgname(), *((short *)&(smstat->stat_version)));
 		}
-#endif
 		notified |= MAPSTATS_NOTV2STRUCT;
 	    }
 	    
@@ -281,10 +269,8 @@ do_sendmail_cf(void)
 	    /* this is pretty serious! */
 	    nmailer = 0;
 	    statsfile = NULL;
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL0)
+	    if (pmDebugOptions.appl0)
 		fprintf(stderr, "Warning: cannot find sendmail.cf, so no stats!\n");
-#endif
 	    return;
 	}
     }
@@ -316,11 +302,9 @@ do_sendmail_cf(void)
 		indomtab[MAILER_INDOM].it_set = (pmdaInstid *)realloc(indomtab[MAILER_INDOM].it_set, (nmailer+1) * sizeof(pmdaInstid));
 		indomtab[MAILER_INDOM].it_set[nmailer].i_name = strdup(&buf[1]);
 		indomtab[MAILER_INDOM].it_set[nmailer].i_inst = nmailer;
-#ifdef PCP_DEBUG
-		if (pmDebug & DBG_TRACE_APPL0)
+		if (pmDebugOptions.appl0)
 		    fprintf(stderr, "sendmail.cf[%d]: mailer \"%s\" inst=%d\n",
 			lineno, &buf[1], nmailer);
-#endif
 		nmailer++;
 	    }
 	}
@@ -346,11 +330,9 @@ do_sendmail_cf(void)
 	    *bp = '\0';
 
 	    statsfile = strdup(tp);
-#ifdef PCP_DEBUG
-	    if (pmDebug & DBG_TRACE_APPL0)
+	    if (pmDebugOptions.appl0)
 		fprintf(stderr, "sendmail.cf[%d]: statsfile \"%s\"\n",
 		    lineno, tp);
-#endif
 	}
     }
     fclose(fp);
@@ -500,12 +482,12 @@ main(int argc, char **argv)
     pmdaInterface	dispatch;
     char		mypath[MAXPATHLEN];
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
     __pmGetUsername(&username);
 
-    snprintf(mypath, sizeof(mypath), "%s%c" "sendmail" "%c" "help",
+    pmsprintf(mypath, sizeof(mypath), "%s%c" "sendmail" "%c" "help",
 		pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
-    pmdaDaemon(&dispatch, PMDA_INTERFACE_3, pmProgname, SENDMAIL,
+    pmdaDaemon(&dispatch, PMDA_INTERFACE_3, pmGetProgname(), SENDMAIL,
 		"sendmail.log", mypath);
 
     pmdaGetOptions(argc, argv, &opts, &dispatch);

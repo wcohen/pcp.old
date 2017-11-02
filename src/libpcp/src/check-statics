@@ -269,6 +269,10 @@ events.o
     ?caller                     # const
     ?pmUnpackEventRecords.caller		# const
     ?pmUnpackHighResEventRecords.caller	# const
+exec.o
+    exec_lock			# local mutex
+    map				# guarded by exec_lock mutex
+    nmap			# guarded by exec_lock mutex
 fault.o
 fetchlocal.o
     splitlist			# single-threaded PM_SCOPE_DSO_PMDA
@@ -315,6 +319,8 @@ ipc.o
     __pmLastUsedFd		# guarded by ipc_lock mutex
     ipcentrysize		# guarded by ipc_lock mutex
     ipctablecount		# guarded by ipc_lock mutex
+jsmn.o
+labels.o
 lock.o
     lock_lock			# local mutex
     __pmLock_libpcp		# the global libpcp mutex
@@ -367,9 +373,6 @@ pdu.o
     pdu_lock			# local mutex
     req_wait			# guarded by pdu_lock mutex
     req_wait_done		# guarded by pdu_lock mutex
-    pmDebug			# set-once from main(), read-only elsewhere
-    				# also guarded by __pmLock_extcall when set
-				# from __pmInitLocks()
     ceiling			# no unsafe side-effects
     ?sigpipe_done		# guarded by pdu_lock mutex
     mypid			# no unsafe side-effects
@@ -386,6 +389,7 @@ profile.o
 p_text.o
 p_fetch.o
 p_instance.o
+p_label.o
 p_lcontrol.o
 p_lrequest.o
 p_lstatus.o
@@ -415,6 +419,7 @@ pmns.o
     ?curr_pmns			# thread private (no __thread symbols for Mac OS X)
     ?__emutls_t.curr_pmns	# thread private for OpenBSD
     locerr			# no unsafe side-effects, see notes in pmns.c
+    argp			# guarded by exec_lock
 p_pmns.o
 p_profile.o
 p_result.o
@@ -468,6 +473,10 @@ util.o
     ?num_debug			# const
     pmState			# no unsafe side-effects, see notes in util.c
     pmProgname			# no unsafe side-effects, see notes in util.c
+    pmDebug			# set-once from main(), read-only elsewhere
+    				# also guarded by __pmLock_extcall when set
+				# from __pmInitLocks()
+    pmDebugOptions		# same story as pmDebug
     filelog			# guarded by util_lock mutex
     nfilelog			# guarded by util_lock mutex
     dosyslog			# no unsafe side-effects, see notes in util.c
@@ -489,6 +498,7 @@ util.o
     xconfirm			# no unsafe side-effects, see notes in util.c
     tmpdir_init			# no unsafe side-effects, see notes in util.c
     tmpdir			# no unsafe side-effects, see notes in util.c
+pmapi_old.o
 ?win32.o
 END				# this is magic, DO NOT DELETE THIS LINE
 End-of-File

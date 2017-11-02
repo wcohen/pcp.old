@@ -32,7 +32,6 @@ dometric(const char *name)
     int		*instlist = NULL;
     char	**instname = NULL;
     pmResult	*result;
-    extern int	pmDebug;
 
     _metrics++;
 
@@ -71,12 +70,12 @@ dometric(const char *name)
 	else {
 	    if (result->vset[0]->valfmt == PM_VAL_INSITU) {
 		_insitu++;
-		if (pmDebug & DBG_TRACE_APPL0)
+		if (pmDebugOptions.appl0)
 		    printf("%s: insitu type=%s\n", name, pmTypeStr(desc.type));
 	    }
 	    else {
 		_ptr++;
-		if (pmDebug & DBG_TRACE_APPL0)
+		if (pmDebugOptions.appl0)
 		    printf("%s: ptr size=%d valtype=%d descrtype=%s\n",
 			    name,
 			    result->vset[0]->vlist[0].value.pval->vlen,
@@ -102,31 +101,22 @@ char *argv[];
     char	*endnum;
     int		iter = 1;
     unsigned long datasize;
-#ifdef PCP_DEBUG
-    static char	*debug = "[-D N]";
-#else
-    static char	*debug = "";
-#endif
-    static char	*usage = "[-h hostname] [-i iterations] [-n namespace] [-l licenseflag ] [name ...]";
+    static char	*usage = "[-D debugspec] [-h hostname] [-i iterations] [-n namespace] [-l licenseflag ] [name ...]";
 
     __pmProcessDataSize(NULL);
-    __pmSetProgname(pmProgname);
+    pmSetProgname(pmGetProgname());
 
     while ((c = getopt(argc, argv, "D:h:i:l:n:")) != EOF) {
 	switch (c) {
 
-#ifdef PCP_DEBUG
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
-#endif
 
 	case 'h':	/* hostname for PMCD to contact */
 	    host = optarg;
@@ -135,7 +125,7 @@ char *argv[];
 	case 'i':	/* iteration count */
 	    iter = (int)strtol(optarg, &endnum, 10);
 	    if (*endnum != '\0') {
-		fprintf(stderr, "%s: -i requires numeric argument\n", pmProgname);
+		fprintf(stderr, "%s: -i requires numeric argument\n", pmGetProgname());
 		errflag++;
 	    }
 	    break;
@@ -152,14 +142,14 @@ char *argv[];
     }
 
     if (errflag) {
-	fprintf(stderr, "Usage: %s %s%s\n", pmProgname, debug, usage);
+	fprintf(stderr, "Usage: %s %s\n", pmGetProgname(), usage);
 	exit(1);
     }
 
     sts = pmNewContext(PM_CONTEXT_HOST, host);
 
     if (sts < 0) {
-	printf("%s: Cannot connect to PMCD on host \"%s\": %s\n", pmProgname, host, pmErrStr(sts));
+	printf("%s: Cannot connect to PMCD on host \"%s\": %s\n", pmGetProgname(), host, pmErrStr(sts));
 	exit(1);
     }
 
@@ -168,7 +158,7 @@ char *argv[];
 	 * only explicitly load namespace if -n specified
 	 */
 	if ((sts = pmLoadASCIINameSpace(namespace, 1)) < 0) {
-	    printf("%s: Cannot load namespace from \"%s\": %s\n", pmProgname, namespace, pmErrStr(sts));
+	    printf("%s: Cannot load namespace from \"%s\": %s\n", pmGetProgname(), namespace, pmErrStr(sts));
 	    exit(1);
 	}
     }

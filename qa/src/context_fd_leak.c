@@ -40,12 +40,12 @@ main(int argc, char* argv[])
     char	*endp;
     int		fd;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     if (argc != 2) {
 	fprintf(stderr,
 		"Usage: %s count\nwhere count is the number of runs required\n",
-		pmProgname);
+		pmGetProgname());
 	exit(1);
     }
     run = strtol(argv[1], &endp, 0);
@@ -88,16 +88,17 @@ main(int argc, char* argv[])
 	}
 	else {
 	    char*	childArgv[3];
-	    int		sts;
+	    int		sts, len;
 
 	    childArgv[0] = argv[0];
 	    /* numeric arguments will get shorter, not longer so this is safe */
+	    len = strlen(argv[1]) + 1;
 	    childArgv[1] = strdup(argv[1]);
 	    if (childArgv[1] == NULL) {
 		perror("can't copy argv[1]\n");
 		exit(1);
 	    }
-	    sprintf(childArgv[1], "%ld", run - 1);
+	    pmsprintf(childArgv[1], len, "%ld", run - 1);
 	    childArgv[2] = NULL;
 	    sts = execvp(childArgv[0], childArgv);
 	    if (sts < 0) {

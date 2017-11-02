@@ -47,36 +47,32 @@ main(int argc, char **argv)
     char	local[MAXHOSTNAMELEN];
     char	*namespace = PM_NS_DEFAULT;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "a:D:h:n:V?")) != EOF) {
 	switch (c) {
 
 	case 'a':	/* archive name */
 	    if (type != 0) {
-		fprintf(stderr, "%s: at most one of -a and/or -h allowed\n", pmProgname);
+		fprintf(stderr, "%s: at most one of -a and/or -h allowed\n", pmGetProgname());
 		errflag++;
 	    }
 	    type = PM_CONTEXT_ARCHIVE;
 	    host = optarg;
 	    break;
 
-#ifdef PCP_DEBUG
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
-#endif
 
 	case 'h':	/* contact PMCD on this hostname */
 	    if (type != 0) {
-		fprintf(stderr, "%s: at most one of -a and/or -h allowed\n", pmProgname);
+		fprintf(stderr, "%s: at most one of -a and/or -h allowed\n", pmGetProgname());
 		errflag++;
 	    }
 	    host = optarg;
@@ -104,16 +100,16 @@ main(int argc, char **argv)
 \n\
 Options:\n\
   -a   archive	  metrics source is an archive log\n\
-  -D   debug	  standard PCP debug flag\n\
+  -D   debugspec  standard PCP debugging options\n\
   -h   host	  metrics source is PMCD on host\n\
   -n   namespace  use an alternative PMNS\n\
   -V 	          verbose/diagnostic output\n",
-		pmProgname);
+		pmGetProgname());
 	exit(1);
     }
 
     if (namespace != PM_NS_DEFAULT && (sts = pmLoadASCIINameSpace(namespace, 1)) < 0) {
-	printf("%s: Cannot load namespace from \"%s\": %s\n", pmProgname, namespace, pmErrStr(sts));
+	printf("%s: Cannot load namespace from \"%s\": %s\n", pmGetProgname(), namespace, pmErrStr(sts));
 	exit(1);
     }
 
@@ -125,10 +121,10 @@ Options:\n\
     if ((sts = pmNewContext(type, host)) < 0) {
 	if (type == PM_CONTEXT_HOST)
 	    fprintf(stderr, "%s: Cannot connect to PMCD on host \"%s\": %s\n",
-		pmProgname, host, pmErrStr(sts));
+		pmGetProgname(), host, pmErrStr(sts));
 	else
 	    fprintf(stderr, "%s: Cannot open archive \"%s\": %s\n",
-		pmProgname, host, pmErrStr(sts));
+		pmGetProgname(), host, pmErrStr(sts));
 	exit(1);
     }
 
@@ -152,9 +148,9 @@ Options:\n\
 	    int		i;
 	    putchar('\n');
 	    if (sts < 0)
-		fprintf(stderr, "%s: pmLookupName: %s\n", pmProgname, pmErrStr(sts));
+		fprintf(stderr, "%s: pmLookupName: %s\n", pmGetProgname(), pmErrStr(sts));
 	    else
-		fprintf(stderr, "%s: pmLookupName: returned %d, expected %d\n", pmProgname, sts, todolist[todo].numpmid);
+		fprintf(stderr, "%s: pmLookupName: returned %d, expected %d\n", pmGetProgname(), sts, todolist[todo].numpmid);
 	    for (i = 0; i < todolist[todo].numpmid; i++) {
 		if (todolist[todo].pmidlist[i] == PM_ID_NULL)
 		    fprintf(stderr, "   %s is bad\n", todolist[todo].namelist[i]);
@@ -164,7 +160,7 @@ Options:\n\
 	sts = pmFetch(todolist[todo].numpmid, todolist[todo].pmidlist, &todolist[todo].rp);
 	if (sts < 0) {
 	    putchar('\n');
-	    fprintf(stderr, "%s: pmFetch: %s\n", pmProgname, pmErrStr(sts));
+	    fprintf(stderr, "%s: pmFetch: %s\n", pmGetProgname(), pmErrStr(sts));
 	    exit(1);
 	}
 	if (verbose)
@@ -206,7 +202,7 @@ next:
 	sts = pmFetch(todolist[n].numpmid, todolist[n].pmidlist, &todolist[n].rp);
 	if (sts < 0) {
 	    putchar('\n');
-	    fprintf(stderr, "%s: pmFetch: %s\n", pmProgname, pmErrStr(sts));
+	    fprintf(stderr, "%s: pmFetch: %s\n", pmGetProgname(), pmErrStr(sts));
 	    exit(1);
 	}
 	if (todolist[n].numpmid != todolist[n].rp->numpmid)

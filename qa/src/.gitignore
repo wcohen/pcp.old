@@ -7,6 +7,7 @@
 agenttimeout
 aggrstore
 anon-sa
+archctl_segfault
 archfetch
 archinst
 arch_maxfd
@@ -17,6 +18,7 @@ badmmv
 badpmcdpmid
 badpmda
 batch_import.pl
+chain
 check_fault_injection
 check_import
 check_import_name
@@ -56,6 +58,7 @@ endian
 eofarch
 eol
 err
+exectest
 exercise
 exercise_fault
 exerlock
@@ -73,6 +76,7 @@ getversion
 github-50
 grind_conv
 grind_ctx
+hanoi
 hashwalk
 hex2nbo
 hp-mib
@@ -80,6 +84,8 @@ hrunpack
 httpfetch
 import_limit_test.pl
 indom
+int2indom
+int2pmid
 interp0
 interp1
 interp2
@@ -92,12 +98,15 @@ json_test
 keycache
 keycache2
 killparent
+labels
 loadderived
 loadconfig2
 logcontrol
 lookupnametest
 mark-bug
 matchInstanceName
+mergelabels
+mergelabelsets
 mkfiles
 mmv_genstats
 mmv_instances
@@ -163,6 +172,7 @@ pmnsunload
 pmpost-exploit
 pmprintf
 pmsocks_objstyle
+pmsprintf
 pmtimezone.so
 proc_test
 pv
@@ -198,6 +208,7 @@ torture_trace
 tstate
 tztest
 unpack
+unpickargs
 units-parse
 username
 whichtimezone

@@ -107,19 +107,26 @@ class ScanPrometheus(object):
 			self.description = None
 			self.instances = None
 			self.type = None
+			self.labels = None
 			self.semantics = None
 			self.units_str = None
 			self.prometheus_name = None
 
-		def add_instance(self, name, prometheus_name):
+		def add_instance(self, name, prometheus_name, labels):
 			# Adds the instances to the metric
 			if self.instances == None:
 				self.instances = []
-			self.instances.append({"name": name, "prometheus_name": prometheus_name})
+			self.instances.append({
+				"name": name,
+				"prometheus_name": prometheus_name,
+				"labels": labels
+			})
 
 		def export(self):
 			# Returns a dictionary of attributes with non null values
 			metadata = {}
+			if self.instances is not None:
+				self.labels = None
 			for key in self.__dict__:
 				if self.__dict__[key] is not None:
 					metadata[key] = self.__dict__[key]
@@ -166,42 +173,60 @@ class ScanPrometheus(object):
 				raise ValueError("Unable to connect to the Prometheus "
 									"endpoint = %s\n%s" % (self.endpoint, str(e)))
 
-	def get_metric_metadata(self, lines):
-		# Returns the metric metadata name, descriptions and type
-		# First commented line of the metric is the description
-		# Second commented line of the metric is the type
-		tokens = lines[0].split(' ')
-		description = ' '.join(tokens[3:])
-		name = tokens[2]
-		type_ = lines[1].split(' ')[3]
-		return (description, name, type_)
+	def get_metric(self, name):
+		metric = self.metrics_by_name.get(name)
+		if metric == None:
+			metric = self.Metric()
+			metric.name = name
+			metric.type = DOUBLE
+			metric.semantics = INSTANT
+			metric.units_str = self.get_metric_units(name)
+			self.metrics_by_name[name] = metric
+		return metric
 
 	def get_metric_instance(self, s):
 		# Returns the instances of the Prometheus metric
 		# labels of Prometheus metric is translated into the labels
 		i = 0
-		while i < len(s) and s[i]!=' ' and s[i]!='{':
+		while i < len(s) and s[i] != ' ' and s[i] != '{':
 			i+=1
-		if i==len(s):
+		if i == len(s):
 			raise Exception("Incorrect metric line: %s" % s)
 		# Metric without instances
-		if s[i]==' ':
-			return (s[:i], s[:i], None)
-
 		name = s[:i]
+		prometheus_name = s[:i]
+		instance = None
+		tokens = name.split('_')
+
+		if tokens[len(tokens) - 1] in ["sum", "count", "bucket"]:
+			tempname = '_'.join(tokens[ : len(tokens) - 1])
+			if self.metrics_by_name.get(tempname) != None:
+				name = tempname
+				instance = tokens[len(tokens) - 1]
+
+		if s[i] == ' ':
+			return (prometheus_name, name, instance, None)
+
 		instance = []
-		while s[i]!='}':
+		labels = []
+		while s[i] != '}':
 			j = i + s[i:].find('=')
-			if j==-1:
+			if j == -1:
 				raise Exception("Incorrect metric line: %s" % s)
+			key = s[i+1:j]
+			valIndex = j + 1
 			j += 2
 			while j < len(s):
 				if s[j] == '"' and s[j-1] != '\\':
 					break
 				j += 1
+			value = s[valIndex: j+1]
+			label = "\"%s\": %s" %(key, value)
+			labels.append(label)
 			instance.append(s[i+1: j+1])
 			i = j+1
-		return (s[:i+1], name, "::".join(instance))
+		labels_str = "{" + ','.join(labels) + '}'
+		return (s[:i+1], name, "::".join(instance), labels_str)
 
 	def get_metric_units(self, name):
 		if name.endswith("_seconds"):
@@ -215,50 +240,37 @@ class ScanPrometheus(object):
 			return pmContext.pmUnitsStr(pmUnits(0,0,1))
 		return ""
 
-	def parse_metric(self, lines):
-		''' Iterates over the instances of a metric '''
-		(description, name, type_) = self.get_metric_metadata(lines)
-		metric = self.Metric()
-		metric.name = name
-		metric.description = description
-		metric.type = DOUBLE
-		metric.units_str = self.get_metric_units(name)
-		if type_ == "counter":
+	def parse_comment(self, line):
+		tokens = line.split()
+		if len(tokens) < 3 or tokens[0] != '#':
+			return
+		name = tokens[2]
+		metric = self.get_metric(name)
+		if tokens[1] == "HELP":
+			metric.description = ' '.join(tokens[3:])
+		elif tokens[1] == "TYPE" and tokens[3] == "counter":
 			metric.semantics = COUNTER
-		else:
-			metric.semantics = INSTANT
 
-		for line in lines[2:]:
-			(prometheus_name, name, instance) = self.get_metric_instance(line)
-			if not self.metrics_by_name.get(name):
-				metric.name = name
-				metric.prometheus_name = None
-				metric.instances = None
-				self.metrics_by_name[name] = copy.deepcopy(metric)
-			if instance:
-				self.metrics_by_name[name].add_instance(instance, prometheus_name)
-			else:
-				self.metrics_by_name[name].prometheus_name = prometheus_name
+	def parse_metric(self, line):
+		''' Iterates over the instances of a metric '''
+		(prometheus_name, name, instance, label) = self.get_metric_instance(line)
+		metric = self.get_metric(name)
+		if instance:
+			metric.add_instance(instance, prometheus_name, label)
+		else:
+			metric.prometheus_name = prometheus_name
 
 	def parse_raw(self):
 		''' Iterates over all the metrics in the source'''
 		lines = self.raw_metrics.splitlines()
-		lineIter = 0
-		while lineIter<len(lines):
-			if len(lines[lineIter]) == 0:
-				return
-			if lines[lineIter][0] != "#" \
-				or lines[lineIter+1][0] != '#':
-				raise ValueError("Invalid format of Prometheus metrics metadata"
-					"\n%s" %(lines[lineIter]))
-			metricLines = [lines[lineIter], lines[lineIter+1]]
-			metricIter = lineIter + 2
-			while (metricIter < len(lines) and len(lines[metricIter])!=0 \
-				and lines[metricIter][0] != '#'):
-				metricLines.append(lines[metricIter])
-				metricIter += 1
-			lineIter = metricIter
-			self.parse_metric(metricLines)
+		for line in lines:
+			line = line.strip()
+			if len(line) == 0:
+				continue
+			elif line[0] == '#':
+				self.parse_comment(line)
+			else:
+				self.parse_metric(line)
 
 class Metric(object):
 	''' Metric information class '''
@@ -272,14 +284,15 @@ class Metric(object):
 		self.name_prefix = name_prefix
 		self.sem = c_api.PM_SEM_INSTANT
 		self.type = c_api.PM_TYPE_UNKNOWN
-		self.__units_val = pmUnits(0, 0, 0, 0, 0, 0)
 		self.instances = None
 		self.instance_by_name = {}
 		self.cluster = cluster
 		self.idx = -1
-		self.__pmda = pmda
 		self.obj = None
+		self.label = None
+		self.__pmda = pmda
 		self.__indom_cache = None
+		self.__units_val = pmUnits(0, 0, 0, 0, 0, 0)
 
 	def log(self, string):
 		''' Log an informational message '''
@@ -332,28 +345,31 @@ class Metric(object):
 	def parse(self, json_obj):
 		''' Parses the metric metadata JSON '''
 		try:
-			self.name = json_obj["name"]
-			self.description = json_obj["description"]
+			self.name = json_obj.get("name")
+			self.description = json_obj.get("description")
 
-			type_ = json_obj["type"]
+			type_ = json_obj.get("type")
 			# Types can be only of the TYPES constant
 			if not TYPES.get(type_):
 				raise ValueError("Invalid type: %s" %(type_))
 			self.type = TYPES.get(type_)
 
-			semantics = json_obj["semantics"]
+			semantics = json_obj.get("semantics")
 			if not SEMANTICS.get(semantics):
 				raise ValueError("Invalid semantic: %s" %(semantics))
 			self.semantics = SEMANTICS.get(semantics)
-			(unit, val) = pmContext.pmParseUnitsStr(json_obj["units_str"])
+			(unit, val) = pmContext.pmParseUnitsStr(json_obj.get("units_str"))
 			self.__units_val = unit
-			self.units_str = json_obj["units_str"]
+			self.units_str = json_obj.get("units_str")
 			self.prometheus_name = json_obj.get("prometheus_name")
 			self.instances = json_obj.get("instances")
+			self.label = json_obj.get("label")
 			if self.instances:
 				for instance in self.instances:
-					self.instance_by_name[instance["name"]] \
-						= instance["prometheus_name"]
+					self.instance_by_name[instance["name"]] = {
+						"name": instance["prometheus_name"],
+						"label": instance["labels"]
+					}
 		except ValueError as e:
 			raise e
 
@@ -374,6 +390,29 @@ class Metric(object):
 			self.obj = pmdaMetric(self.pmid, self.type, c_api.PM_INDOM_NULL,
 								  self.sem, self.__units_val)
 
+	def label_func(self, inst=c_api.PM_IN_NULL):
+		''' Label value of this instance '''
+		ret_label = "{}"
+		if self.__indom_cache:
+			if inst == c_api.PM_INDOM_NULL:
+				self.log("Empty instance on label for metric %s" \
+					% self.name)
+			try:
+				name = self.__indom_cache.lookup_value(inst)
+				label = self.instance_by_name[name]["label"]
+				if label is not None:
+					ret_label = label
+			except Exception as e:
+				self.log("Invalid instance given for metric on label: %s" \
+					% self.name)
+		else:
+			if inst != c_api.PM_INDOM_NULL:
+				self.log("Invalid instance given for single metric type on "
+					"label: %s" % self.name)
+			elif self.label is not None:
+				ret_label = self.label
+		return ret_label
+
 	def fetch(self, inst, values):
 		''' Fetch value of this metric '''
 		if self.__indom_cache:
@@ -383,7 +422,7 @@ class Metric(object):
 				return [c_api.PM_ERR_INDOM, 0]
 			try:
 				name = self.__indom_cache.lookup_value(inst)
-				prometheus_name = self.instance_by_name[name]
+				prometheus_name = self.instance_by_name[name]["name"]
 				return [values[prometheus_name], 1]
 			except Exception:
 				self.log("Invalid instance given for metric on fetch: %s %d" \
@@ -563,6 +602,7 @@ class IndomCache(pmdaIndom):
 class PrometheusSource(object):
 
 	def __init__(self, path, pmda):
+		self.__labels = None
 		self.__cluster = None
 		self.pmda = pmda
 		self.path = path
@@ -582,6 +622,10 @@ class PrometheusSource(object):
 
 		if not self.prepare_passed:
 			self.log("Prometheus Source creation failed for %s" % self.path)
+
+	@property
+	def labels(self):
+		return self.__labels
 
 	@property
 	def cluster(self):
@@ -684,6 +728,7 @@ class PrometheusSource(object):
 					break
 			indom = IndomCache(indom_idx, MAX_INDOM, self.pmda)
 			metric.indom_cache = indom
+			self.pmda.metrics_by_indom[indom.indom] = metric
 		# Stores the cached indoms
 		self.pmda.indom_cache.refresh()
 
@@ -722,6 +767,7 @@ class PrometheusSource(object):
 		self.pmda.add_metric(metric.full_name, metric.obj,
 								   metric.description)
 		self.metrics_by_id[metric.idx] = metric
+		self.pmda.metrics_by_pmid[metric.pmid] = metric
 
 	def __remove_metric(self, name):
 		try:
@@ -729,6 +775,7 @@ class PrometheusSource(object):
 			metric = self.metrics_by_id[id]
 			self.pmda.remove_metric(metric.full_name, metric.obj)
 			self.metrics_by_id.pop(id)
+			self.pmda.metrics_by_pmid.pop(metric.pmid)
 		except KeyError:
 			pass
 
@@ -736,6 +783,7 @@ class PrometheusSource(object):
 		for id in self.metrics_by_id:
 			metric = self.metrics_by_id[id]
 			self.pmda.remove_metric(metric.full_name, metric.obj)
+			self.pmda.metrics_by_pmid.pop(metric.pmid)
 		self.metrics_by_id = {}
 
 	def parse_metrics_values(self, raw_data):
@@ -822,6 +870,10 @@ class PrometheusPMDA(PMDA):
 		self.source_by_name = {}
 		self.source_by_path = {}
 
+		# PMID to metrics map used for labels (callback)
+		self.metrics_by_pmid = {}
+		self.metrics_by_indom = {}
+
 		# Cluster cache stores the indoms of clusters
 		# Indom values start from 2 as Indom 1 is reserved for internal metrics
 		# Indom 2 is reserved for caching  the indoms metrics with indoms
@@ -838,9 +890,11 @@ class PrometheusPMDA(PMDA):
 		self.add_static_metrics()
 		self.load_prometheus_sources()
 		self.set_fetch(self.prometheus_fetch)
+		self.set_label(self.prometheus_label)
 		self.set_refresh_all(self.refresh_all)
 		self.set_refresh_metrics(self.refresh_metrics)
 		self.set_fetch_callback(self.prometheus_fetch_callback)
+		self.set_label_callback(self.prometheus_label_callback)
 		self.set_store_callback(self.prometheus_store_callback)
 
 	def add_static_metrics(self):
@@ -855,6 +909,7 @@ class PrometheusPMDA(PMDA):
 		metric_info.create()
 		self.add_metric(metric_info.full_name, metric_info.obj,
 						metric_info.description)
+		self.metrics_by_pmid[metric_info.pmid] = metric_info
 
 		metric_info = Metric(self.pmda_name + '.config', 0, self)
 		metric_info.name = 'metadata_refresh_frequency'
@@ -864,6 +919,7 @@ class PrometheusPMDA(PMDA):
 		metric_info.create()
 		self.add_metric(metric_info.full_name, metric_info.obj,
 						metric_info.description)
+		self.metrics_by_pmid[metric_info.pmid] = metric_info
 
 		metric_info = Metric(self.pmda_name + '.config', 0, self)
 		metric_info.name = 'endpoint_fetch_timeout'
@@ -873,6 +929,8 @@ class PrometheusPMDA(PMDA):
 		metric_info.create()
 		self.add_metric(metric_info.full_name, metric_info.obj,
 						metric_info.description)
+		self.metrics_by_pmid[metric_info.pmid] = metric_info
+
 
 	def load_prometheus_sources(self):
 		''' Initializes the PrometheusSource for all the Prometheus sources'''
@@ -940,10 +998,27 @@ class PrometheusPMDA(PMDA):
 		# Count the number of times fetch called
 		self.numfetch += 1
 
+	def prometheus_label(self, ident, type):
+		if type == c_api.PM_LABEL_ITEM:
+			if ident in self.metrics_by_pmid:
+				return self.metrics_by_pmid[ident].label_func()
+			else:
+				self.log("Invalid pmid:%d requested"
+					"on label with type:%d"%(ident, type))
+		return "{}"
+
+	def prometheus_label_callback(self, indom, inst):
+		if indom in self.metrics_by_indom:
+			return self.metrics_by_indom[indom].label_func(inst)
+		else:
+			self.log("Invalid indom:%d requested "
+				"on label callback with inst:%d"%(indom, inst))
+		return "{}"
+
 	def prometheus_fetch_callback(self, cluster, item, inst):
 		''' Main fetch callback which returns the value of the metric '''
 		# cluster 0 is reserved for the static metrics
-		# self.log("requesting " + str(item) + " cluster" + str(cluster))
+		# self.log("Fetch: Cluster: " + str(cluster) + ",item: " + str(item) + ",inst: " + str(inst))
 		if cluster == 0:
 			if inst != c_api.PM_IN_NULL:
 				return [c_api.PM_ERR_PMID, 0]

@@ -30,7 +30,7 @@ main(int argc, char **argv)
     char	*vp;
     char	*q;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     /* stop at type arg, so value may have leading "-" */
     putenv("POSIXLY_CORRECT=yes");
@@ -38,15 +38,13 @@ main(int argc, char **argv)
     while ((c = getopt(argc, argv, "D:")) != EOF) {
 	switch (c) {
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case '?':
@@ -57,7 +55,7 @@ main(int argc, char **argv)
     }
 
     if (errflag || argc - optind != 4) {
-	fprintf(stderr, "Usage: %s %s\n", pmProgname, usage);
+	fprintf(stderr, "Usage: %s %s\n", pmGetProgname(), usage);
 	exit(1);
     }
 

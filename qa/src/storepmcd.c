@@ -124,7 +124,7 @@ main(int argc, char **argv)
     int		sts;
     int		errflag = 0;
     char	*host = "local:";
-    static char	*usage = "[-w] [-x N] [-D N] [-h hostname] container...";
+    static char	*usage = "[-w] [-x N] [-D debugspec] [-h hostname] container...";
     pmID	pmids[num_metrics];
     pmResult	*result;
     int		*excludes = NULL;
@@ -133,18 +133,16 @@ main(int argc, char **argv)
     int		whoflag = 0;
     int		delay = 0;
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "d:D:h:wx:?")) != EOF) {
 	switch (c) {
-	case 'D':	/* debug flag */
-	    if ((sts = __pmParseDebug(optarg)) < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+	case 'D':	/* debug options */
+	    if ((sts = pmSetDebug(optarg)) < 0) {
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case 'd':	/* sleep interval after changing container */
@@ -174,12 +172,12 @@ main(int argc, char **argv)
     }
 
     if (errflag) {
-	printf("Usage: %s %s\n", pmProgname, usage);
+	printf("Usage: %s %s\n", pmGetProgname(), usage);
 	exit(1);
     }
 
     if ((sts = pmNewContext(PM_CONTEXT_HOST, host)) < 0) {
-	printf("%s: Cannot connect to PMCD on host \"%s\": %s\n", pmProgname, host, pmErrStr(sts));
+	printf("%s: Cannot connect to PMCD on host \"%s\": %s\n", pmGetProgname(), host, pmErrStr(sts));
 	exit(1);
     }
 

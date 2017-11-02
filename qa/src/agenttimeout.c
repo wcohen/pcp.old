@@ -29,20 +29,18 @@ main(int argc, char *argv[])
     int		tMax;
     int		errflag = 0;
 
-    __pmSetProgname(pmProgname);
+    pmSetProgname(pmGetProgname());
 
     while ((c = getopt(argc, argv, "D:?")) != EOF) {
 	switch (c) {
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case '?':

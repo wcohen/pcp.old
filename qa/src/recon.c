@@ -39,19 +39,17 @@ main(int argc, char **argv)
      * 10 msec
      */
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "D:")) != EOF) {
 	switch (c) {
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	case '?':
@@ -66,8 +64,8 @@ main(int argc, char **argv)
 "Usage: %s options ...\n\
 \n\
 Options:\n\
-  -D N		set pmDebug debugging flag to N\n",
-		pmProgname);
+  -D debugspec		set PCP debugging options\n",
+		pmGetProgname());
 	exit(1);
     }
 

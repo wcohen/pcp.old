@@ -34,33 +34,29 @@ main(int argc, char **argv)
     int		numpmid = 3;
     char	*name[] = { "sample.seconds", "sample.drift", "sample.milliseconds" };
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     while ((c = getopt(argc, argv, "a:D:n:s:?")) != EOF) {
 	switch (c) {
 
 	case 'a':	/* archive name */
 	    if (ahtype != 0) {
-		fprintf(stderr, "%s: at most one of -a and/or -h allowed\n", pmProgname);
+		fprintf(stderr, "%s: at most one of -a and/or -h allowed\n", pmGetProgname());
 		errflag++;
 	    }
 	    ahtype = PM_CONTEXT_ARCHIVE;
 	    host = optarg;
 	    break;
 
-#ifdef PCP_DEBUG
 
-	case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
-#endif
 
 	case 'n':	/* alternative name space file */
 	    namespace = optarg;
@@ -80,28 +76,28 @@ main(int argc, char **argv)
 Options\n\
   -a   archive	  metrics source is an archive log\n\
   -n   namespace  use an alternative PMNS\n",
-		pmProgname);
+		pmGetProgname());
 	exit(1);
     }
 
     if ((sts = pmLoadASCIINameSpace(namespace, 1)) < 0) {
-	printf("%s: Cannot load namespace from \"%s\": %s\n", pmProgname, namespace, pmErrStr(sts));
+	printf("%s: Cannot load namespace from \"%s\": %s\n", pmGetProgname(), namespace, pmErrStr(sts));
 	exit(1);
     }
 
     if (ahtype != PM_CONTEXT_ARCHIVE) {
-	fprintf(stderr, "%s: -a is not optional!\n", pmProgname);
+	fprintf(stderr, "%s: -a is not optional!\n", pmGetProgname());
 	exit(1);
     }
     if ((sts = pmNewContext(ahtype, host)) < 0) {
 	fprintf(stderr, "%s: Cannot open archive \"%s\": %s\n",
-	    pmProgname, host, pmErrStr(sts));
+	    pmGetProgname(), host, pmErrStr(sts));
 	exit(1);
     }
 
     if ((sts = pmGetArchiveLabel(&label)) < 0) {
 	fprintf(stderr, "%s: Cannot get archive label record: %s\n",
-	    pmProgname, pmErrStr(sts));
+	    pmGetProgname(), pmErrStr(sts));
 	exit(1);
     }
 

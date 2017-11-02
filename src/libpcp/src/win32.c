@@ -38,6 +38,8 @@
 #include <winbase.h>
 #include <psapi.h>
 
+static char	*appname = NULL;
+
 #define FILETIME_1970		116444736000000000ull	/* 1/1/1601-1/1/1970 */
 #define HECTONANOSEC_PER_SEC	10000000ull
 #define MILLISEC_PER_SEC	1000
@@ -108,7 +110,7 @@ __pmSetSignalHandler(int sig, __pmSignalHandler func)
 	return 0;
 
     sts = 0;
-    snprintf(evname, sizeof(evname), "PCP/%" FMT_PID "/%s", getpid(), signame);
+    pmsprintf(evname, sizeof(evname), "PCP/%" FMT_PID "/%s", (pid_t)getpid(), signame);
     if (!(eventhdl = CreateEvent(NULL, FALSE, FALSE, TEXT(evname)))) {
 	sts = GetLastError();
 	fprintf(stderr, "CreateEvent::%s failed (%d)\n", signame, sts);
@@ -141,24 +143,47 @@ __pmSetProcessIdentity(const char *username)
 }
 
 int
-__pmSetProgname(const char *program)
+pmSetProgname(const char *program)
 {
     int	sts1, sts2;
-    char *p, *suffix = NULL;
+    const char *p
+    const char *name;
+    char *suffix = NULL;
+    int c;
     WORD wVersionRequested = MAKEWORD(2, 2);
     WSADATA wsaData;
 
-    /* Trim command name of leading directory components and ".exe" suffix */
-    if (program)
-	pmProgname = (char *)program;
-    for (p = pmProgname; pmProgname && *p; p++) {
+    if (program == NULL) {
+	/* Restore the default application name */
+	if (appname != NULL)
+	    free(appname);
+	appname = NULL;
+	pmProgname = "pcp";		/* for deprecated use */
+	return 0;
+    }
+
+    /* Trim command name of leading directory components */
+    for (name = p = program; *p; p++) {
 	if (*p == '\\' || *p == '/')
-	    pmProgname = p + 1;
+	    name = p+1;
 	if (*p == '.')
 	    suffix = p;
     }
-    if (suffix && strcmp(suffix, ".exe") == 0)
+    if (suffix && strcmp(suffix, ".exe") == 0) {
+	c = *suffix;
 	*suffix = '\0';
+    }
+
+    /* strdup failure leaves appname set to NULL, which is the default */
+    appname = strdup(name);
+
+    if (appname == NULL) {
+	pmProgname = "pcp";		/* for deprecated use */
+	return -ENOMEM;
+    }
+    else {
+	pmProgname = appname;		/* for deprecated use */
+    }
 
     /* Deal with all files in binary mode - no EOL futzing */
     _fmode = O_BINARY;
@@ -187,21 +212,21 @@ __pmServerStart(int argc, char **argv, int flags)
     PROCESS_INFORMATION piProcInfo;
     STARTUPINFO siStartInfo;
     LPTSTR cmdline = NULL;
-    int i, sz = 3; /* -f\0 */
+    int i, sz, total = 3; /* -f\0 */
 
     (void)flags;
     fflush(stdout);
     fflush(stderr);
 
     for (i = 0; i < argc; i++)
-	sz += strlen(argv[i]) + 1;
-    if ((cmdline = malloc(sz)) == NULL) {
+	total += strlen(argv[i]) + 1;
+    if ((cmdline = malloc(total)) == NULL) {
 	__pmNotifyErr(LOG_ERR, "__pmServerStart: out-of-memory");
 	exit(1);
     }
     for (sz = i = 0; i < argc; i++)
-	sz += sprintf(cmdline, "%s ", argv[i]);
-    sprintf(cmdline + sz, "-f");
+	sz += pmsprintf(cmdline + sz, total - sz, "%s ", argv[i]);
+    pmsprintf(cmdline + sz, total - sz, "-f");
 
     ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
     ZeroMemory(&siStartInfo, sizeof(STARTUPINFO));
@@ -622,7 +647,7 @@ syslog(int priority, const char *format, ...)
 	openlog(NULL, 0, 0);
 
     if (eventlogPrefix)
-	offset = snprintf(p, sizeof(logmsg), "%s: ", eventlogPrefix);
+	offset = pmsprintf(p, sizeof(logmsg), "%s: ", eventlogPrefix);
 
     switch (priority) {
     case LOG_EMERG:
@@ -642,7 +667,7 @@ syslog(int priority, const char *format, ...)
 	break;
     }
     msgptr = logmsg;
-    snprintf(p + offset, sizeof(logmsg) - offset, format, arg);
+    pmsprintf(p + offset, sizeof(logmsg) - offset, format, arg);
     ReportEvent(eventlog, eventlogPriority, 0, 0, NULL, 1, 0, &msgptr, NULL);
     va_end(arg);
 }

@@ -24,20 +24,18 @@ main(int argc, char **argv)
     pmID	pmid;
     char	*name = "sample.seconds";
 
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
 
     if (argc > 1) {
 	while ((c = getopt(argc, argv, "D:")) != EOF) {
 	    switch (c) {
-	    case 'D':	/* debug flag */
-	    sts = __pmParseDebug(optarg);
+	    case 'D':	/* debug options */
+	    sts = pmSetDebug(optarg);
 	    if (sts < 0) {
-		fprintf(stderr, "%s: unrecognized debug flag specification (%s)\n",
-		    pmProgname, optarg);
+		fprintf(stderr, "%s: unrecognized debug options specification (%s)\n",
+		    pmGetProgname(), optarg);
 		errflag++;
 	    }
-	    else
-		pmDebug |= sts;
 	    break;
 
 	    case '?':
@@ -48,7 +46,7 @@ main(int argc, char **argv)
 	}
 
 	if (errflag || optind > argc) {
-	    fprintf(stderr, "Usage: %s [-D]\n", pmProgname);
+	    fprintf(stderr, "Usage: %s [-D]\n", pmGetProgname());
 	    exit(1);
 	}
     }

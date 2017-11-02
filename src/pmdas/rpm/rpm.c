@@ -422,7 +422,7 @@ rpm_extract_value(rpmtd td, Header h, int tag)
 static void
 rpm_extract_metadata(const char *name, rpmtd td, Header h, metadata *m)
 {
-    if (pmDebug & DBG_TRACE_APPL0)
+    if (pmDebugOptions.appl0)
 	__pmNotifyErr(LOG_INFO, "updating package %s metadata", name);
 
     m->name = dict_insert(rpm_extract_string(td, h, RPMTAG_NAME));
@@ -571,7 +571,7 @@ rpm_inotify(void *ptr)
 
 	/* Wait for changes in the rpm database */
 	read_count = read(fd, buffer, EVENT_BUF_LEN);
-	if (pmDebug & DBG_TRACE_APPL1)
+	if (pmDebugOptions.appl1)
 	    __pmNotifyErr(LOG_INFO, "rpm_inotify: read_count=%d", read_count);
 
 	/*
@@ -585,7 +585,7 @@ rpm_inotify(void *ptr)
 
         rpm_update_cache(ptr);
 
-	if (pmDebug & DBG_TRACE_APPL1)
+	if (pmDebugOptions.appl1)
 	    __pmNotifyErr(LOG_INFO, "rpm_inotify: refresh done");
     }
 
@@ -607,7 +607,7 @@ rpm_init(pmdaInterface * dp)
 	int sep = __pmPathSeparator();
 	char helppath[MAXPATHLEN];
 
-	snprintf(helppath, sizeof(helppath), "%s%c" "rpm" "%c" "help",
+	pmsprintf(helppath, sizeof(helppath), "%s%c" "rpm" "%c" "help",
                 pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
 	pmdaDSO(dp, PMDA_INTERFACE_5, "rpm DSO", helppath);
     }
@@ -641,7 +641,7 @@ rpm_init(pmdaInterface * dp)
 static void
 usage(void)
 {
-    fprintf(stderr, "Usage: %s [options]\n\n", pmProgname);
+    fprintf(stderr, "Usage: %s [options]\n\n", pmGetProgname());
     fprintf(stderr, "Options:\n"
 	  "  -C           parse the RPM database, and exit\n"
 	  "  -d domain    use domain (numeric) for metrics domain of PMDA\n"
@@ -670,13 +670,13 @@ main(int argc, char **argv)
     char helppath[MAXPATHLEN];
 
     isDSO = 0;
-    __pmSetProgname(argv[0]);
+    pmSetProgname(argv[0]);
     __pmProcessDataSize(NULL);
     __pmGetUsername(&username);
 
-    snprintf(helppath, sizeof(helppath), "%s%c" "rpm" "%c" "help",
+    pmsprintf(helppath, sizeof(helppath), "%s%c" "rpm" "%c" "help",
 	     pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
-    pmdaDaemon(&dispatch, PMDA_INTERFACE_5, pmProgname, RPM,
+    pmdaDaemon(&dispatch, PMDA_INTERFACE_5, pmGetProgname(), RPM,
 	       "rpm.log", helppath);
 
     while ((c =
