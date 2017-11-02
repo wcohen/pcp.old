@@ -197,12 +197,12 @@ init_sample(void)
     if (predicate_name) {
 	if ((sts = pmLookupName(1, &predicate_name, &predicate_pmid) < 0)) {
 	    fprintf(stderr, "%s: Failed to find pmid for the predicate: %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
 	    exit(1);
 	}
 	if ((sts = pmLookupDesc(predicate_pmid, &predicate_desc))) {
 	    fprintf(stderr, "%s: Failed to find pmDesc for %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
 	    exit(1);
 	}
 	/* FIXME be more flexible on the units/conversions */
@@ -212,27 +212,27 @@ init_sample(void)
 					    predicate, PM_TYPE_DOUBLE,
 					    NULL, indom_maxnum, &num_predicate, NULL)) < 0) {
 	    fprintf(stderr, "%s: Failed %s ExtendFetchGroup: %s\n",
-		    pmProgname, predicate_name, pmErrStr(sts));
+		    pmGetProgname(), predicate_name, pmErrStr(sts));
 	    exit(1);
 	}
     }
 
     if ((sts = pmLookupName(metric_count, &(metric_name[0]), metric_pmid) < 0)) {
 	    fprintf(stderr, "%s: Failed to find pmid for the metrics: %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
 	    exit(1);
     }
 
     for (i=0; metric_name[i] && i<metric_count; ++i){
 	if ((sts = pmLookupDesc(metric_pmid[i], &metric_desc[i]))) {
 	    fprintf(stderr, "%s: Failed to find pmDesc for %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
 	    /* some metrics are missing descriptions so just warn about it */
 	}
 	/* should have the same instance domain */
 	if (predicate_name && predicate_desc.indom != metric_desc[i].indom) {
 	    fprintf(stderr, "%s: predicate %s and metric %s have different instance domains\n",
-		    pmProgname, predicate_name, metric_name[i]);
+		    pmGetProgname(), predicate_name, metric_name[i]);
 	    errors++;
 	}
 	if ((sts = pmExtendFetchGroup_indom(pmfg,
@@ -240,12 +240,12 @@ init_sample(void)
 				metric_inst[i], NULL, metric[i], metric_desc[i].type,
 				NULL, indom_maxnum, &num_metric[i], NULL)) < 0) {
 	    fprintf(stderr, "%s: Failed %s ExtendFetchGroup: %s\n",
-		    pmProgname, metric_name[i], pmErrStr(sts));
+		    pmGetProgname(), metric_name[i], pmErrStr(sts));
 	    errors++;
 	}
 	if ((sts = pmLookupText(metric_pmid[i], PM_TEXT_ONELINE, &metric_desc_text[i]))) {
 	    fprintf(stderr, "%s: Failed to get Text description for %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
 	    /* some metrics are missing descriptions so just warn about it */
 	}
     }
@@ -291,7 +291,7 @@ get_sample(void)
      */
     sts = pmFetchGroup(pmfg);
     if (sts < 0) {
-	fprintf(stderr, "%s: pmFetchGroup: %s\n", pmProgname, pmErrStr(sts));
+	fprintf(stderr, "%s: pmFetchGroup: %s\n", pmGetProgname(), pmErrStr(sts));
 	exit(1);
     }
 
@@ -500,12 +500,12 @@ main(int argc, char **argv)
     setup_cleanup();
 
     if (metric_count == 0) {
-	pmprintf("%s: need to select metrics\n", pmProgname);
+	pmprintf("%s: need to select metrics\n", pmGetProgname());
 	opts.errors++;
     }
 
     if (pauseFlag && opts.context != PM_CONTEXT_ARCHIVE) {
-	pmprintf("%s: pause can only be used with archives\n", pmProgname);
+	pmprintf("%s: pause can only be used with archives\n", pmGetProgname());
 	opts.errors++;
     }
 
@@ -527,10 +527,10 @@ main(int argc, char **argv)
     if (sts < 0) {
 	if (opts.context == PM_CONTEXT_HOST)
 	    fprintf(stderr, "%s: Cannot connect to PMCD on host \"%s\": %s\n",
-		    pmProgname, source, pmErrStr(sts));
+		    pmGetProgname(), source, pmErrStr(sts));
 	else
 	    fprintf(stderr, "%s: Cannot open archive \"%s\": %s\n",
-		    pmProgname, source, pmErrStr(sts));
+		    pmGetProgname(), source, pmErrStr(sts));
 	exit(1);
     }
     c = pmGetFetchGroupContext(pmfg);
@@ -545,7 +545,7 @@ main(int argc, char **argv)
 	(opts.start.tv_sec != 0 || opts.start.tv_usec != 0)) {
 	if ((sts = pmSetMode(PM_MODE_FORW, &opts.start, 0)) < 0) {
 	    fprintf(stderr, "%s: pmSetMode failed: %s\n",
-		    pmProgname, pmErrStr(sts));
+		    pmGetProgname(), pmErrStr(sts));
 	    exit(1);
 	}
     }
