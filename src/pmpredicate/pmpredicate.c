@@ -26,14 +26,6 @@
 
 #define MAX_METRICS 10
 
-#ifdef _WIN32
-#define PATH_SEPARATOR   '\\'
-#define PATH_SEPARATOR_STRING  "\\"
-#else
-#define PATH_SEPARATOR   '/'
-#define PATH_SEPARATOR_STRING   "/"
-#endif
-
 static int backup=0;
 static int clean_default=0;
 static char *directory = NULL;
@@ -372,18 +364,23 @@ static char *mangle(char *name)
 static char *dir_plus_file(char *dir, char *file)
 {
     char result[MAXPATHLEN];
+    char separator[2];
+    char *empty = "";
 
     result[0] = '\0';
+    separator[0] = '\0';
+    separator[1] = '\0';
     if (dir) {
-	strncat(result, dir, MAXPATHLEN-1);
 	/* ensure there is a path separator at end */
-	if (rindex(dir, PATH_SEPARATOR) != (dir + strlen(dir)-1)){
-	    strncat(result, PATH_SEPARATOR_STRING, MAXPATHLEN-1);
+	if (rindex(dir, __pmPathSeparator()) != (dir + strlen(dir)-1)){
+	    separator[0] = __pmPathSeparator();
 	}
     }
-    if (file) {
-	strncat(result, file, MAXPATHLEN-1);
-    }
+    if (dir == NULL)
+	dir = empty;
+    if (file == NULL)
+	file = empty;
+    pmsprintf(result, MAXPATHLEN, "%s%s%s", dir, separator, file);
     return strdup(result);
 }
 
