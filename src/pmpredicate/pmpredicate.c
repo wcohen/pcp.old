@@ -83,32 +83,32 @@ typedef struct {
     int inst;
     double predicate;
     char *inst_name;
-} hotproc_t;
+} hotvalues_t;
 
-static hotproc_t	hotproc[indom_maxnum];
-static int		num_hotproc;
+static hotvalues_t	hotvalues[indom_maxnum];
+static int		num_hotvalues;
 
 /* Used by qsort to sort from largest to smallest predicate */
 static int compare_predicate(const void *a, const void *b)
 {
-    return (int) (((hotproc_t *)b)->predicate - ((hotproc_t *)a)->predicate);
+    return (int) (((hotvalues_t *)b)->predicate - ((hotvalues_t *)a)->predicate);
 }
 
 /* Used for qsort to sort from smallest to largest instance */
 static int compare_inst(const void *a, const void *b)
 {
-    return (int) (((hotproc_t *)a)->inst - ((hotproc_t *)b)->inst);
+    return (int) (((hotvalues_t *)a)->inst - ((hotvalues_t *)b)->inst);
 }
 
 void cull()
 {
     /* Cull to top matches */
-    if (top>0 && top<num_hotproc) {
+    if (top>0 && top<num_hotvalues) {
 	/* Move values with highest predicate values to array start */
-	qsort(hotproc, num_hotproc, sizeof(hotproc_t), compare_predicate);
-	num_hotproc = top;
+	qsort(hotvalues, num_hotvalues, sizeof(hotvalues_t), compare_predicate);
+	num_hotvalues = top;
 	/* Return culled values to inst order */
-	qsort(hotproc, num_hotproc,sizeof(hotproc_t), compare_inst);
+	qsort(hotvalues, num_hotvalues,sizeof(hotvalues_t), compare_inst);
     }
 }
 
@@ -146,7 +146,7 @@ void write_metadata()
     fprintf(meta_fd, "{\n\t\"prefix\": \"%s\",\n", json_prefix);
     fprintf(meta_fd, "\t\"metrics\": [\n\t\t{\n");
     fprintf(meta_fd, "\t\t\t\"name\": \"%s\",\n", "metrics");
-    fprintf(meta_fd, "\t\t\t\"pointer\": \"/%s\",\n", "hotprocdata");
+    fprintf(meta_fd, "\t\t\t\"pointer\": \"/%s\",\n", "hotvaluesdata");
     fprintf(meta_fd, "\t\t\t\"type\": \"array\",\n");
     fprintf(meta_fd, "\t\t\t\"description\": \"%s\",\n", "FIXME");
     fprintf(meta_fd, "\t\t\t\"index\": \"/%s\",\n", "inst");
@@ -290,13 +290,13 @@ get_sample(void)
     }
 
     /* Get a list of indoms that predicate true on */
-    num_hotproc = 0;
+    num_hotvalues = 0;
     for (i=0; i<num_predicate; ++i){
 	if (predicate[i].d>0) {
-	    hotproc[num_hotproc].inst = predicate_inst[i];
-	    hotproc[num_hotproc].predicate = predicate[i].d;
-	    hotproc[num_hotproc].inst_name = predicate_inst_name[i];
-	    ++num_hotproc;
+	    hotvalues[num_hotvalues].inst = predicate_inst[i];
+	    hotvalues[num_hotvalues].predicate = predicate[i].d;
+	    hotvalues[num_hotvalues].inst_name = predicate_inst_name[i];
+	    ++num_hotvalues;
 	}
     }
     cull();
@@ -309,24 +309,24 @@ get_sample(void)
 	int p[MAX_METRICS];
 
 	/* FIXME write following to data.json */
-	fprintf(data_fd, "{\n\t\"%s\": [\n", "hotprocdata");
+	fprintf(data_fd, "{\n\t\"%s\": [\n", "hotvaluesdata");
 
 	for(i=0; i<MAX_METRICS;++i) p[i] = 0;
-	for (j=0; j<num_hotproc; j++){
+	for (j=0; j<num_hotvalues; j++){
 	    /* FIXME write out instance info */
-	    fprintf(data_fd, "\t{\n\t\t\"inst\": \"%s\"", hotproc[j].inst_name);
+	    fprintf(data_fd, "\t{\n\t\t\"inst\": \"%s\"", hotvalues[j].inst_name);
 	    for (i=0; metric_name[i] && i<metric_count; ++i){
 		/* Scan for matching instance number, They could be in different positions */
-		while (p[i]<num_metric[i] && metric_inst[i][p[i]]<hotproc[j].inst)
+		while (p[i]<num_metric[i] && metric_inst[i][p[i]]<hotvalues[j].inst)
 		    ++p[i];
-		if (p[i]<num_metric[i] && metric_inst[i][p[i]]==hotproc[j].inst){
+		if (p[i]<num_metric[i] && metric_inst[i][p[i]]==hotvalues[j].inst){
 		    /* FIXME have a match, do whatever */
 		    fprintf(data_fd, ",\n\t\t\"%s\": %s",
 			    metric_name[i], pmAtomStr(&metric[i][p[i]], metric_desc[i].type));
 		}
 	    }
 	    fprintf(data_fd, "\n\t}");
-	    if (j < num_hotproc-1) fprintf(data_fd, ",");
+	    if (j < num_hotvalues-1) fprintf(data_fd, ",");
 	    fprintf(data_fd, "\n");
 	}
 	fprintf(data_fd, "\t]\n}\n");
