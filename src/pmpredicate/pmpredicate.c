@@ -457,10 +457,14 @@ main(int argc, char **argv)
 	    }
 	    break;
 	case 'r':
+	    if (top) {
+		fprintf(stderr, "can only have a single --top option\n");
+		opts.errors++;
+	    }
 	    top = atoi(opts.optarg);
 	    if (!(top>0)) {
 		fprintf(stderr, "--top option needs a postive value\n");
-		exit(1);
+		opts.errors++;
 	    }
 	    break;
 	case 'd':
