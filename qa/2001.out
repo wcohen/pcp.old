@@ -41,11 +41,17 @@ PMID: 137.2.2 (json.hot_disk.metrics.disk_dev_total_rawactive)
 PMID: 137.1.1 (json.hot_cpu.metrics.kernel_percpu_cpu_sys)
     Data Type: 64-bit int  InDom: 137.2 0x22400002
     Semantics: counter  Units: millisec
+PMID: 2.0.23 (pmcd.pid)
+    Data Type: 64-bit unsigned int  InDom: PM_INDOM_NULL 0xffffffff
+    Semantics: discrete  Units: none
 PMID: 137.2.3 (json.hot_disk.metrics.disk_dev_blktotal)
     Data Type: 64-bit int  InDom: 137.4 0x22400004
     Semantics: counter  Units: count
 PMID: 2.3.0 (pmcd.pmlogger.port)
     Data Type: 32-bit unsigned int  InDom: 2.1 0x800001
+    Semantics: discrete  Units: none
+PMID: 2.0.24 (pmcd.seqnum)
+    Data Type: 32-bit unsigned int  InDom: PM_INDOM_NULL 0xffffffff
     Semantics: discrete  Units: none
 PMID: 137.2.4 (json.hot_disk.metrics.disk_dev_total_bytes)
     Data Type: 64-bit int  InDom: 137.4 0x22400004
@@ -53,16 +59,18 @@ PMID: 137.2.4 (json.hot_disk.metrics.disk_dev_total_bytes)
 PMID: 2.3.2 (pmcd.pmlogger.archive)
     Data Type: string  InDom: 2.1 0x800001
     Semantics: discrete  Units: none
-PMID: 2.3.3 (pmcd.pmlogger.host)
-    Data Type: string  InDom: 2.1 0x800001
-    Semantics: discrete  Units: none
 PMID: 137.2.1 (json.hot_disk.metrics.disk_dev_aveq)
     Data Type: 64-bit int  InDom: 137.4 0x22400004
     Semantics: counter  Units: millisec
+PMID: 2.3.3 (pmcd.pmlogger.host)
+    Data Type: string  InDom: 2.1 0x800001
+    Semantics: discrete  Units: none
 
 TIMESTAMP  2.3.3 (pmcd.pmlogger.host): inst [INTEGER or STRING] value "HOST"
               2.3.0 (pmcd.pmlogger.port): inst [INTEGER or STRING] value PORT
               2.3.2 (pmcd.pmlogger.archive): inst [INTEGER or STRING] value "PATH"
+              2.0.23 (pmcd.pid): value INTEGER
+              2.0.24 (pmcd.seqnum): value INTEGER
 
 TIMESTAMP  137.2.4 (json.hot_disk.metrics.disk_dev_total_bytes): inst [INTEGER or STRING] value INTEGER
               137.2.3 (json.hot_disk.metrics.disk_dev_blktotal): inst [INTEGER or STRING] value INTEGER
@@ -77,6 +85,12 @@ TIMESTAMP  137.2.4 (json.hot_disk.metrics.disk_dev_total_bytes): inst [INTEGER o
               137.2.1 (json.hot_disk.metrics.disk_dev_aveq): inst [INTEGER or STRING] value INTEGER
               137.1.1 (json.hot_cpu.metrics.kernel_percpu_cpu_sys): inst [INTEGER or STRING] value INTEGER
               137.1.0 (json.hot_cpu.metrics.kernel_percpu_cpu_user): inst [INTEGER or STRING] value INTEGER
+
+TIMESTAMP  2.3.3 (pmcd.pmlogger.host): inst [INTEGER or STRING] value "HOST"
+              2.3.0 (pmcd.pmlogger.port): inst [INTEGER or STRING] value PORT
+              2.3.2 (pmcd.pmlogger.archive): inst [INTEGER or STRING] value "PATH"
+              2.0.23 (pmcd.pid): value INTEGER
+              2.0.24 (pmcd.seqnum): value INTEGER
 
 === remove json agent ===
 Culling the Performance Metrics Name Space ...
