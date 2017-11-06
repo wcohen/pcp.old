@@ -114,6 +114,16 @@ The metadata.json describe the metrics names, units, and types.  It is written w
 .IP +
 The data.json has the filtered data that and is periodically updated at the specified interval.
 .PP
+.SH EXAMPLE
+.PP
+With PMDA JSON installed and running the following would provide a new metric
+called json.big_proc.metrics.proc_psinfo_rss that would just have the
+top five instances of user processes consuming machine memory:
+.sp
+.nf
+.ft CW
+$ pmpredicate -r 5 -j top_mem_user -f proc.psinfo.rss -m proc.psinfo.rss
+.sp
 .SH FILES
 .PD 0
 .TP 10
