@@ -59,7 +59,7 @@ pmOptions opts = {
     .flags = PM_OPTFLAG_STDOUT_TZ,
     .short_options = "?t:j:f:r:m:d:U:s:b",
     .long_options = longopts,
-    .interval = {.tv_sec = 5, .tv_usec = 0}, /*Default: 5 second  between samples */
+    .interval = {.tv_sec = 5, .tv_usec = 0}, /*Default: 5 second between samples */
     .samples = -1, /* Default: No limit on the number of samples */
 };
 
@@ -102,12 +102,12 @@ static int compare_inst(const void *a, const void *b)
 
 void cull()
 {
-    /* Cull to top matches */
+    /* Cull to top matches. */
     if (top>0 && top<num_hotvalues) {
-	/* Move values with highest predicate values to array start */
+	/* Move values with highest predicate values to array start. */
 	qsort(hotvalues, num_hotvalues, sizeof(hotvalues_t), compare_predicate);
 	num_hotvalues = top;
-	/* Return culled values to inst order */
+	/* Return culled values to instance order. */
 	qsort(hotvalues, num_hotvalues,sizeof(hotvalues_t), compare_inst);
     }
 }
@@ -187,7 +187,7 @@ init_sample(void)
     int i;
     int errors = 0;
 
-    /* set up predicate fetch if there is a predicate */
+    /* Set up the predicate fetch if there is a predicate. */
     if (predicate_name) {
 	if ((sts = pmLookupName(1, &predicate_name, &predicate_pmid) < 0)) {
 	    fprintf(stderr, "%s: Failed to find pmid for the predicate: %s\n",
@@ -199,7 +199,6 @@ init_sample(void)
 		    pmGetProgname(), pmErrStr(sts));
 	    exit(1);
 	}
-	/* FIXME be more flexible on the units/conversions */
 	if ((sts = pmExtendFetchGroup_indom(pmfg,
 					    predicate_name, NULL,
 					    predicate_inst, predicate_inst_name,
@@ -221,9 +220,9 @@ init_sample(void)
 	if ((sts = pmLookupDesc(metric_pmid[i], &metric_desc[i]))) {
 	    fprintf(stderr, "%s: Failed to find pmDesc for %s\n",
 		    pmGetProgname(), pmErrStr(sts));
-	    /* some metrics are missing descriptions so just warn about it */
+	    /* Some metrics are missing descriptions, so just warn about it. */
 	}
-	/* should have the same instance domain */
+	/* Need to have the same instance domain for predicate and metric. */
 	if (predicate_name && predicate_desc.indom != metric_desc[i].indom) {
 	    fprintf(stderr, "%s: predicate %s and metric %s have different instance domains\n",
 		    pmGetProgname(), predicate_name, metric_name[i]);
@@ -240,7 +239,7 @@ init_sample(void)
 	if ((sts = pmLookupText(metric_pmid[i], PM_TEXT_ONELINE, &metric_desc_text[i]))) {
 	    fprintf(stderr, "%s: Failed to get Text description for %s\n",
 		    pmGetProgname(), pmErrStr(sts));
-	    /* some metrics are missing descriptions so just warn about it */
+	    /* Some metrics are missing descriptions, so just warn about it. */
 	}
     }
 
@@ -257,7 +256,7 @@ backup_file(void)
     struct tm *loctime;
     char *backup_name=malloc(strlen(data_json_name)+16);
 
-    /* create a new name for backup */
+    /* Create a new name for backup. */
     if(backup_name == NULL) {
 	printf("unable to allocate space for backup data.json file name\n");
 	exit(1);
@@ -289,7 +288,7 @@ get_sample(void)
 	exit(1);
     }
 
-    /* Get a list of indoms that predicate true on */
+    /* Get a list of indoms that predicate is true for. */
     num_hotvalues = 0;
     for (i=0; i<num_predicate; ++i){
 	if (predicate[i].d>0) {
@@ -308,19 +307,20 @@ get_sample(void)
     if (predicate_name) {
 	int p[MAX_METRICS];
 
-	/* FIXME write following to data.json */
+	/* Write hot values to data.json. */
 	fprintf(data_fd, "{\n\t\"%s\": [\n", "hotvaluesdata");
 
 	for(i=0; i<MAX_METRICS;++i) p[i] = 0;
 	for (j=0; j<num_hotvalues; j++){
-	    /* FIXME write out instance info */
+	    /* Write out data for the instance. */
 	    fprintf(data_fd, "\t{\n\t\t\"inst\": \"%s\"", hotvalues[j].inst_name);
 	    for (i=0; metric_name[i] && i<metric_count; ++i){
-		/* Scan for matching instance number, They could be in different positions */
+		/* Scan for matching instance number.
+		   They could be in different positions. */
 		while (p[i]<num_metric[i] && metric_inst[i][p[i]]<hotvalues[j].inst)
 		    ++p[i];
 		if (p[i]<num_metric[i] && metric_inst[i][p[i]]==hotvalues[j].inst){
-		    /* FIXME have a match, do whatever */
+		    /* The metric has a matching instance, write the data. */
 		    fprintf(data_fd, ",\n\t\t\"%s\": %s",
 			    metric_name[i], pmAtomStr(&metric[i][p[i]], metric_desc[i].type));
 		}
@@ -371,7 +371,7 @@ static char *dir_plus_file(char *dir, char *file)
     separator[0] = '\0';
     separator[1] = '\0';
     if (dir) {
-	/* ensure there is a path separator at end */
+	/* Ensure there is a path separator at end of dir. */
 	if (rindex(dir, __pmPathSeparator()) != (dir + strlen(dir)-1)){
 	    separator[0] = __pmPathSeparator();
 	}
@@ -400,7 +400,9 @@ static int mkdir_recurse(char *path, mode_t mode)
     return retval;
 }
 
-/* Avoid cluttering up default location */
+/* Avoid cluttering up default location with files no longer being updated.
+   This clean up allows pmdajson to keep track of which metrics are actually
+   available. */
 static void clean_files()
 {
     if (clean_default) {
@@ -478,7 +480,7 @@ main(int argc, char **argv)
 	}
     }
 
-    /* By default put in PCP_TMP_DIR/json/pid */
+    /* By default put in $PCP_TMP_DIR/json/pid. */
     if (directory == NULL) {
 	clean_default = 1;
 	char *json_dir = dir_plus_file(pmGetConfig("PCP_TMP_DIR"), "json");
