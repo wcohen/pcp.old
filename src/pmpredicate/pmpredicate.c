@@ -348,7 +348,7 @@ get_sample(void)
     return;
 }
 
-/* PCP does not allow '.' in metric names. Covert them to '.' */
+/* PCP does not allow '.' in metric names. Covert them to '_' */
 static char *mangle(char *name)
 {
     char *s = strdup(name);
