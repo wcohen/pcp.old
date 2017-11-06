@@ -148,7 +148,6 @@ void write_metadata()
     fprintf(meta_fd, "\t\t\t\"name\": \"%s\",\n", "metrics");
     fprintf(meta_fd, "\t\t\t\"pointer\": \"/%s\",\n", "hotvaluesdata");
     fprintf(meta_fd, "\t\t\t\"type\": \"array\",\n");
-    fprintf(meta_fd, "\t\t\t\"description\": \"%s\",\n", "FIXME");
     fprintf(meta_fd, "\t\t\t\"index\": \"/%s\",\n", "inst");
     fprintf(meta_fd, "\t\t\t\"metrics\": [\n");
 
