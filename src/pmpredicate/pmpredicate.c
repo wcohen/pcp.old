@@ -511,42 +511,17 @@ main(int argc, char **argv)
 	exit(1);
     }
 
-    if (opts.context == PM_CONTEXT_ARCHIVE) {
-	source = opts.archives[0];
-    } else if (opts.context == PM_CONTEXT_HOST) {
-	source = opts.hosts[0];
-    } else {
-	opts.context = PM_CONTEXT_HOST;
-	source = "local:";
-    }
+    opts.context = PM_CONTEXT_HOST;
+    source = "local:";
 
     sts = pmCreateFetchGroup(& pmfg, opts.context, source);
     if (sts < 0) {
-	if (opts.context == PM_CONTEXT_HOST)
-	    fprintf(stderr, "%s: Cannot connect to PMCD on host \"%s\": %s\n",
-		    pmGetProgname(), source, pmErrStr(sts));
-	else
-	    fprintf(stderr, "%s: Cannot open archive \"%s\": %s\n",
-		    pmGetProgname(), source, pmErrStr(sts));
+	fprintf(stderr, "%s: Cannot connect to PMCD on host \"%s\": %s\n",
+		pmGetProgname(), source, pmErrStr(sts));
 	exit(1);
     }
     c = pmGetFetchGroupContext(pmfg);
     
-    /* complete TZ and time window option (origin) setup */
-    if (pmGetContextOptions(c, &opts)) {
-	pmflush();
-	exit(1);
-    }
-
-    if ((opts.context == PM_CONTEXT_ARCHIVE) &&
-	(opts.start.tv_sec != 0 || opts.start.tv_usec != 0)) {
-	if ((sts = pmSetMode(PM_MODE_FORW, &opts.start, 0)) < 0) {
-	    fprintf(stderr, "%s: pmSetMode failed: %s\n",
-		    pmGetProgname(), pmErrStr(sts));
-	    exit(1);
-	}
-    }
-
     /* set sampling loop termination via the command line options */
     forever = (opts.samples == -1);
 
