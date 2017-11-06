@@ -29,7 +29,7 @@
 static int backup=0;
 static int clean_default=0;
 static char *directory = NULL;
-static char *json_prefix = "prefix";
+static char *json_prefix = NULL;
 static char *metadata_json_name = "metadata.json";
 static char *data_json_name = "data.json";
 static char *data_json_name_tmp = "data.json.tmp";
@@ -442,9 +442,17 @@ main(int argc, char **argv)
 	    backup++;
 	    break;
 	case 'j':
+	    if (json_prefix) {
+		fprintf(stderr, "--json_prefix option can only be used once\n");
+		opts.errors++;
+	    }
 	    json_prefix = opts.optarg;
 	    break;
 	case 'f':
+	    if (predicate_name) {
+		fprintf(stderr, "--filter option can only be used once\n");
+		opts.errors++;
+	    }
 	    predicate_name = opts.optarg;
 	    break;
 	case 'm':
@@ -458,7 +466,7 @@ main(int argc, char **argv)
 	    break;
 	case 'r':
 	    if (top) {
-		fprintf(stderr, "can only have a single --top option\n");
+		fprintf(stderr, "--top can only be used once\n");
 		opts.errors++;
 	    }
 	    top = atoi(opts.optarg);
@@ -471,7 +479,7 @@ main(int argc, char **argv)
 	    if (directory == NULL) {
 		directory = opts.optarg;
 	    } else {
-		fprintf(stderr, "--directory option can only used once\n");
+		fprintf(stderr, "--directory option can only be used once\n");
 		opts.errors++;
 	    }
 	    break;
@@ -482,6 +490,10 @@ main(int argc, char **argv)
 	    opts.errors++;
 	    break;
 	}
+    }
+
+    if (json_prefix == NULL) {
+	json_prefix = "prefix";
     }
 
     /* By default put in $PCP_TMP_DIR/json/pid. */
