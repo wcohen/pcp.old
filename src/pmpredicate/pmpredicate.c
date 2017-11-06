@@ -24,7 +24,7 @@
 #include <time.h>
 #include <sys/stat.h>
 
-#define MAX_METRICS 10
+#define MAX_METRICS 50
 
 static int backup=0;
 static int clean_default=0;
