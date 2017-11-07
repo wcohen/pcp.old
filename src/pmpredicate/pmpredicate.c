@@ -137,10 +137,9 @@ const char *json_type(int type)
 
 void write_metadata()
 {
-    FILE *meta_fd = stdout;
+    FILE *meta_fd = fopen(metadata_json_name, "w+");
     int i;
 
-    meta_fd = fopen(metadata_json_name, "w+");
     if (meta_fd==NULL) goto fail;
 
     fprintf(meta_fd, "{\n\t\"prefix\": \"%s\",\n", json_prefix);
@@ -432,8 +431,6 @@ main(int argc, char **argv)
     int			sts;
     int			forever;
     char		*source;
-
-    setlinebuf(stdout);
 
     while ((c = pmGetOptions(argc, argv, &opts)) != EOF) {
 	switch (c) {
