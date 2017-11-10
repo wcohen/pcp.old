@@ -61,8 +61,11 @@
 
 #include "pmapi.h"
 #include "impl.h"
+#include "libpcp.h"
+#include "deprecated.h"
 #include "pmdbg.h"
 #include "internal.h"
+#include "deprecated.h"
 
 #if defined(HAVE_SYS_TIMES_H)
 #include <sys/times.h>
@@ -116,6 +119,12 @@ __pmIsUtilLock(void *lock)
     return lock == (void *)&util_lock;
 }
 #endif
+
+char *
+pmGetProgname(void)
+{
+    return pmProgname;
+}
 
 /*
  * if onoff == 1, logging is to syslog and stderr, else logging is
@@ -417,9 +426,9 @@ pmIDStr_r(pmID pmid, char *buf, int buflen)
 	 * that can enumerate the subtree in the cluster field, while
 	 * the item field is zero
 	 */
-	pmsprintf(buf, buflen, "%d.*.*", pmid_cluster(pmid));
+	pmsprintf(buf, buflen, "%d.*.*", pmID_cluster(pmid));
     else
-	pmsprintf(buf, buflen, "%d.%d.%d", pmid_domain(pmid), pmid_cluster(pmid), pmid_item(pmid));
+	pmsprintf(buf, buflen, "%d.%d.%d", pmID_domain(pmid), pmID_cluster(pmid), pmID_item(pmid));
     return buf;
 }
 
@@ -2647,15 +2656,9 @@ pmSetProgname(const char *program)
 	/* Trim command name of leading directory components */
 	pmProgname = (char *)program;
 	for (p = pmProgname; *p; p++)
-	    if (*p == __pmPathSeparator())
+	    if (*p == '/')
 		pmProgname = p+1;
     }
-}
-
-char *
-pmGetProgname(void)
-{
-    return pmProgname;
 }
 
 int
@@ -2687,6 +2690,7 @@ __pmMemoryUnmap(void *addr, size_t sz)
 {
     munmap(addr, sz);
 }
+#endif /* !IS_MINGW */
 
 #if HAVE_TRACE_BACK_STACK
 #include <libexc.h>
@@ -2746,4 +2750,68 @@ __pmDumpStack(FILE *f)
 }
 #endif /* HAVE_BACKTRACE */
 
-#endif /* !IS_MINGW */
+/*
+ * pmID helper functions
+ */
+
+unsigned int
+pmID_item(pmID pmid)
+{
+    __pmID_int	*idp = (__pmID_int *)&pmid;
+    return idp->item;
+}
+
+unsigned int 
+pmID_cluster(pmID pmid)
+{
+    __pmID_int	*idp = (__pmID_int *)&pmid;
+    return idp->cluster;
+}
+
+unsigned int 
+pmID_domain(pmID pmid)
+{
+    __pmID_int	*idp = (__pmID_int *)&pmid;
+    return idp->domain;
+}
+
+pmID
+pmID_build(unsigned int domain, unsigned int cluster, unsigned int item)
+{
+    pmID	pmid;
+    __pmID_int	pmid_int;
+
+    pmid_int.flag = 0;
+    pmid_int.domain = domain;
+    pmid_int.cluster = cluster;
+    pmid_int.item = item;
+    memcpy(&pmid, &pmid_int, sizeof(pmid));
+    return pmid;
+}
+
+unsigned int 
+pmInDom_domain(pmInDom indom)
+{
+    __pmInDom_int	*idp = (__pmInDom_int *)&indom;
+    return idp->domain;
+}
+
+unsigned int 
+pmInDom_serial(pmInDom indom)
+{
+    __pmInDom_int	*idp = (__pmInDom_int *)&indom;
+    return idp->serial;
+}
+
+pmInDom
+pmInDom_build(unsigned int domain, unsigned int serial)
+{
+    pmInDom		indom;
+    __pmInDom_int	indom_int;
+
+    indom_int.flag = 0;
+    indom_int.domain = domain;
+    indom_int.serial = serial;
+    memcpy(&indom, &indom_int, sizeof(indom));
+    return indom;
+}

@@ -933,6 +933,7 @@ collectl
 583 pmie #698718 remote
 584:retired libpcp pmie local #698774 purify
 585 pmval pmprobe local pminfo
+586 other local
 587 pmcd #754795 local pmda.install pmda.trivial
 589 remote
 592 pmda.sample local
@@ -1409,6 +1410,7 @@ collectl
 1141 selinux local
 1159 pmlogger local pmdumplog
 1174 threads valgrind local
+1182 libpcp local
 1186 pmie local
 1191 pmda.prometheus pmda.install local
 1192 pmda.prometheus local

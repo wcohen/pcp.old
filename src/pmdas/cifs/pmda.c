@@ -16,6 +16,7 @@
 
 #include "pmapi.h"
 #include "impl.h"
+#include "libpcp.h"
 #include "pmda.h"
 #include "domain.h"
 
@@ -276,9 +277,8 @@ cifs_fetch(int numpmid, pmID pmidlist[], pmResult **resp, pmdaExt *pmda)
     int i, sts, need_refresh[NUM_CLUSTERS] = { 0 };
 
     for (i = 0; i < numpmid; i++) {
-	__pmID_int *idp = (__pmID_int *)&(pmidlist[i]);
-	if (idp->cluster < NUM_CLUSTERS)
-	    need_refresh[idp->cluster]++;
+	if (pmID_cluster(pmidlist[i]) < NUM_CLUSTERS)
+	    need_refresh[pmID_cluster(pmidlist[i])]++;
     }
 
     if ((sts = cifs_fetch_refresh(pmda, need_refresh)) < 0)
@@ -293,19 +293,18 @@ cifs_fetch(int numpmid, pmID pmidlist[], pmResult **resp, pmdaExt *pmda)
 static int
 cifs_fetchCallBack(pmdaMetric *mdesc, unsigned int inst, pmAtomValue *atom)
 {
-    __pmID_int *idp = (__pmID_int *)&(mdesc->m_desc.pmid);
     struct cifs_fs *fs;
     int sts;
 
-    switch (idp->cluster) {
+    switch (pmID_cluster(mdesc->m_desc.pmid)) {
     case CLUSTER_GLOBAL_STATS:
-        return cifs_global_stats_fetch(idp->item, atom);
+        return cifs_global_stats_fetch(pmID_item(mdesc->m_desc.pmid), atom);
 
     case CLUSTER_FS_STATS:
 	sts = pmdaCacheLookup(INDOM(CIFS_FS_INDOM), inst, NULL, (void **)&fs);
 	if (sts < 0)
 	    return sts;
-	return cifs_fs_stats_fetch(idp->item, &fs->fs_stats, atom);
+	return cifs_fs_stats_fetch(pmID_item(mdesc->m_desc.pmid), &fs->fs_stats, atom);
 
     default: /* unknown cluster */
 	return PM_ERR_PMID;

@@ -15,6 +15,7 @@
 
 #include "pmapi.h"
 #include "impl.h"
+#include "libpcp.h"
 #include <ctype.h>
 #include <limits.h>
 
@@ -149,8 +150,8 @@ lookup_cluster_labels(pmID pmid)
     static pmID		last = PM_ID_NULL;
     static pmLabelSet	*labels;
 
-    if (pmid_domain(pmid) != pmid_domain(last) ||
-	pmid_cluster(pmid) != pmid_cluster(last)) {
+    if (pmID_domain(pmid) != pmID_domain(last) ||
+	pmID_cluster(pmid) != pmID_cluster(last)) {
 	if (labels)
 	    pmFreeLabelSets(labels, 1);
 	labels = NULL;
@@ -286,7 +287,7 @@ setup_event_derived_metrics(void)
 	    fprintf(stderr, "Warning: cannot get PMID for %s: %s\n",
 			name_flags, pmErrStr(sts));
 	    /* avoid subsequent warnings ... */
-	    __pmid_int(&pmid_flags)->item = 1;
+	    pmid_flags = pmID_build(pmID_domain(pmid_flags), pmID_cluster(pmid_flags), 1);
 	}
 	sts = pmLookupName(1, &name_missed, &pmid_missed);
 	if (sts < 0) {
@@ -294,7 +295,7 @@ setup_event_derived_metrics(void)
 	    fprintf(stderr, "Warning: cannot get PMID for %s: %s\n",
 			name_missed, pmErrStr(sts));
 	    /* avoid subsequent warnings ... */
-	    __pmid_int(&pmid_missed)->item = 1;
+	    pmid_missed = pmID_build(pmID_domain(pmid_missed), pmID_cluster(pmid_missed), 1);
 	}
     }
 }
@@ -510,7 +511,7 @@ mylabels(pmDesc *dp)
     int		sts = 0;
 
     labels[0] = lookup_context_labels();
-    labels[1] = lookup_domain_labels(pmid_domain(dp->pmid));
+    labels[1] = lookup_domain_labels(pmID_domain(dp->pmid));
     labels[2] = lookup_indom_labels(dp->indom);
     labels[3] = lookup_cluster_labels(dp->pmid);
     labels[4] = lookup_item_labels(dp->pmid);
@@ -733,7 +734,7 @@ dodigit(const char *arg)
     int		domain, cluster, item, serial;
 
     if (sscanf(arg, "%u.%u.%u", &domain, &cluster, &item) == 3)
-	return dopmid(pmid_build(domain, cluster, item));
+	return dopmid(pmID_build(domain, cluster, item));
     if (sscanf(arg, "%u.%u", &domain, &serial) == 2)
 	return doindom(pmInDom_build(domain, serial));
     return PM_ERR_NAME;

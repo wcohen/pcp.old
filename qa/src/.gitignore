@@ -99,6 +99,7 @@ keycache
 keycache2
 killparent
 labels
+libpcp.h
 loadderived
 loadconfig2
 logcontrol
@@ -175,6 +176,7 @@ pmsocks_objstyle
 pmsprintf
 pmtimezone.so
 proc_test
+progname
 pv
 pv64
 pv64.c

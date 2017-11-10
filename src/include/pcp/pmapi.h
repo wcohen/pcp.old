@@ -20,6 +20,36 @@
  */
 #include "platform_defs.h"
 
+#include <time.h>
+#include <fcntl.h>
+#include <dirent.h>
+#include <signal.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/param.h>
+#include <sys/time.h>
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+#endif
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
+#ifdef HAVE_NETINET_TCP_H
+#include <netinet/tcp.h>
+#endif
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>
+#endif
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h> 
+#endif
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -1007,11 +1037,86 @@ PCP_CALL extern int pmSetDebug(const char *);
 PCP_CALL extern int pmClearDebug(const char *);
 
 /*
+ * New style ...
+ * Note that comments are important ... these are extracted and
+ * built into pmdbg.h.
+ */
+typedef struct {
+    int	pdu;		/* PDU traffic at the Xmit and Recv level */
+    int	fetch;		/* Results from pmFetch */
+    int	profile;	/* Changes and xmits for instance profile */
+    int	value;		/* Metric value extraction and conversion */
+    int	context;	/* Changes to PMAPI contexts */
+    int	indom;		/* Low-level instance profile xfers */
+    int	pdubuf;		/* PDU buffer operations */
+    int	log;		/* Archive log manipulations */
+    int	logmeta;	/* Archive metadata operations */
+    int	optfetch;	/* optFetch magic */
+    int	af;		/* Asynchronous event scheduling */
+    int	appl0;		/* Application-specific flag 0 */
+    int	appl1;		/* Application-specific flag 1 */
+    int	appl2;		/* Application-specific flag 2 */
+    int	pmns;		/* PMNS operations */
+    int	libpmda;	/* PMDA callbacks into libpcp_pmda */
+    int	timecontrol;	/* Time control API */
+    int	pmc;		/* Metrics class operations */
+    int	derive;		/* Derived metrics functionality */
+    int	lock;		/* Synchronization and lock tracing */
+    int	interp;		/* Interpolate mode for archives */
+    int	config;		/* Configuration parameters */
+    int	pmapi;		/* PMAPI call tracing */
+    int	fault;		/* Fault injection tracing */
+    int	auth;		/* Authentication tracing */
+    int	discovery;	/* Service discovery tracing */
+    int	attr;		/* Connection attribute handling */
+    int	http;		/* Trace HTTP operations in libpcp_web */
+    int	desperate;	/* Verbose/Desperate level (developers only) */
+/* new ones start here, no DBG_TRACE_xxx macro and no backwards compatibility */
+    int	deprecated;	/* Report use of deprecated services */
+    int	exec;	 	/* __pmProcessExec and related calls */
+    int labels;		/* Metric label metadata operations */
+    int series;		/* Time series tracing */
+} pmdebugoptions_t;
+
+PCP_DATA extern pmdebugoptions_t	pmDebugOptions;
+
+/*
  * Startup handling:
  * set/get program name, as used in pmNotifyErr() ... default is "pcp"
  */
 PCP_CALL extern void pmSetProgname(const char *);
 PCP_CALL extern char *pmGetProgname(void);
+
+/*
+ * Special case PMIDs
+ *   Domain DYNAMIC_PMID (number 511) is reserved for PMIDs representing
+ *   the root of a dynamic subtree in the PMNS (and in this case the real
+ *   domain number is encoded in the cluster field and the item field is
+ *   zero).
+ *   Domain DYNAMIC_PMID is also reserved for the PMIDs of derived metrics
+ *   and in this case the item field is non-zero.  If a derived metric is
+ *   written to a PCP archive, then the top bit is set in the cluster field
+ *   (to disambiguate this from derived metics that must be evaluted on
+ *   the pmFetch() path).
+ */
+#define DYNAMIC_PMID	511
+#define IS_DYNAMIC_ROOT(x) (pmID_domain(x) == DYNAMIC_PMID && pmID_item(x) == 0)
+#define IS_DERIVED(x) (pmID_domain(x) == DYNAMIC_PMID && (pmID_cluster(x) & 2048) == 0 && pmID_item(x) != 0)
+
+/*
+ * pmID helper functions
+ */
+PCP_CALL extern pmID pmID_build(unsigned int, unsigned int, unsigned int);
+PCP_CALL extern unsigned int pmID_domain(pmID);
+PCP_CALL extern unsigned int pmID_cluster(pmID);
+PCP_CALL extern unsigned int pmID_item(pmID);
+
+/*
+ * pmInDom helper functions
+ */
+PCP_CALL extern pmInDom pmInDom_build(unsigned int, unsigned int);
+PCP_CALL extern unsigned int pmInDom_domain(pmInDom);
+PCP_CALL extern unsigned int pmInDom_serial(pmInDom);
 
 #ifdef __cplusplus
 }

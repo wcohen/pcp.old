@@ -15,9 +15,10 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
  * for more details.
  */
-#include <pcp/pmapi.h>
-#include <pcp/impl.h>
-#include <pcp/pmda.h>
+#include "pmapi.h"
+#include "impl.h"
+#include "libpcp.h"
+#include "pmda.h"
 #include "domain.h"
 #include <sys/stat.h>
 #include <ctype.h>
@@ -188,20 +189,24 @@ static int	compat_names = 0;
  */
 static int perfevent_fetchCallBack(pmdaMetric *mdesc, unsigned int inst, pmAtomValue *atom)
 {
+    unsigned int cluster;
+    unsigned int item;
     if( NULL == mdesc )
     {
         return PM_ERR_PMID;
     }
-    __pmID_int		*idp = (__pmID_int *)&(mdesc->m_desc.pmid);
 
-    if(idp->cluster == 0)
+    cluster = pmID_cluster(mdesc->m_desc.pmid);
+    item = pmID_item(mdesc->m_desc.pmid);
+
+    if(cluster == 0)
     {
-        if(idp->item == 0)
+        if(item == 0)
         {
             atom->cp = VERSION;
             return 1;
         }
-        else if( idp->item == 1)
+        else if( item == 1)
         {
             atom->l = activecounters;
             return 1;
@@ -211,9 +216,9 @@ static int perfevent_fetchCallBack(pmdaMetric *mdesc, unsigned int inst, pmAtomV
             return PM_ERR_PMID;
         }
     }
-    if (idp->cluster == 1)
+    if (cluster == 1)
     {
-        if (idp->item == 0)
+        if (item == 0)
         {
             atom->l = nderivedcounters;
             return 1;
@@ -223,7 +228,7 @@ static int perfevent_fetchCallBack(pmdaMetric *mdesc, unsigned int inst, pmAtomV
             return PM_ERR_PMID;
         }
     }
-    else if(idp->cluster >= (nderivedcounters + nhwcounters + NUM_STATIC_CLUSTERS + NUM_STATIC_DERIVED_CLUSTERS)  )
+    else if(cluster >= (nderivedcounters + nhwcounters + NUM_STATIC_CLUSTERS + NUM_STATIC_DERIVED_CLUSTERS)  )
     {
         return PM_ERR_PMID;
     }
@@ -238,7 +243,7 @@ static int perfevent_fetchCallBack(pmdaMetric *mdesc, unsigned int inst, pmAtomV
     const perf_data *pdata = NULL;
     const perf_derived_data *pddata = NULL;
 
-    if (idp->cluster >= NUM_STATIC_DERIVED_CLUSTERS + NUM_STATIC_CLUSTERS + nhwcounters)
+    if (cluster >= NUM_STATIC_DERIVED_CLUSTERS + NUM_STATIC_CLUSTERS + nhwcounters)
         pddata = &(pinfo->derived_counter->data[inst]);
     else if (pinfo->hwcounter->counter_disabled)
 	return PM_ERR_VALUE;
@@ -321,7 +326,7 @@ static int perfevent_text(int ident, int type, char **buffer, pmdaExt *pmda)
     if ((type & PM_TEXT_PMID) == PM_TEXT_PMID)
     {
         /* Lookup pmid in the metric table. */
-        int item = pmid_item(ident);
+        int item = pmID_item(ident);
 
         /* bounds check item, ensure PMID matches and user data present */
         if (item >= 0 && item < nummetrics

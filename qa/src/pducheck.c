@@ -10,6 +10,7 @@
 
 #include <pcp/pmapi.h>
 #include <pcp/impl.h>
+#include "libpcp.h"
 #include <pcp/trace.h>
 #include <pcp/trace_dev.h>
 #include <math.h>
@@ -1630,7 +1631,6 @@ main(int argc, char **argv)
     int		errflag = 0;
     int		port = 4323;	/* default port for remote connection */
     char	*endnum;
-    __pmID_int	*pmidp;
 
     pmSetProgname(argv[0]);
 
@@ -1721,21 +1721,11 @@ main(int argc, char **argv)
 	exit(1);
     }
 
-    pmidlist[0] = (pmID)0;
-    pmidlist[1] = (pmID)0;
-    pmidp = (__pmID_int *)&pmidlist[1];
-    pmidp->domain = 123;
-    pmidp->cluster = 456;
-    pmidp->item = 789;
-    pmidlist[2] = (pmID)0;
-    pmidp = (__pmID_int *)&pmidlist[2];
-    pmidp->domain = 255;
-    pmidlist[3] = (pmID)0;
-    pmidp = (__pmID_int *)&pmidlist[3];
-    pmidp->cluster = 4095;
-    pmidlist[4] = (pmID)0;
-    pmidp = (__pmID_int *)&pmidlist[4];
-    pmidp->item = 1023;
+    pmidlist[0] = pmID_build(0, 0, 0);
+    pmidlist[1] = pmID_build(123, 456, 789);
+    pmidlist[2] = pmID_build(255, 0, 0);
+    pmidlist[3] = pmID_build(0, 4095, 0);
+    pmidlist[4] = pmID_build(0, 0, 1023);
     pmidlist[5] = PM_ID_NULL;
 
     for (pass = 0; pass < iter; pass++) {

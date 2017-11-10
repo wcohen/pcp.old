@@ -17,7 +17,9 @@
 #include <sys/stat.h>
 #include <pcp/pmapi.h>
 #include <pcp/impl.h>
+#include "libpcp.h"
 #include <pcp/pmda.h>
+#include <pcp/deprecated.h>
 #include "percontext.h"
 #include "events.h"
 #include "domain.h"
@@ -1069,45 +1071,22 @@ nextinst(int *inst)
 static void
 init_tables(int dom)
 {
-    int			i, allocsz;
-    __pmInDom_int	b_indom;
-    __pmInDom_int	*indomp;
-    __pmID_int		*pmidp;
-    pmDesc		*dp;
+    int		i, allocsz;
+    int		serial;
+    pmDesc	*dp;
 
     /* serial numbering is arbitrary, but must be unique in this PMD */
-    b_indom.flag = 0;
-    b_indom.domain = dom;
-    b_indom.serial = 1;
-    indomp = (__pmInDom_int *)&indomtab[COLOUR_INDOM].it_indom;
-    *indomp = b_indom;
-    b_indom.serial++;
-    indomp = (__pmInDom_int *)&indomtab[BIN_INDOM].it_indom;
-    *indomp = b_indom;
-    b_indom.serial++;
-    indomp = (__pmInDom_int *)&indomtab[MIRAGE_INDOM].it_indom;
-    *indomp = b_indom;
-    b_indom.serial++;
-    indomp = (__pmInDom_int *)&indomtab[FAMILY_INDOM].it_indom;
-    *indomp = b_indom;
-    b_indom.serial++;
-    indomp = (__pmInDom_int *)&indomtab[HORDES_INDOM].it_indom;
-    *indomp = b_indom;
-    b_indom.serial++;
-    indomp = (__pmInDom_int *)&indomtab[DODGEY_INDOM].it_indom;
-    *indomp = b_indom;
-    b_indom.serial++;
-    indomp = (__pmInDom_int *)&indomtab[DYNAMIC_INDOM].it_indom;
-    *indomp = b_indom;
-    b_indom.serial++;
-    indomp = (__pmInDom_int *)&indomtab[MANY_INDOM].it_indom;
-    *indomp = b_indom;
-    b_indom.serial++;
-    indomp = (__pmInDom_int *)&indomtab[SCRAMBLE_INDOM].it_indom;
-    *indomp = b_indom;
-    b_indom.serial++;
-    indomp = (__pmInDom_int *)&indomtab[EVENT_INDOM].it_indom;
-    *indomp = b_indom;
+    serial = 1;
+    indomtab[COLOUR_INDOM].it_indom = pmInDom_build(dom, serial++);
+    indomtab[BIN_INDOM].it_indom = pmInDom_build(dom, serial++);
+    indomtab[MIRAGE_INDOM].it_indom = pmInDom_build(dom, serial++);
+    indomtab[FAMILY_INDOM].it_indom = pmInDom_build(dom, serial++);
+    indomtab[HORDES_INDOM].it_indom = pmInDom_build(dom, serial++);
+    indomtab[DODGEY_INDOM].it_indom = pmInDom_build(dom, serial++);
+    indomtab[DYNAMIC_INDOM].it_indom = pmInDom_build(dom, serial++);
+    indomtab[MANY_INDOM].it_indom = pmInDom_build(dom, serial++);
+    indomtab[SCRAMBLE_INDOM].it_indom = pmInDom_build(dom, serial++);
+    indomtab[EVENT_INDOM].it_indom = pmInDom_build(dom, serial++);
 
     /* rewrite indom in desctab[] */
     for (dp = desctab; dp->pmid != PM_ID_NULL; dp++) {
@@ -1171,9 +1150,8 @@ init_tables(int dom)
 
     /* merge performance domain id part into PMIDs in pmDesc table */
     for (i = 0; desctab[i].pmid != PM_ID_NULL; i++) {
-	pmidp = (__pmID_int *)&desctab[i].pmid;
-	pmidp->domain = dom;
-	if (direct_map && pmidp->item != i) {
+	desctab[i].pmid = pmID_build(dom, pmID_cluster(desctab[i].pmid), pmID_item(desctab[i].pmid));
+	if (direct_map && pmID_item(desctab[i].pmid) != i) {
 	    direct_map = 0;
 	    if (pmDebugOptions.appl0) {
 		__pmNotifyErr(LOG_WARNING, "sample_init: direct map disabled @ desctab[%d]", i);
@@ -1181,8 +1159,7 @@ init_tables(int dom)
 	}
     }
     ndesc--;
-    pmidp = (__pmID_int *)&magic.pmid;
-    pmidp->domain = dom;
+    magic.pmid = pmID_build(dom, pmID_cluster(magic.pmid), pmID_item(magic.pmid));
 
     /* local hacks */
     allocsz = roundup(sizeof("13"), 8);
@@ -1591,7 +1568,6 @@ sample_fetch(int numpmid, pmID pmidlist[], pmResult **resp, pmdaExt *ep)
     struct timeval	now;
     pmValueSet	*vset;
     pmDesc	*dp;
-    __pmID_int	*pmidp;
     pmAtomValue	atom;
     int		type;
     char	strbuf[4];	/* sample.string.bin value X00\0 */
@@ -1625,10 +1601,11 @@ sample_fetch(int numpmid, pmID pmidlist[], pmResult **resp, pmdaExt *ep)
 	redo_dodgey();
 
     for (i = 0; i < numpmid; i++) {
-	pmidp = (__pmID_int *)&pmidlist[i];
+	unsigned int	cluster = pmID_cluster(pmidlist[i]);
+	unsigned int	item = pmID_item(pmidlist[i]);
 
 	if (direct_map) {
-	    j = pmidp->item;
+	    j = item;
 	    if (j < ndesc && desctab[j].pmid == pmidlist[i]) {
 		dp = &desctab[j];
 		goto doit;
@@ -1642,26 +1619,26 @@ doit:
 
 	if (dp->pmid != PM_ID_NULL) {
 	    /* the special cases */
-	    if (pmidp->cluster == 0 && pmidp->item == 86) {
+	    if (cluster == 0 && item == 86) {
 		dp = &magic;
 		numval = 1;
 	    }
-	    else if (pmidp->cluster == 0 && pmidp->item == 54)
+	    else if (cluster == 0 && item == 54)
 		numval = PM_ERR_PMID;
-	    else if (pmidp->cluster == 0 && pmidp->item == 92)	/* darkness */
+	    else if (cluster == 0 && item == 92)	/* darkness */
 		numval = 0;
-	    else if (pmidp->cluster == 0 && pmidp->item == 138)	/* bad.novalues */
+	    else if (cluster == 0 && item == 138)	/* bad.novalues */
 		numval = 0;
-	    else if (pmidp->cluster == 0 &&
-	             (pmidp->item == 127 ||	/* event.type */
-		      pmidp->item == 128 ||	/* event.param_32 */
-		      pmidp->item == 129 ||	/* event.param_u32 */
-		      pmidp->item == 130 ||	/* event.param_64 */
-		      pmidp->item == 131 ||	/* event.param_u64 */
-		      pmidp->item == 132 ||	/* event.param_float */
-		      pmidp->item == 133 ||	/* event.param_double */
-		      pmidp->item == 134 ||	/* event.param_string */
-		      pmidp->item == 135))	/* event.param_aggregate */
+	    else if (cluster == 0 &&
+	             (item == 127 ||	/* event.type */
+		      item == 128 ||	/* event.param_32 */
+		      item == 129 ||	/* event.param_u32 */
+		      item == 130 ||	/* event.param_64 */
+		      item == 131 ||	/* event.param_u64 */
+		      item == 132 ||	/* event.param_float */
+		      item == 133 ||	/* event.param_double */
+		      item == 134 ||	/* event.param_string */
+		      item == 135))	/* event.param_aggregate */
 		numval = 0;
 	    else if (dp->type == PM_TYPE_NOSUPPORT)
 		numval = PM_ERR_APPVERSION;
@@ -1669,7 +1646,7 @@ doit:
 		/* count instances in the profile */
 		numval = 0;
 		/* special case(s) */
-		if (pmidp->cluster == 0 && pmidp->item == 49) {
+		if (cluster == 0 && item == 49) {
 		    int		kp;
 		    /* needprofile - explict instances required */
 
@@ -1683,7 +1660,7 @@ doit:
 			break;
 		    }
 		}
-		else if (pmidp->cluster == 0 && (pmidp->item == 76 || pmidp->item == 77 || pmidp->item == 78)) {
+		else if (cluster == 0 && (item == 76 || item == 77 || item == 78)) {
 		    /*
 		     * if $(PCP_VAR_DIR)/pmdas/sample/dynamic.indom is not present,
 		     * then numinst will be zero after the redo_dynamic() call
@@ -1702,7 +1679,7 @@ doit:
 		    startinst(dp->indom, 1);
 		    while (nextinst(&inst)) {
 			/* special case ... not all here for part_bin */
-			if (pmidp->cluster == 0 && pmidp->item == 50 && (inst % 200) == 0)
+			if (cluster == 0 && item == 50 && (inst % 200) == 0)
 			    continue;
 			numval++;
 		    }
@@ -1710,7 +1687,7 @@ doit:
 	    }
 	    else {
 		/* special case(s) for singular instance domains */
-		if (pmidp->cluster == 0 && pmidp->item == 9) {
+		if (cluster == 0 && item == 9) {
 		    /* surprise! no value available */
 		    numval = 0;
 		}
@@ -1750,9 +1727,9 @@ doit:
 	type = dp->type;
 	j = 0;
 	do {
-	    if (pmidp->cluster == 0 && pmidp->item == 50 && inst % 200 == 0)
+	    if (cluster == 0 && item == 50 && inst % 200 == 0)
 		goto skip;
-	    if (pmidp->cluster == 0 && pmidp->item == 51 && inst % 200 == 0)
+	    if (cluster == 0 && item == 51 && inst % 200 == 0)
 		inst += 50;
 	    if (j == numval) {
 		/* more instances than expected! */
@@ -1772,8 +1749,8 @@ doit:
 	     * we mostly have cluster 0, metric already found in desctab[]
 	     * so no checking needed
 	     */
-	    if (pmidp->cluster == 0) {
-		switch (pmidp->item) {
+	    if (cluster == 0) {
+		switch (item) {
 		    case 0:		/* control */
 			atom.l = _control;
 			break;
@@ -1891,7 +1868,7 @@ doit:
 			/* percontext.control.active */
 			/* percontext.control.start */
 			/* percontext.control.end */
-			atom.l = sample_ctx_fetch(ep->e_context, pmidp->item);
+			atom.l = sample_ctx_fetch(ep->e_context, item);
 			break;
 		    case 37:
 			/* mirage */
@@ -2443,7 +2420,7 @@ static int
 sample_desc(pmID pmid, pmDesc *desc, pmdaExt *ep)
 {
     int		i;
-    __pmID_int	*pmidp = (__pmID_int *)&pmid;
+    unsigned int	item = pmID_item(pmid);
 
     sample_inc_recv(ep->e_context);
     sample_inc_xmit(ep->e_context);
@@ -2453,7 +2430,7 @@ sample_desc(pmID pmid, pmDesc *desc, pmdaExt *ep)
     }
 
     if (direct_map) {
-	i = pmidp->item;
+	i = item;
 	if (i < ndesc && desctab[i].pmid == pmid)
 	    goto doit;
     }
@@ -2461,12 +2438,12 @@ sample_desc(pmID pmid, pmDesc *desc, pmdaExt *ep)
 	if (desctab[i].pmid == pmid) {
 doit:
 	    /* the special cases */
-	    if (pmidp->item == 54)
+	    if (item == 54)
 		return PM_ERR_PMID;
-	    else if (pmidp->item == 75 && _error_code < 0)
+	    else if (item == 75 && _error_code < 0)
 		/* error_check and error_code armed */
 		return _error_code;
-	    else if (pmidp->item == 86)
+	    else if (item == 86)
 		*desc = magic;
 	    else
 		*desc = desctab[i];
@@ -2489,19 +2466,19 @@ sample_text(int ident, int type, char **buffer, pmdaExt *ep)
     }
 
     if (ident & PM_TEXT_PMID) {
-	__pmID_int	*pmidp = (__pmID_int *)&ident;
-	int		i;
+	pmID	pmid = (pmID)ident;
+	int	i;
 
 	if (direct_map) {
-	    i = pmidp->item;
+	    i = pmID_item(pmid);
 	    if (i < ndesc && desctab[i].pmid == (pmID)ident)
 		goto doit;
 	}
 	for (i = 0; desctab[i].pmid != PM_ID_NULL; i++) {
-	    if (desctab[i].pmid == (pmID)ident) {
+	    if (desctab[i].pmid == pmid) {
 doit:
 		/* the special cases */
-		if (pmidp->item == 75 && _error_code < 0)
+		if (pmID_item(pmid) == 75 && _error_code < 0)
 		    /* error_check and error_code armed */
 		    return _error_code;
 		break;
@@ -2522,7 +2499,6 @@ sample_store(pmResult *result, pmdaExt *ep)
     int		inst;
     pmValueSet	*vsp;
     pmDesc	*dp;
-    __pmID_int	*pmidp;
     int		sts = 0;
     __int32_t	*lp;
     pmAtomValue	av;
@@ -2545,9 +2521,8 @@ sample_store(pmResult *result, pmdaExt *ep)
 	    sts = PM_ERR_PMID;
 	    break;
 	}
-	pmidp = (__pmID_int *)&vsp->pmid;
 
-	if (pmidp->cluster != 0) {
+	if (pmID_cluster(vsp->pmid) != 0) {
 	    sts = PM_ERR_PMID;
 	    break;
 	}
@@ -2561,7 +2536,7 @@ sample_store(pmResult *result, pmdaExt *ep)
 	 * The notable exception is sample.bin where one or more
 	 * 32-bit values is expected.
 	 */
-	switch (pmidp->item) {
+	switch (pmID_item(vsp->pmid)) {
 
 	    case 0:	/* control */
 	    case 7:	/* drift */
@@ -2657,9 +2632,9 @@ sample_store(pmResult *result, pmdaExt *ep)
 
 	/*
 	 * we only have cluster 0, metric already found in desctab[],
-	 * so no checking needed nor outer case on pmidp->cluster
+	 * so no checking needed nor outer case on pmID_cluster(vsp->pmid)
 	 */
-	switch (pmidp->item) {
+	switch (pmID_item(vsp->pmid)) {
 	    case 0:	/* control */
 		_control = av.l;
 		switch (_control) {
@@ -2864,12 +2839,10 @@ sample_label_indom(pmInDom indom, pmLabelSet **lp)
 static int
 sample_label_item(pmID pmid, pmLabelSet **lp)
 {
-    __pmID_int	*pmidp = (__pmID_int *)&pmid;
-
-    if (pmidp->cluster != 0)
+    if (pmID_cluster(pmid) != 0)
 	return 0;
 
-    switch (pmidp->item) {
+    switch (pmID_item(pmid)) {
 	case 14:	/* long.write_me */
 	    pmdaAddNotes(lp, "{\"changed\":%s}", boolstr(_long != 13));
 	    return 1;
@@ -3035,15 +3008,13 @@ sample_init(pmdaInterface *dp)
 
     /* initialization of domain in PMIDs for dynamic PMNS entries */
     for (i = 0; i < numdyn; i++) {
-	((__pmID_int *)&dynamic_ones[i].pmid)->domain = dp->domain;
+	dynamic_ones[i].pmid = pmID_build(dp->domain, pmID_cluster(dynamic_ones[i].pmid), pmID_item(dynamic_ones[i].pmid));
     }
     /*
      * Max Matveev wanted this sort of redirection, so first entry is
      * actually a redirect to PMID 2.4.1 (pmcd.agent.status)
      */
-    ((__pmID_int *)&dynamic_ones[0].pmid)->domain = 2;
-    ((__pmID_int *)&dynamic_ones[0].pmid)->cluster = 4;
-    ((__pmID_int *)&dynamic_ones[0].pmid)->item = 1;
+    dynamic_ones[0].pmid = pmID_build(2, 4, 1);
 
     /*
      * for gcc/egcs, statically initializing these cased the strings

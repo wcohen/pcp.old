@@ -7,6 +7,7 @@
 
 #include <pcp/pmapi.h>
 #include <pcp/impl.h>
+#include "libpcp.h"
 #if defined(HAVE_PWD_H)
 #include <pwd.h>
 #endif

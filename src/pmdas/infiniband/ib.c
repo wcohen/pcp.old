@@ -538,22 +538,24 @@ ib_linkwidth (port_state_t *pst)
 int
 ib_fetch_val(pmdaMetric *mdesc, unsigned int inst, pmAtomValue *atom)
 {
-    __pmInDom_int *ind = (__pmInDom_int *)&(mdesc->m_desc.indom);
-    __pmID_int	*idp = (__pmID_int *)&(mdesc->m_desc.pmid);
+    unsigned int cluster = pmID_cluster(mdesc->m_desc.pmid);
+    unsigned int item = pmID_item(mdesc->m_desc.pmid);
     int	rv = 1; 
     port_state_t *pst = NULL;
     hca_state_t *hca = NULL;
-    int umask = 1<<idp->cluster;
+    int umask;
     int udata = (int)((__psint_t)mdesc->m_user);
     void *closure = NULL;
     int st;
     char *name = NULL;
 
+    umask = 1<<cluster;
+
     if (inst == PM_INDOM_NULL) {
 	return PM_ERR_INST;
     }
 
-    if (ind->serial != IB_CNT_INDOM) {
+    if (pmInDom_serial(mdesc->m_desc.indom) != IB_CNT_INDOM) {
 	if ((st = pmdaCacheLookup (mdesc->m_desc.indom, inst, &name,
 				   &closure)) != PMDA_CACHE_ACTIVE) {
 	    if (st == PMDA_CACHE_INACTIVE)
@@ -567,9 +569,9 @@ ib_fetch_val(pmdaMetric *mdesc, unsigned int inst, pmAtomValue *atom)
     /* If fetching from HCA indom, then no refreshing is necessary for the
      * lifetime of a pmda. Ports could change state, so some update could be
      * necessary */
-    switch (ind->serial) {
+    switch (pmInDom_serial(mdesc->m_desc.indom)) {
     case IB_PORT_INDOM:
-	if (idp->cluster > 3) {
+	if (cluster > 3) {
 	    return PM_ERR_INST;
 	}
 
@@ -621,7 +623,7 @@ ib_fetch_val(pmdaMetric *mdesc, unsigned int inst, pmAtomValue *atom)
 		}
 	    }
 
-	    switch (idp->cluster) {
+	    switch (cluster) {
 	    case 0: /* port attributes */
 		memset (pst->portinfo, 0, sizeof(pst->portinfo));
 		if (!smp_query_via (pst->portinfo, &pst->portid,
@@ -715,9 +717,9 @@ ib_fetch_val(pmdaMetric *mdesc, unsigned int inst, pmAtomValue *atom)
 	return (PM_ERR_INST);
     }
 
-    switch (idp->cluster) {
+    switch (cluster) {
     case 0: /* UMAD data - hca name, fw_version, number of ports etc */
-	switch(idp->item) {
+	switch(item) {
 	case METRIC_ib_hca_hw_ver:
 	    atom->cp = hca->ca.hw_ver;
 	    break;
@@ -845,7 +847,7 @@ ib_fetch_val(pmdaMetric *mdesc, unsigned int inst, pmAtomValue *atom)
 	} else {
 	    int rv1=0, rv2=0;
 	    /* Synthetic metrics */
-	    switch (idp->item) {
+	    switch (item) {
 	    case METRIC_ib_port_total_bytes:
 		atom->ll = ib_update_perfcnt (pst, IBPMDA_XMT_BYTES, &rv1)
 			 + ib_update_perfcnt (pst, IBPMDA_RCV_BYTES, &rv2);
@@ -878,7 +880,7 @@ ib_fetch_val(pmdaMetric *mdesc, unsigned int inst, pmAtomValue *atom)
 	break;
 
     case 2: /* Control structures */
-	switch (idp->item) {
+	switch (item) {
 	case METRIC_ib_control_query_timeout:
 	    atom->l = pst->timeout;
 	    break;
@@ -903,7 +905,7 @@ ib_fetch_val(pmdaMetric *mdesc, unsigned int inst, pmAtomValue *atom)
 
 	// (The values are "swapped" because what the port receives is what the
 	// switch sends, and vice versa.)
-	switch (idp->item) {
+	switch (item) {
 	    case METRIC_ib_port_switch_in_bytes: {
 		mad_decode_field(pst->switchperfdata, 
 		    	IB_PC_EXT_XMT_BYTES_F, &atom->ull);
@@ -1017,10 +1019,9 @@ ib_store(pmResult *result, pmdaExt *pmda)
 
     for (i = 0; i < result->numpmid ; i++) {
 	pmValueSet *vs = result->vset[i];
-	__pmID_int *pmidp = (__pmID_int *)&vs->pmid;
 	int inst;
 
-	if (pmidp->cluster != 2) {
+	if (pmID_cluster(vs->pmid) != 2) {
 	    return (-EACCES);
 	}
 
@@ -1032,7 +1033,7 @@ ib_store(pmResult *result, pmdaExt *pmda)
 	    int id = vs->vlist[inst].inst;
 	    void *closure = NULL;
 
-	    switch (pmidp->item) {
+	    switch (pmID_item(vs->pmid)) {
 	    case METRIC_ib_control_query_timeout:
 		if (pmdaCacheLookup (pmda->e_indoms[IB_PORT_INDOM].it_indom,
 				     id, NULL, &closure) == PMDA_CACHE_ACTIVE) {

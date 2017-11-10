@@ -7,6 +7,7 @@
 
 #include <pcp/pmapi.h>
 #include <pcp/impl.h>
+#include "libpcp.h"
 #include "localconfig.h"
 
 int a[4] = {0, 37, 235, 126};

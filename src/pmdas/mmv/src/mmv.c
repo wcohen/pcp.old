@@ -23,11 +23,13 @@
  * of the file (by default - this can be changed).
  */
 
-#include "pmapi.h"
-#include "mmv_stats.h"
-#include "mmv_dev.h"
-#include "impl.h"
-#include "pmda.h"
+#include <pcp/pmapi.h>
+#include <pcp/mmv_stats.h>
+#include <pcp/mmv_dev.h>
+#include <pcp/impl.h>
+#include <pcp/libpcp.h>
+#include <pcp/deprecated.h>
+#include <pcp/pmda.h>
 #include "./domain.h"
 #include <sys/stat.h>
 #include <inttypes.h>
@@ -271,7 +273,7 @@ verify_metric_item(unsigned int item, char *name, stats_t *s)
     if (pmDebugOptions.appl0)
 	__pmNotifyErr(LOG_DEBUG, "MMV: verify_metric_item: %u - %s", item, name);
 
-    if (pmid_item(item) != item) {
+    if (pmID_item(item) != item) {
 	__pmNotifyErr(LOG_WARNING, "invalid item %u (%s) in %s, ignored",
 			item, name, s->name);
 	return -EINVAL;
@@ -495,11 +497,11 @@ map_stats(pmdaExt *pmda)
 
     /* hard-coded metrics (not from mmap'd files) */
     pmsprintf(name, sizeof(name), "%s.control.reload", prefix);
-    __pmAddPMNSNode(pmns, pmid_build(pmda->e_domain, 0, 0), name);
+    __pmAddPMNSNode(pmns, pmID_build(pmda->e_domain, 0, 0), name);
     pmsprintf(name, sizeof(name), "%s.control.debug", prefix);
-    __pmAddPMNSNode(pmns, pmid_build(pmda->e_domain, 0, 1), name);
+    __pmAddPMNSNode(pmns, pmID_build(pmda->e_domain, 0, 1), name);
     pmsprintf(name, sizeof(name), "%s.control.files", prefix);
-    __pmAddPMNSNode(pmns, pmid_build(pmda->e_domain, 0, 2), name);
+    __pmAddPMNSNode(pmns, pmID_build(pmda->e_domain, 0, 2), name);
     mtot = 3;
 
     if (indoms != NULL) {
@@ -597,7 +599,7 @@ map_stats(pmdaExt *pmda)
 			if (verify_metric_item(mp->item, name, s) != 0)
 			    continue;
 
-			pmid = pmid_build(pmda->e_domain, s->cluster, mp->item);
+			pmid = pmID_build(pmda->e_domain, s->cluster, mp->item);
 			create_metric(pmda, s, name, pmid, mp->indom,
 					mp->type, mp->semantics, mp->dimension);
 		    }
@@ -652,7 +654,7 @@ map_stats(pmdaExt *pmda)
 			if (verify_metric_item(mp->item, name, s) != 0)
 			    continue;
 
-			pmid = pmid_build(pmda->e_domain, s->cluster, mp->item);
+			pmid = pmID_build(pmda->e_domain, s->cluster, mp->item);
 			create_metric(pmda, s, name, pmid, mp->indom,
 					mp->type, mp->semantics, mp->dimension);
 		    }
@@ -845,18 +847,17 @@ mmv_lookup_stat_metric(pmID pmid, unsigned int inst,
 	stats_t **stats, mmv_disk_value_t **value,
 	__uint64_t *shorttext, __uint64_t *helptext)
 {
-    __pmID_int *id = (__pmID_int *)&pmid;
     int si, sts = PM_ERR_PMID;
 
     for (si = 0; si < scnt; si++) {
 	stats_t *s = &slist[si];
 
-	if (s->cluster != id->cluster)
+	if (s->cluster != pmID_cluster(pmid))
 	    continue;
 
 	sts = (s->version == MMV_VERSION1) ?
-	    mmv_lookup_item1(id->item, inst, s, value, shorttext, helptext):
-	    mmv_lookup_item2(id->item, inst, s, value, shorttext, helptext);
+	    mmv_lookup_item1(pmID_item(pmid), inst, s, value, shorttext, helptext):
+	    mmv_lookup_item2(pmID_item(pmid), inst, s, value, shorttext, helptext);
 	if (sts >= 0) {
 	    *stats = s;
 	    break;
@@ -878,10 +879,8 @@ mmv_lookup_stat_metric_value(pmID pmid, unsigned int inst,
 static int
 mmv_fetchCallBack(pmdaMetric *mdesc, unsigned int inst, pmAtomValue *atom)
 {
-    __pmID_int *id = (__pmID_int *)&(mdesc->m_desc.pmid);
-
-    if (id->cluster == 0) {
-	if (id->item <= 2) {
+    if (pmID_cluster(mdesc->m_desc.pmid) == 0) {
+	if (pmID_item(mdesc->m_desc.pmid) <= 2) {
 	    atom->l = *(int *)mdesc->m_user;
 	    return 1;
 	}
@@ -1094,8 +1093,8 @@ mmv_text(int ident, int type, char **buffer, pmdaExt *ep)
 	return PM_ERR_TEXT;
 
     mmv_reload_maybe(ep);
-    if (pmid_cluster(ident) == 0) {
-	switch (pmid_item(ident)) {
+    if (pmID_cluster(ident) == 0) {
+	switch (pmID_item(ident)) {
 	    case 0: {
 		static char reloadoneline[] = "Control maps reloading";
 		static char reloadtext[] = 
@@ -1152,13 +1151,11 @@ mmv_store(pmResult *result, pmdaExt *ep)
 
     for (i = 0; i < result->numpmid; i++) {
 	pmValueSet * vsp = result->vset[i];
-	__pmID_int * id = (__pmID_int *)&vsp->pmid;
 
-	if (id->cluster == 0) {
+	if (pmID_cluster(vsp->pmid) == 0) {
 	    for (m = 0; m < mtot; m++) {
-		__pmID_int * mid = (__pmID_int *)&(metrics[m].m_desc.pmid);
 
-		if (mid->cluster == 0 && mid->item == id->item) {
+		if (pmID_cluster(metrics[m].m_desc.pmid) == 0 && pmID_item(metrics[m].m_desc.pmid) == pmID_item(vsp->pmid)) {
 		    pmAtomValue atom;
 		    int sts;
 
@@ -1168,9 +1165,9 @@ mmv_store(pmResult *result, pmdaExt *ep)
 		    if ((sts = pmExtractValue(vsp->valfmt, &vsp->vlist[0],
 					PM_TYPE_32, &atom, PM_TYPE_32)) < 0)
 			return sts;
-		    if (id->item == 0)
+		    if (pmID_item(vsp->pmid) == 0)
 			reload = atom.l;
-		    else if (id->item == 1)
+		    else if (pmID_item(vsp->pmid) == 1)
 			pmDebug = atom.l;
 		    else
 			return PM_ERR_PERMISSION;
@@ -1244,7 +1241,7 @@ mmv_init(pmdaInterface *dp)
 		    metrics[m].m_user = &pmDebug;
 		else if (m == 2)
 		    metrics[m].m_user = &scnt;
-		metrics[m].m_desc.pmid = pmid_build(dp->domain, 0, m);
+		metrics[m].m_desc.pmid = pmID_build(dp->domain, 0, m);
 		metrics[m].m_desc.type = PM_TYPE_32;
 		metrics[m].m_desc.indom = PM_INDOM_NULL;
 		metrics[m].m_desc.sem = PM_SEM_INSTANT;

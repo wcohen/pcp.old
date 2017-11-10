@@ -172,15 +172,16 @@ valid_pmid(unsigned int cluster, unsigned int item)
 static int
 logger_fetchCallBack(pmdaMetric *mdesc, unsigned int inst, pmAtomValue *atom)
 {
-    __pmID_int *idp = (__pmID_int *)&(mdesc->m_desc.pmid);
+    unsigned int	cluster = pmID_cluster(mdesc->m_desc.pmid);
+    unsigned int	item = pmID_item(mdesc->m_desc.pmid);
     int		sts;
 
-    if ((sts = valid_pmid(idp->cluster, idp->item)) < 0)
+    if ((sts = valid_pmid(cluster, item)) < 0)
 	return sts;
 
     sts = PMDA_FETCH_STATIC;
-    if (idp->item < 4) {
-	switch (idp->item) {
+    if (item < 4) {
+	switch (item) {
 	    case 0:			/* logger.numclients */
 		sts = pmdaEventClients(atom);
 		break;
@@ -244,12 +245,11 @@ logger_store(pmResult *result, pmdaExt *pmda)
 
     for (i = 0; i < result->numpmid; i++) {
 	pmValueSet		*vsp = result->vset[i];
-	__pmID_int		*idp = (__pmID_int *)&vsp->pmid;
 	dynamic_metric_info_t	*pinfo = NULL;
 	void			*filter;
 	int			queueid;
 
-	if ((sts = valid_pmid(idp->cluster, idp->item)) < 0)
+	if ((sts = valid_pmid(pmID_cluster(vsp->pmid), pmID_item(vsp->pmid))) < 0)
 	    return sts;
 	for (j = 0; j < pmda->e_nmetrics; j++) {
 	    if (vsp->pmid == pmda->e_metrics[j].m_desc.pmid) {
@@ -317,7 +317,7 @@ logger_text(int ident, int type, char **buffer, pmdaExt *pmda)
 
     if ((type & PM_TEXT_PMID) == PM_TEXT_PMID) {
 	/* Lookup pmid in the metric table. */
-	int item = pmid_item(ident);
+	int item = pmID_item(ident);
 
 	/* If the PMID item was for a dynamic metric... */
 	if (item >= numstatics && item < nummetrics

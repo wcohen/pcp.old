@@ -45,7 +45,7 @@ CFILES = disk_test.c exercise.c context_test.c chkoptfetch.c \
 	mmv2_genstats.c mmv2_instances.c mmv2_nostats.c mmv2_simple.c \
 	httpfetch.c json_test.c check_pmiend_fdleak.c loadconfig2.c \
 	archctl_segfault.c debug.c int2pmid.c int2indom.c exectest.c \
-	unpickargs.c hanoi.c chain.c
+	unpickargs.c hanoi.c chain.c progname.c
 
 ifeq ($(shell test -f ../localconfig && echo 1), 1)
 include ../localconfig
@@ -153,7 +153,7 @@ endif
 MYFILES += \
 	err_v1.dump \
 	root_irix root_pmns tiny.pmns sgi.bf versiondefs \
-	pthread_barrier.h pv.c qa_test.c qa_timezone.c \
+	pthread_barrier.h libpcp.h pv.c qa_test.c qa_timezone.c \
 	permslist \
 	qa_shmctl.c qa_sem_msg_ctl.c \
 	qa_shmctl_stat.c qa_msgctl_stat.c qa_semctl_stat.c
@@ -636,6 +636,10 @@ endif
 
 arch_maxfd.o:	localconfig.h
 scale.o:	localconfig.h
+
+hex2nbo.o:	libpcp.h
+endian.o:	libpcp.h
+debug.o:	libpcp.h
 
 bozo:
 	@echo TARGETS=$(TARGETS)

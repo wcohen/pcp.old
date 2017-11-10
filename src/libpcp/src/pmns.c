@@ -25,6 +25,7 @@
 #include <ctype.h>
 #include "pmapi.h"
 #include "impl.h"
+#include "libpcp.h"
 #include "pmda.h"
 #include "internal.h"
 #include "fault.h"
@@ -2563,7 +2564,7 @@ pmNameID(pmID pmid, char **name)
 
 	if (c_type == PM_CONTEXT_LOCAL) {
 	    /* have PM_CONTEXT_LOCAL ... try to ship request to PMDA */
-	    int		domain = pmid_domain(pmid);
+	    int		domain = pmID_domain(pmid);
 	    __pmDSO	*dp;
 
 	    if ((dp = __pmLookupDSO(domain)) == NULL)
@@ -2738,7 +2739,7 @@ pmNameAll_ctx(__pmContext *ctxp, pmID pmid, char ***namelist)
 
 	if (c_type == PM_CONTEXT_LOCAL) {
 	    /* have PM_CONTEXT_LOCAL ... try to ship request to PMDA */
-	    int		domain = pmid_domain(pmid);
+	    int		domain = pmID_domain(pmid);
 	    __pmDSO	*dp;
 
 	    if ((dp = __pmLookupDSO(domain)) == NULL)

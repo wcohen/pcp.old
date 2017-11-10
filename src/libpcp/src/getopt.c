@@ -17,6 +17,7 @@
 
 #include "pmapi.h"
 #include "impl.h"
+#include "libpcp.h"
 #include "internal.h"
 #include <ctype.h>
 #include <dirent.h>
@@ -551,10 +552,7 @@ badfolio:
 static void
 __pmAddOptHostFile(pmOptions *opts, char *arg)
 {
-    if (!(opts->flags & PM_OPTFLAG_MULTI)) {
-	pmprintf("%s: too many hosts requested: %s\n", pmGetProgname(), arg);
-	opts->errors++;
-    } else if (opts->narchives && !(opts->flags & PM_OPTFLAG_MIXED)) {
+    if (opts->narchives && !(opts->flags & PM_OPTFLAG_MIXED)) {
 	pmprintf("%s: only one of hosts or archives allowed\n", pmGetProgname());
 	opts->errors++;
     } else {
@@ -574,6 +572,11 @@ __pmAddOptHostFile(pmOptions *opts, char *arg)
 		    p++;
 		if (*p == '\n' || *p == '#')
 		    continue;
+		if (opts->nhosts > 0 && !(opts->flags & PM_OPTFLAG_MULTI)) {
+		    pmprintf("%s: too many hosts requested: %s\n", pmGetProgname(), arg);
+		    opts->errors++;
+		    break;
+		}
 		host = p;
 		length = 0;
 		while (*p != '\n' && *p != '#' && !isspace((int)*p)) {

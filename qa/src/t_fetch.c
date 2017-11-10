@@ -8,7 +8,7 @@
 #include <pcp/pmapi.h>
 #include <pcp/impl.h>
 
-#define StuffDom(metric, newdom) (((__pmID_int *)&(metric))->domain = (newdom))
+#define StuffDom(metric, newdom) pmID_build(newdom, pmID_cluster(metric), pmID_item(metric))
 
 #define NMETRICS 3
 

@@ -16,6 +16,7 @@
 #include <ctype.h>
 #include "pmapi.h"
 #include "impl.h"
+#include "libpcp.h"
 #include "pmda.h"
 #include "internal.h"
 #include "sort_r.h"
@@ -820,7 +821,7 @@ lookup_domain(int ident, int type)
     if (type & PM_LABEL_INDOM)
 	return pmInDom_domain(ident);
     if (type & (PM_LABEL_CLUSTER | PM_LABEL_ITEM | PM_LABEL_INSTANCES))
-	return pmid_domain(ident);
+	return pmID_domain(ident);
     return -EINVAL;
 }
 
@@ -982,7 +983,7 @@ pmLookupLabels(pmID pmid, pmLabelSet **labels)
 	free(lsp);
     }
 
-    ident = pmid_domain(pmid);
+    ident = pmID_domain(pmid);
     if ((sts = pmGetDomainLabels(ident, &lsp)) < 0)
 	goto fail;
     if (lsp) {
@@ -999,7 +1000,7 @@ pmLookupLabels(pmID pmid, pmLabelSet **labels)
 	}
     }
 
-    ident = pmid_build(ident, pmid_cluster(pmid), 0);
+    ident = pmID_build(ident, pmID_cluster(pmid), 0);
     if ((sts = pmGetClusterLabels(ident, &lsp)) < 0)
 	goto fail;
     if (lsp) {

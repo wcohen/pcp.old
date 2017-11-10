@@ -15,6 +15,7 @@
 
 #include "pmapi.h"
 #include "impl.h"
+#include "libpcp.h"
 #include "import.h"
 #include "domain.h"
 #include "private.h"
@@ -138,7 +139,7 @@ pmiUnits(int dimSpace, int dimTime, int dimCount, int scaleSpace, int scaleTime,
 pmID
 pmiID(int domain, int cluster, int item)
 {
-    return pmid_build(domain, cluster, item);
+    return pmID_build(domain, cluster, item);
 }
 
 pmInDom
@@ -466,7 +467,7 @@ pmiAddMetric(const char *name, pmID pmid, int type, pmInDom indom, int sem, pmUn
 	}
 	item %= (1<<10);
 	cluster >>= 10;
-	mp->pmid = pmid_build(PMI_DOMAIN, cluster, item);
+	mp->pmid = pmID_build(PMI_DOMAIN, cluster, item);
     }
     mp->name = strdup(name);
     if (mp->name == NULL) {

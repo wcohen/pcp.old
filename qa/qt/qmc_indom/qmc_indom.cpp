@@ -8,6 +8,8 @@
 #include <qmc_desc.h>
 #include <qmc_indom.h>
 
+#include <pcp/libpcp.h>
+
 QTextStream cerr(stderr);
 QTextStream cout(stdout);
 
@@ -56,7 +58,7 @@ main(int argc, char* argv[])
 	return 1;
     }
 
-    pmID hinv_map_cpu = pmid_build(1, 26, 9);
+    pmID hinv_map_cpu = pmID_build(1, 26, 9);
     QmcDesc hinv_map_cpu_pmc(hinv_map_cpu);
 
     if (hinv_map_cpu_pmc.status() < 0) {
