@@ -15,7 +15,6 @@
  */
 
 #include "pmapi.h"
-#include "impl.h"
 #include "libpcp.h"
 #include "pmda.h"
 #include "domain.h"
@@ -1045,7 +1044,7 @@ static pmdaOptions opts = {
 int
 main(int argc, char **argv)
 {
-    int			sep = __pmPathSeparator();
+    int			sep = pmPathSeparator();
     pmdaInterface	dispatch;
     char		helppath[MAXPATHLEN];
 

@@ -16,7 +16,6 @@
 #include <limits.h>
 #include <sys/stat.h>
 #include <pcp/pmapi.h>
-#include <pcp/impl.h>
 #include "libpcp.h"
 #include <pcp/pmda.h>
 #include <pcp/deprecated.h>
@@ -657,7 +656,7 @@ redo_dynamic(void)
 {
     int			err;
     int			i;
-    int			sep = __pmPathSeparator();
+    int			sep = pmPathSeparator();
     static struct stat	lastsbuf;
     struct stat		statbuf;
     pmdaIndom		*idp = &indomtab[DYNAMIC_INDOM];
@@ -963,7 +962,7 @@ cntinst(pmInDom indom)
 	if (idp->it_indom == indom)
 	    return idp->it_numinst;
     }
-    __pmNotifyErr(LOG_WARNING, "cntinst: unknown pmInDom 0x%x", indom);
+    pmNotifyErr(LOG_WARNING, "cntinst: unknown pmInDom 0x%x", indom);
     return 0;
 }
 
@@ -1154,7 +1153,7 @@ init_tables(int dom)
 	if (direct_map && pmID_item(desctab[i].pmid) != i) {
 	    direct_map = 0;
 	    if (pmDebugOptions.appl0) {
-		__pmNotifyErr(LOG_WARNING, "sample_init: direct map disabled @ desctab[%d]", i);
+		pmNotifyErr(LOG_WARNING, "sample_init: direct map disabled @ desctab[%d]", i);
 	    }
 	}
     }
@@ -1762,8 +1761,8 @@ doit:
 			atom.ul = time(NULL) - _start;
 			break;
 		    case 3:		/* milliseconds */
-			__pmtimevalNow(&now);
-			atom.d = 1000 * __pmtimevalSub(&now, &_then);
+			pmtimevalNow(&now);
+			atom.d = 1000 * pmtimevalSub(&now, &_then);
 			break;
 		    case 4:		/* load */
 			atom.l = 42;
@@ -2174,8 +2173,8 @@ doit:
 			}
 			break;
 		    case 72: /* const_rate.value */
-			__pmtimevalNow(&now);
-			atom.ul = const_rate_value + const_rate_gradient * __pmtimevalSub(&now, &const_rate_timestamp);
+			pmtimevalNow(&now);
+			atom.ul = const_rate_value + const_rate_gradient * pmtimevalSub(&now, &const_rate_timestamp);
 			const_rate_timestamp = now;
 			const_rate_value = atom.ul;
 			break;
@@ -2971,7 +2970,7 @@ sample_init(pmdaInterface *dp)
     int		i;
 
     if (_isDSO) {
-	int sep = __pmPathSeparator();
+	int sep = pmPathSeparator();
 	pmsprintf(helppath, sizeof(helppath), "%s%c" "sample" "%c" "dsohelp",
 			pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
 	pmdaDSO(dp, PMDA_INTERFACE_LATEST, "sample DSO", helppath);
@@ -2999,7 +2998,7 @@ sample_init(pmdaInterface *dp)
 
     pmdaInit(dp, NULL, 0, NULL, 0);	/* don't use indomtab or metrictab */
 
-    __pmtimevalNow(&_then);
+    pmtimevalNow(&_then);
     _start = time(NULL);
     init_tables(dp->domain);
     init_events(dp->domain);

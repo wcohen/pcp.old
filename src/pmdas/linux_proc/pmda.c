@@ -18,7 +18,6 @@
  */
 
 #include "pmapi.h"
-#include "impl.h"
 #include "libpcp.h"
 #include "pmda.h"
 #include "domain.h"
@@ -3392,7 +3391,7 @@ proc_init(pmdaInterface *dp)
 
     if (_isDSO) {
 	char helppath[MAXPATHLEN];
-	int sep = __pmPathSeparator();
+	int sep = pmPathSeparator();
 	pmsprintf(helppath, sizeof(helppath), "%s%c" "proc" "%c" "help",
 		pmGetConfig("PCP_PMDAS_DIR"), sep, sep);
 	pmdaDSO(dp, PMDA_INTERFACE_7, "proc DSO", helppath);
@@ -3492,7 +3491,7 @@ pmdaOptions	opts = {
 int
 main(int argc, char **argv)
 {
-    int			c, sep = __pmPathSeparator();
+    int			c, sep = pmPathSeparator();
     pmdaInterface	dispatch;
     char		helppath[MAXPATHLEN];
     char		*username = "root";
@@ -3525,7 +3524,7 @@ main(int argc, char **argv)
 	username = opts.username;
 
     pmdaOpenLog(&dispatch);
-    __pmSetProcessIdentity(username);
+    pmSetProcessIdentity(username);
 
     proc_init(&dispatch);
     pmdaConnect(&dispatch);

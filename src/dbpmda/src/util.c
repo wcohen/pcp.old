@@ -47,7 +47,7 @@ void
 reset_profile(void)
 {
     if ((profile = (pmProfile *)realloc(profile, sizeof(pmProfile))) == NULL) {
-	__pmNoMem("reset_profile", sizeof(pmProfile), PM_FATAL_ERR);
+	pmNoMem("reset_profile", sizeof(pmProfile), PM_FATAL_ERR);
 	exit(1);
     }
     ctxp->c_instprof = profile;
@@ -585,7 +585,7 @@ _dbDumpResult(FILE *f, pmResult *resp, pmDesc *desc_list)
 
     fprintf(f, "pmResult dump from " PRINTF_P_PFX "%p timestamp: %d.%06d ",
         resp, (int)resp->timestamp.tv_sec, (int)resp->timestamp.tv_usec);
-    __pmPrintStamp(f, &resp->timestamp);
+    pmPrintStamp(f, &resp->timestamp);
     fprintf(f, " numpmid: %d\n", resp->numpmid);
     for (i = 0; i < resp->numpmid; i++) {
 	pmValueSet	*vsp = resp->vset[i];

@@ -22,7 +22,6 @@
 #define _LOGGER_H
 
 #include "pmapi.h"
-#include "impl.h"
 #include "libpcp.h"
 
 /*
@@ -30,7 +29,7 @@
  */
 typedef struct _reclist_t {
     __pmPDU		*pdu;		/* PDU ptr */
-    __pmTimeval		stamp;		/* for indom records */
+    pmTimeval		stamp;		/* for indom records */
     pmDesc		desc;
     int			written;	/* written status */
     struct _reclist_t	*ptr;		/* ptr to record in another reclist */
