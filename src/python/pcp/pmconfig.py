@@ -24,6 +24,7 @@ try:
     import ConfigParser
 except ImportError:
     import configparser as ConfigParser
+import signal
 import time
 import csv
 import sys
@@ -35,6 +36,8 @@ from pcp import pmapi
 # Common defaults (for applicable utils)
 TRUNC = "xxx"
 VERSION = 1
+CURR_INSTS = False
+MAX_INSTS = 1024
 
 class pmConfig(object):
     """ Config reader and validator """
@@ -59,6 +62,19 @@ class pmConfig(object):
 
         # Pass data with pmTraversePMNS
         self._tmp = []
+
+    def set_signal_handler(self):
+        """ Set default signal handler """
+        def handler(signum, frame):
+            """ Default signal handler """
+            self.util.finalize()
+            sys.exit(0)
+        for sig in "SIGHUP", "SIGTERM":
+            try:
+                signum = getattr(signal, sig)
+                signal.signal(signum, handler)
+            except:
+                pass
 
     def set_config_file(self, default_config):
         """ Set default config file """
@@ -91,12 +107,15 @@ class pmConfig(object):
 
     def set_attr(self, name, value):
         """ Set options read from file """
+        if name == 'colxrow':
+            # As a special service for pmrep(1) utility we handle
+            # its config colxrow parameter here with minimal impact.
+            self.util.colxrow = value
+            return
         if value in ('true', 'True', 'y', 'yes', 'Yes'):
             value = 1
         if value in ('false', 'False', 'n', 'no', 'No'):
             value = 0
-        if name == 'source':
-            self.util.source = value
         if name == 'speclocal':
             if not self.util.speclocal or not self.util.speclocal.startswith("K:"):
                 self.util.speclocal = value
@@ -117,6 +136,8 @@ class pmConfig(object):
             try:
                 setattr(self.util, name, int(value))
             except ValueError:
+                if value.startswith('"') and value.endswith('"'): # pylint: disable=no-member
+                    value = value[1:-1]
                 setattr(self.util, name, value)
 
     def read_section_options(self, config, section):
@@ -160,7 +181,7 @@ class pmConfig(object):
 
     def parse_metric_spec_instances(self, spec):
         """ Parse instances from metric spec """
-        insts = [None]
+        insts = []
         if spec.count(",") < 2:
             return spec + ",,", insts
         # User may supply quoted or unquoted instance specification
@@ -180,7 +201,8 @@ class pmConfig(object):
                 insts = self.parse_instances(inststr)
             spec = spec.replace(inststr, "")
         else:
-            insts = [s]
+            if s:
+                insts = [s]
         if spec.count(",") < 2:
             spec += ",,"
         return spec, insts
@@ -206,20 +228,28 @@ class pmConfig(object):
                 metrics[key] = [value]
                 for index in range(0, 6):
                     if len(metrics[key]) <= index:
-                        metrics[key].append(None)
+                        if index == 2:
+                            metrics[key].append([])
+                        else:
+                            metrics[key].append(None)
             else:
                 # Additional info
                 key, spec = key.rsplit(".")
                 if key not in metrics:
                     sys.stderr.write("Undeclared metric key %s.\n" % key)
                     sys.exit(1)
+                if value.startswith('"') and value.endswith('"'):
+                    value = value[1:-1]
                 if spec == "formula":
                     if self.util.derived is None:
                         self.util.derived = metrics[key][0] + "=" + value
                     else:
                         self.util.derived += "@" + metrics[key][0] + "=" + value
                 else:
-                    metrics[key][self.metricspec.index(spec)+1] = value
+                    if self.metricspec.index(spec) == 1:
+                        metrics[key][self.metricspec.index(spec)+1] = [value]
+                    else:
+                        metrics[key][self.metricspec.index(spec)+1] = value
 
     def prepare_metrics(self):
         """ Construct and prepare the initial metrics set """
@@ -267,10 +297,10 @@ class pmConfig(object):
                     for key in config.options(spec):
                         if key not in self.util.keys:
                             self.parse_metric_info(parsemet, key, config.get(spec, key))
-                            for metric in parsemet:
-                                name = parsemet[metric][:1][0]
-                                confmet[name] = parsemet[metric][1:]
-                            tempmet[spec] = confmet
+                    for metric in parsemet:
+                        name = parsemet[metric][:1][0]
+                        confmet[name] = parsemet[metric][1:]
+                    tempmet[spec] = confmet
                 else:
                     raise IOError("Metricset definition '%s' not found." % metric)
 
@@ -315,7 +345,7 @@ class pmConfig(object):
                     desc.contents.type == pmapi.c_api.PM_TYPE_DOUBLE or
                     desc.contents.type == pmapi.c_api.PM_TYPE_STRING):
                 raise pmapi.pmErr(pmapi.c_api.PM_ERR_TYPE)
-            instances = self.util.instances if not self._tmp[0] else self._tmp
+            instances = self.util.instances if not self._tmp else self._tmp
             if self.util.omit_flat and instances and not inst[1][0]:
                 return
             if instances and inst[1][0]:
@@ -352,7 +382,17 @@ class pmConfig(object):
             label = label.replace(" / ", "/")
         return label
 
-    def validate_metrics(self, instances=1024):
+    class pmfg_items_to_indom(object): # pylint: disable=too-few-public-methods
+        """ Helper to provide consistent interface with pmfg items and indoms """
+        def __init__(self, items):
+            """ Initialize an instance with items """
+            self._items = items
+
+        def __call__(self):
+            """ Retrieve the items """
+            return self._items
+
+    def validate_metrics(self, curr_insts=CURR_INSTS, max_insts=MAX_INSTS):
         """ Validate the metrics set """
         # Check the metrics against PMNS, resolve non-leaf metrics
         if self.util.derived:
@@ -394,8 +434,6 @@ class pmConfig(object):
             try:
                 l = len(self.pmids)
                 self._tmp = metrics[metric][1]
-                if not 'append' in dir(self._tmp):
-                    self._tmp = [self._tmp]
                 self.util.context.pmTraversePMNS(metric, self.check_metric)
                 if len(self.pmids) == l:
                     # No compatible metrics found
@@ -427,12 +465,15 @@ class pmConfig(object):
             sys.exit(1)
 
         # Finalize the metrics set
-        incompat_metrics = {}
+        incompat_metrics = OrderedDict()
         for i, metric in enumerate(self.util.metrics):
             # Fill in all fields for easier checking later
             for index in range(0, 6):
                 if len(self.util.metrics[metric]) <= index:
-                    self.util.metrics[metric].append(None)
+                    if index == 1:
+                        self.util.metrics[metric].append([])
+                    else:
+                        self.util.metrics[metric].append(None)
 
             # Label
             if not self.util.metrics[metric][0]:
@@ -441,6 +482,13 @@ class pmConfig(object):
                 for m in metric.split("."):
                     name += m[0] + "."
                 self.util.metrics[metric][0] = name[:-2] + m # pylint: disable=undefined-loop-variable
+
+            # Instance(s)
+            if not self.util.metrics[metric][1] and self.util.instances:
+                if self.insts[i][0][0] != pmapi.c_api.PM_IN_NULL:
+                    self.util.metrics[metric][1] = self.util.instances
+            if self.insts[i][0][0] == pmapi.c_api.PM_IN_NULL:
+                self.util.metrics[metric][1] = []
 
             # Rawness
             # As a special service for pmrep(1) utility we hardcode
@@ -511,10 +559,31 @@ class pmConfig(object):
             if self.util.metrics[metric][4] < len(TRUNC):
                 self.util.metrics[metric][4] = len(TRUNC) # Forced minimum
 
-            # Add fetchgroup item
+            # Add fetchgroup items
             try:
+                items = []
+                max_insts = max(1, max_insts)
                 scale = self.util.metrics[metric][2][0]
-                self.util.metrics[metric][5] = self.util.pmfg.extend_indom(metric, mtype, scale, instances)
+                if curr_insts and self.util.metrics[metric][1]:
+                    mitems = 0
+                    vanished = []
+                    for j in range(0, len(self.insts[i][1])):
+                        if mitems < max_insts:
+                            try:
+                                items.append((self.insts[i][0][j], self.insts[i][1][j], self.util.pmfg.extend_item(metric, mtype, scale, self.insts[i][1][j])))
+                                mitems += 1
+                            except:
+                                vanished.append(j)
+                        else:
+                            del self.insts[i][0][-1]
+                            del self.insts[i][1][-1]
+                    if mitems > 0:
+                        for v in reversed(vanished):
+                            del self.insts[i][0][v]
+                            del self.insts[i][1][v]
+                    self.util.metrics[metric][5] = self.pmfg_items_to_indom(items)
+                else:
+                    self.util.metrics[metric][5] = self.util.pmfg.extend_indom(metric, mtype, scale, max_insts)
             except:
                 if hasattr(self.util, 'ignore_incompat') and self.util.ignore_incompat:
                     # Schedule the metric for removal
@@ -523,12 +592,12 @@ class pmConfig(object):
                     raise
 
         # Remove all traces of incompatible metrics
-        for metric in incompat_metrics:
+        for metric in reversed(incompat_metrics):
             del self.pmids[incompat_metrics[metric]]
             del self.descs[incompat_metrics[metric]]
             del self.insts[incompat_metrics[metric]]
             del self.util.metrics[metric]
-        incompat_metrics = {}
+        del incompat_metrics
 
         # Verify that we have valid metrics
         if not self.util.metrics:
