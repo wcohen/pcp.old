@@ -113,6 +113,7 @@ class PCP2XML(object):
         self.pmconfig.read_options()
         self.pmconfig.read_cmd_line()
         self.pmconfig.prepare_metrics()
+        self.pmconfig.set_signal_handler()
 
     def options(self):
         """ Setup default command line argument option handling """
@@ -235,7 +236,7 @@ class PCP2XML(object):
         if pmapi.c_api.pmSetContextOptions(self.context.ctx, self.opts.mode, self.opts.delta):
             raise pmapi.pmUsageErr()
 
-        self.pmconfig.validate_metrics()
+        self.pmconfig.validate_metrics(curr_insts=True)
 
     def validate_config(self):
         """ Validate configuration options """

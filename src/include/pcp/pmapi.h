@@ -645,7 +645,6 @@ PCP_CALL extern int pmGetArchiveEnd(struct timeval *);
 
 /* Free result buffer */
 PCP_CALL extern void pmFreeResult(pmResult *);
-PCP_CALL extern void pmFreeHighResResult(pmHighResResult *);
 
 /* Value extract from pmValue and type conversion */
 PCP_CALL extern int pmExtractValue(int, const pmValue *, int, pmAtomValue *, int);
@@ -1174,6 +1173,7 @@ PCP_CALL extern void pmNotifyErr(int, const char *, ...) __PM_PRINTFLIKE(2,3);
 PCP_CALL extern void pmSyslog(int);
 
 PCP_CALL extern void pmPrintDesc(FILE *, const pmDesc *);
+PCP_CALL extern void pmPrintLabelSets(FILE *, int, int, pmLabelSet *, int);
 
 /* struct timeval manipulations */
 PCP_CALL extern void pmtimevalNow(struct timeval *);
