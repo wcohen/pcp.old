@@ -938,7 +938,9 @@ collectl
 585 pmval pmprobe local pminfo
 586 other local
 587 pmcd #754795 local pmda.install pmda.trivial
+588 libpcp threads local
 589 remote
+590 libpcp threads local
 591 pminfo archive multi-archive decompress-xz local
 592 pmda.sample local
 593 pmlogger #779495 local pmstore
@@ -951,9 +953,11 @@ collectl
 603 trace pmda.install remote
 605 trace local
 606 python archive pmns pmiostat local
+610 libpcp local
 614 pmns local
 617 dbpmda help local
 622 pmie remote
+624:reserved pmlogrewrite pmdumplog xz-decompress local
 628 pmda local pmda.simple
 633 pmlogger local
 634 libirixpmda local pmval timezone
@@ -982,6 +986,7 @@ collectl
 661 pmwebapi local
 662 pmwebapi pmda.sample local
 663 pmwebapi local
+665 pmda.linux local
 666 pmmgr local slow valgrind
 667 pcp2graphite python pcp2xxx local
 668 pmmgr local containers pmdumplog
@@ -1431,6 +1436,7 @@ collectl
 1196 pmcd local
 1199 libpcp pmcd local
 1202 pmdadm local
+1221:reserved labels pmda.prometheus local
 1225 pmwebapi local
 1227 derive local
 1238 pmiostat archive multi-archive decompress-xz local
@@ -1447,6 +1453,7 @@ collectl
 1331 verify local
 1354 pmval archive local
 1359 libpcp local
+1367:reserved labels pmda.simple local
 1368 labels help pmlogger pmdumplog local
 1369 labels pmcd pmlogger pmdumplog local
 1385:reserved pmda.prometheus local
