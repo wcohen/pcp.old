@@ -41,6 +41,7 @@ import os
 from pcp import pmapi, pmconfig
 from cpmapi import PM_CONTEXT_ARCHIVE, PM_ERR_EOL, PM_IN_NULL, PM_DEBUG_APPL1
 from cpmapi import PM_TIME_SEC
+from cpmapi import pmSetProcessIdentity
 
 if sys.version_info[0] >= 3:
     long = int # pylint: disable=redefined-builtin
@@ -51,7 +52,9 @@ DEFAULT_CONFIG = ["./pcp2json.conf", "$HOME/.pcp2json.conf", "$HOME/.pcp/pcp2jso
 # Defaults
 CONFVER = 1
 INDENT = 2
+PREFIX = "prefix."
 TIMEFMT = "%Y-%m-%d %H:%M:%S"
+PRED_PATH = "$PCP_TMP_DIR/json/$PID"
 
 class PCP2JSON(object):
     """ PCP to JSON """
@@ -66,6 +69,7 @@ class PCP2JSON(object):
         self.keys = ('source', 'output', 'derived', 'header', 'globals',
                      'samples', 'interval', 'type', 'precision', 'daemonize',
                      'timefmt', 'extended', 'everything',
+                     'predicate', 'prefix', 'rank', 'user',
                      'count_scale', 'space_scale', 'time_scale', 'version',
                      'speclocal', 'instances', 'ignore_incompat', 'omit_flat')
 
@@ -109,6 +113,11 @@ class PCP2JSON(object):
         self.prev_ts = None
         self.writer = None
 
+        self.predicate = None
+        self.prefix = PREFIX
+        self.rank = 0
+        self.user = None
+
         # Performance metrics store
         # key - metric name
         # values - 0:label, 1:instance(s), 2:unit/scale, 3:type, 4:width, 5:pmfg item
@@ -121,13 +130,14 @@ class PCP2JSON(object):
         self.pmconfig.read_options()
         self.pmconfig.read_cmd_line()
         self.pmconfig.prepare_metrics()
+        self.pmconfig.set_signal_handler()
 
     def options(self):
         """ Setup default command line argument option handling """
         opts = pmapi.pmOptions()
         opts.pmSetOptionCallback(self.option)
         opts.pmSetOverrideCallback(self.option_override)
-        opts.pmSetShortOptions("a:h:LK:c:Ce:D:V?HGA:S:T:O:s:t:rIi:vP:q:b:y:F:f:Z:zxX")
+        opts.pmSetShortOptions("a:h:LK:c:Ce:D:V?HGA:S:T:O:s:t:rIi:vP:q:b:y:F:f:Z:zxXg:p:w:E:U:")
         opts.pmSetShortUsage("[option...] metricspec [...]")
 
         opts.pmSetLongOptionHeader("General options")
@@ -170,11 +180,16 @@ class PCP2JSON(object):
         opts.pmSetLongOption("with-extended", 0, "x", "", "write extended information about metrics")
         opts.pmSetLongOption("with-everything", 0, "X", "", "write everything, incl. internal IDs")
 
+        opts.pmSetLongOption("predicate", 1, "g", "FILTER", "filter with a predicate mode")
+        opts.pmSetLongOption("prefix", 1, "p", "PREFIX", "prefix for predicate metric names (default: " + PREFIX + ")")
+        opts.pmSetLongOption("rank", 1, "E", "COUNT", "limit results to COUNT highest matches")
+        opts.pmSetLongOption("user", 1, "U", "USER", "switch to USER")
+
         return opts
 
     def option_override(self, opt):
         """ Override standard PCP options """
-        if opt == 'H' or opt == 'K':
+        if opt == 'H' or opt == 'K' or opt == 'g' or opt == 'p':
             return 1
         return 0
 
@@ -193,7 +208,7 @@ class PCP2JSON(object):
         elif opt == 'C':
             self.check = 1
         elif opt == 'F':
-            if os.path.exists(optarg):
+            if os.path.exists(optarg) and os.path.isfile(optarg):
                 sys.stderr.write("File %s already exists.\n" % optarg)
                 sys.exit(1)
             self.outfile = optarg
@@ -229,11 +244,30 @@ class PCP2JSON(object):
             self.extended = 1
         elif opt == 'X':
             self.everything = 1
+        elif opt == 'g':
+            self.predicate = optarg
+            self.metrics[self.predicate] = ['', []]
+            self.type = 1
+        elif opt == 'p':
+            self.prefix = optarg
+        elif opt == 'E':
+            try:
+                self.rank = int(optarg)
+                if self.rank < 1:
+                    raise ValueError("Invalid rank.")
+            except:
+                sys.stderr.write("Error while parsing options: Integer > 0 expected.\n")
+                sys.exit(1)
+        elif opt == 'U':
+            self.user = optarg
         else:
             raise pmapi.pmUsageErr()
 
     def connect(self):
         """ Establish a PMAPI context """
+        if self.user:
+            pmSetProcessIdentity(self.user)
+
         context, self.source = pmapi.pmContext.set_connect_options(self.opts, self.source, self.speclocal)
 
         self.pmfg = pmapi.fetchgroup(context, self.source)
@@ -243,7 +277,7 @@ class PCP2JSON(object):
         if pmapi.c_api.pmSetContextOptions(self.context.ctx, self.opts.mode, self.opts.delta):
             raise pmapi.pmUsageErr()
 
-        self.pmconfig.validate_metrics()
+        self.pmconfig.validate_metrics(curr_insts=True)
 
     def validate_config(self):
         """ Validate configuration options """
@@ -253,6 +287,43 @@ class PCP2JSON(object):
 
         if self.everything:
             self.extended = 1
+
+        if self.predicate and not self.outfile:
+            path = PRED_PATH
+            path = path.replace("$PCP_TMP_DIR", pmapi.pmContext.pmGetConfig("PCP_TMP_DIR"))
+            path = path.replace("$PID", str(os.getpid()))
+            # create the directory if it does not exist
+            try:
+                os.stat(path)
+            except:
+	        # TODO error if unable to create directory
+                os.mkdir(path)
+            self.outfile = path
+
+        if not self.predicate and self.outfile and os.path.exists(self.outfile):
+            sys.stderr.write("File %s already exists.\n" % self.outfile)
+            sys.exit(1)
+
+        if self.predicate:
+            ref = -1
+            incompat_metrics = OrderedDict()
+            for i, metric in enumerate(self.metrics):
+                if metric == self.predicate:
+                    ref = i
+                    break
+            if ref != -1:
+                descs = self.pmconfig.descs
+                for i, metric in enumerate(self.metrics):
+                    if descs[i].contents.indom != descs[ref].contents.indom:
+                        incompat_metrics[metric] = i
+
+            # Remove all traces of incompatible metrics
+            for metric in reversed(incompat_metrics):
+                del self.pmconfig.pmids[incompat_metrics[metric]]
+                del self.pmconfig.descs[incompat_metrics[metric]]
+                del self.pmconfig.insts[incompat_metrics[metric]]
+                del self.metrics[metric]
+            del incompat_metrics
 
         self.pmconfig.finalize_options()
 
@@ -290,7 +361,14 @@ class PCP2JSON(object):
             time.sleep(align)
 
         # Main loop
+        first = 1
         while self.samples != 0:
+            # Write metadata JSON if needed
+            if self.predicate and first:
+                self.write_metadata()
+                self.pmfg.fetch()
+                first = 0
+
             # Fetch values
             try:
                 self.pmfg.fetch()
@@ -319,10 +397,17 @@ class PCP2JSON(object):
         if tstamp != None:
             tstamp = tstamp.strftime(self.timefmt)
 
-        self.write_json(tstamp)
+        if not self.predicate:
+            self.write_json(tstamp)
+        else:
+            self.write_predicate(tstamp)
 
     def write_header(self):
         """ Write info header """
+        if self.predicate:
+            sys.stdout.write("Writing %d predicate metrics using prefix '%s' under '%s'...\n(Ctrl-C to stop)\n" % (len(self.metrics), self.prefix, self.outfile))
+            return
+
         output = self.outfile if self.outfile else "stdout"
         if self.context.type == PM_CONTEXT_ARCHIVE:
             sys.stdout.write('{ "//": "Writing %d archived metrics to %s..." }\n{ "//": "(Ctrl-C to stop)" }\n' % (len(self.metrics), output))
@@ -336,6 +421,114 @@ class PCP2JSON(object):
             sys.stdout.write(':" }\n{ "//": "%s samples(s) with %.1f sec interval ~ %d sec runtime." }\n' % (self.samples, float(self.interval), duration))
         else:
             sys.stdout.write('..." }\n{ "//": "(Ctrl-C to stop)" }\n')
+
+    def write_metadata(self):
+        """ Write JSON PMDA metadata """
+        def get_type_string(desc):
+            """ Get metric type as string """
+            if desc.contents.type == pmapi.c_api.PM_TYPE_32 or \
+               desc.contents.type == pmapi.c_api.PM_TYPE_U32 or \
+               desc.contents.type == pmapi.c_api.PM_TYPE_64 or \
+               desc.contents.type == pmapi.c_api.PM_TYPE_U64:
+                mtype = "integer"
+            elif desc.contents.type == pmapi.c_api.PM_TYPE_FLOAT or \
+                 desc.contents.type == pmapi.c_api.PM_TYPE_DOUBLE:
+                mtype = "double"
+            elif desc.contents.type == pmapi.c_api.PM_TYPE_STRING:
+                mtype = "string"
+            else:
+                mtype = "unknown"
+            return mtype
+
+        meta = open(self.outfile + '/metadata.json', 'wt')
+        meta.write("{\n\t\"prefix\": \"%s\",\n" % self.prefix)
+        meta.write("\t\"metrics\": [\n\t\t{\n")
+        meta.write("\t\t\t\"name\": \"%s\",\n" % "metrics")
+        meta.write("\t\t\t\"pointer\": \"/%s\",\n" % "hotvaluesdata")
+        meta.write("\t\t\t\"type\": \"array\",\n")
+        meta.write("\t\t\t\"index\": \"/%s\",\n" % "inst")
+        meta.write("\t\t\t\"metrics\": [\n")
+        for i, metric in enumerate(self.metrics):
+            meta.write("\t\t\t{\n")
+            meta.write("\t\t\t\t\"name\": \"%s\",\n" % metric.replace(".", "_"))
+            meta.write("\t\t\t\t\"pointer\": \"/%s\",\n" % metric)
+            meta.write("\t\t\t\t\"semantics\": \"%s\",\n" % self.context.pmSemStr(self.pmconfig.descs[i].contents.sem))
+            meta.write("\t\t\t\t\"units\": \"%s\",\n" % self.context.pmUnitsStr(self.pmconfig.descs[i].contents.units))
+            try:
+                pmid = self.context.pmLookupName(metric)[0]
+                text = self.context.pmLookupText(pmid)
+                meta.write("\t\t\t\t\"description\": \"%s\",\n" % text.decode('utf-8'))
+            except:
+                pass
+            meta.write("\t\t\t\t\"type\": \"%s\"\n" % get_type_string(self.pmconfig.descs[i]))
+            meta.write("\t\t\t}")
+            if i + 1 < len(self.metrics):
+                meta.write(",\n")
+        meta.write("\n\t\t\t]\n")
+        meta.write("\t\t}\n\t]\n}\n")
+        meta.close()
+
+    def write_predicate(self, timestamp):
+        """ Write results in PMDA JSON format """
+        if timestamp is None:
+            # Silent goodbye
+            return
+
+        # Collect the instances in play
+        insts = []
+        for i in range(len(self.metrics)):
+            for instance in self.pmconfig.insts[i][1]:
+                if instance not in insts:
+                    insts.append(instance)
+
+        # Avoid expensive PMAPI calls more than once per metric
+        res = {}
+        for _, metric in enumerate(self.metrics):
+            res[metric] = []
+            try:
+                for inst, name, val in self.metrics[metric][5](): # pylint: disable=unused-variable
+                    try:
+                        if inst != PM_IN_NULL and not name:
+                            continue
+                        else:
+                            value = val()
+                            if isinstance(value, str) or value <= 0:
+                                continue
+                            res[metric].append([inst, name, value])
+                    except:
+                        pass
+            except:
+                pass
+
+        if self.rank > 0:
+            import operator
+            for metric in res:
+                res[metric] = sorted(res[metric], key=operator.itemgetter(2), reverse=True)[:self.rank]
+
+        data = open(self.outfile + '/data.json.tmp', 'wt')
+        data.write("{\n\t\"%s\": [\n" % "hotvaluesdata")
+
+        inst_printed = 0
+        for i, instance in enumerate(insts):
+            first = True
+            found = False
+            # Look for this instance from each metric
+            for metric in self.metrics:
+                for inst in res[metric]:
+                    if inst[1] == instance:
+                        if first:
+                            if inst_printed > 0:
+                                data.write(",\n")
+                            inst_printed = inst_printed + 1
+                            first = False
+                            data.write("\t{\n\t\t\"inst\": \"%s\"" % instance)
+                        data.write(",\n\t\t\"%s\": %s" % (metric, inst[2]))
+                        found = True
+            if found:
+                data.write("\n\t}")
+        data.write("\n\t]\n}\n")
+        data.close()
+        os.rename(self.outfile + '/data.json.tmp', self.outfile + '/data.json')
 
     def write_json(self, timestamp):
         """ Write results in JSON format """
@@ -445,6 +638,17 @@ class PCP2JSON(object):
 
     def finalize(self):
         """ Finalize and clean up """
+        if self.predicate:
+            try:
+                os.unlink(self.outfile + '/data.json')
+                os.unlink(self.outfile + '/metadata.json')
+                try:
+                    os.unlink(self.outfile + '/data.json.tmp')
+                except:
+                    pass
+                os.rmdir(self.outfile)
+            except:
+                pass
         if self.writer:
             try:
                 self.writer.write(json.dumps(self.data,
