@@ -25,6 +25,7 @@
 
 # Common imports
 from collections import OrderedDict
+from numbers import Number
 import errno
 import time
 import sys
@@ -114,6 +115,7 @@ class PCP2JSON(object):
         self.writer = None
 
         self.predicate = None
+        self.pred_index = None
         self.prefix = PREFIX
         self.rank = 0
         self.user = None
@@ -313,16 +315,22 @@ class PCP2JSON(object):
             sys.exit(1)
 
         if self.predicate:
-            ref = -1
+            self.pred_index = -1
             incompat_metrics = OrderedDict()
             for i, metric in enumerate(self.metrics):
                 if metric == self.predicate:
-                    ref = i
+                    self.pred_index = i
                     break
-            if ref != -1:
+            if self.pred_index != -1:
                 descs = self.pmconfig.descs
+                # Check to make sure there are instances in the predicate metric.
+                if self.pmconfig.insts[self.pred_index][1][0] == None:
+                    sys.stderr.write("Predicate must not be a scalar.\n")
+                    sys.exit(1)
+                # TODO Check to make sure there are predicate metric is a number.
+
                 for i, metric in enumerate(self.metrics):
-                    if descs[i].contents.indom != descs[ref].contents.indom:
+                    if descs[i].contents.indom != descs[self.pred_index].contents.indom:
                         incompat_metrics[metric] = i
 
             # Remove all traces of incompatible metrics
@@ -483,55 +491,55 @@ class PCP2JSON(object):
             return
 
         # Collect the instances in play
-        insts = []
-        for i in range(len(self.metrics)):
-            for instance in self.pmconfig.insts[i][1]:
-                if instance not in insts:
-                    insts.append(instance)
+        # Find the set of predicates that are true
+        pred_instances = []
+        for inst, name, val in self.metrics[self.predicate][5](): # pylint: disable=unused-variable
+            value = val()
+            if isinstance(value, Number) and value > 0:
+                pred_instances.append([inst, name, value])
+
+        # Subset to instants to at most the rank items
+        if self.rank > 0:
+            pred_instances = sorted(pred_instances, key=lambda value: value[2], reverse=True)[:self.rank]
+
+        # Make the set of instances into a dictionary to make the lookup faster.
+        insts = {}
+        for instance, name, value in pred_instances:
+            insts[instance] = name
 
         # Avoid expensive PMAPI calls more than once per metric
+        # Limit metric results that instances in predicate insts list
         res = {}
         for _, metric in enumerate(self.metrics):
-            res[metric] = []
+            res[metric] = {}
             try:
                 for inst, name, val in self.metrics[metric][5](): # pylint: disable=unused-variable
                     try:
-                        if inst != PM_IN_NULL and not name:
-                            continue
-                        else:
-                            value = val()
-                            if isinstance(value, str) or value <= 0:
-                                continue
-                            res[metric].append([inst, name, value])
+                        if inst in insts:
+                            res[metric][inst] = [inst, name, val()]
                     except:
                         pass
             except:
                 pass
 
-        if self.rank > 0:
-            import operator
-            for metric in res:
-                res[metric] = sorted(res[metric], key=operator.itemgetter(2), reverse=True)[:self.rank]
-
         data = open(self.outfile + '/data.json.tmp', 'wt')
         data.write("{\n\t\"%s\": [\n" % "hotvaluesdata")
 
         inst_printed = 0
-        for i, instance in enumerate(insts):
+        for pred_instance in insts:
             first = True
             found = False
             # Look for this instance from each metric
             for metric in self.metrics:
-                for inst in res[metric]:
-                    if inst[1] == instance:
-                        if first:
-                            if inst_printed > 0:
-                                data.write(",\n")
-                            inst_printed = inst_printed + 1
-                            first = False
-                            data.write("\t{\n\t\t\"inst\": \"%s\"" % instance)
-                        data.write(",\n\t\t\"%s\": %s" % (metric, inst[2]))
-                        found = True
+                if pred_instance in res[metric]:
+                    if first:
+                        if inst_printed > 0:
+                            data.write(",\n")
+                        inst_printed = inst_printed + 1
+                        first = False
+                        data.write("\t{\n\t\t\"inst\": \"%s\"" % insts[pred_instance])
+                    data.write(",\n\t\t\"%s\": %s" % (metric, res[metric][pred_instance][2]))
+                    found = True
             if found:
                 data.write("\n\t}")
         data.write("\n\t]\n}\n")
