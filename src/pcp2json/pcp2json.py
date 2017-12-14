@@ -246,22 +246,26 @@ class PCP2JSON(object):
             self.everything = 1
         elif opt == 'g':
             self.predicate = optarg
-            self.metrics[self.predicate] = ['', []]
-            self.type = 1
         elif opt == 'p':
             self.prefix = optarg
         elif opt == 'E':
             try:
                 self.rank = int(optarg)
-                if self.rank < 1:
-                    raise ValueError("Invalid rank.")
             except:
-                sys.stderr.write("Error while parsing options: Integer > 0 expected.\n")
+                sys.stderr.write("Error while parsing options: Integer expected.\n")
                 sys.exit(1)
         elif opt == 'U':
             self.user = optarg
         else:
             raise pmapi.pmUsageErr()
+
+    def adjust_opts(self):
+        """ Adjust options the configuration/options so the setup makes sense. """
+        if self.predicate:
+            # Force raw so data.json types matches what is listed in metadata.json.
+            self.type = 1
+            # Force the predicate on the list of metrics to fetch.
+            self.metrics[self.predicate] = ['', []]
 
     def connect(self):
         """ Establish a PMAPI context """
@@ -283,6 +287,10 @@ class PCP2JSON(object):
         """ Validate configuration options """
         if self.version != CONFVER:
             sys.stderr.write("Incompatible configuration file version (read v%s, need v%d).\n" % (self.version, CONFVER))
+            sys.exit(1)
+
+        if (not isinstance(self.rank, int)) or self.rank < 0:
+            sys.stderr.write("Rank is expected to be an Integer >= 0.\n")
             sys.exit(1)
 
         if self.everything:
@@ -671,6 +679,7 @@ class PCP2JSON(object):
 if __name__ == '__main__':
     try:
         P = PCP2JSON()
+        P.adjust_opts()
         P.connect()
         P.validate_config()
         P.execute()
