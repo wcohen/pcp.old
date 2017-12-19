@@ -29,18 +29,22 @@
 [\f3\--container\f1 \f2container\f1]
 [\f3\--daemonize\f1]
 [\f3\-e\f1 \f2derived\f1]
+[\f3\-E\f1 \f2rank\f1]
 [\f3\-f\f1 \f2format\f1]
 [\f3\-F\f1 \f2outfile\f1]
+[\f3\-g\f1 \f2filter\f1]
 [\f3\-h\f1 \f2host\f1]
 [\f3\-i\f1 \f2instances\f1]
 [\f3\-K\f1 \f2spec\f1]
 [\f3\-O\f1 \f2origin\f1]
 [\f3\-P\f1 \f2precision\f1]
+[\f3\-p\f1 \f2prefix\f1]
 [\f3\-q\f1 \f2count-scale\f1]
 [\f3\-s\f1 \f2samples\f1]
 [\f3\-S\f1 \f2starttime\f1]
 [\f3\-t\f1 \f2interval\f1]
 [\f3\-T\f1 \f2endtime\f1]
+[\f3\-U\f1 \f2user\f1]
 [\f3\-y\f1 \f2time-scale\f1]
 [\f3\-Z\f1 \f2timezone\f1]
 \f2metricspec [...]\f1
@@ -116,7 +120,11 @@ The following options are common with
 .BR precision ,
 .BR count_scale ,
 .BR space_scale ,
-.BR time_scale .
+.BR time_scale ,
+.BR predicate ,
+.BR prefix ,
+.BR rank ,
+.BR user .
 The
 .B output
 option is recognized but ignored for
@@ -220,6 +228,14 @@ For details see
 and
 .BR pmRegisterDerived (3).
 .TP
+.B \-E
+When in filtering mode (
+.BR \-g
+) the maximum number of instances returned is limited to
+.IR rank .
+The subset of instances for the metrics are the same instances that have the
+largest values for the instances in the metric used for the filter.
+.TP
 .B \-f
 Use the
 .I format
@@ -237,6 +253,15 @@ The default with \fIcsv\fR is
 .B \-F
 Specify the output file
 .IR outfile .
+.TP
+.B \-g
+Use predicate filter mode with the values of the instances of
+.I filter
+metric as the critera to determine which instances of other metric to include in the
+the output. By default this mode cause
+.B pcp2json
+to generate metadata.json and data.json files
+in $PCP_TMP_DIR/json/$PID that are usable by PMDA JSON.
 .TP
 .B \-G
 Do not include global metrics in reporting (see
@@ -309,6 +334,17 @@ Refer to
 .BR PCPIntro (1)
 for a complete description of the syntax for
 .IR origin .
+.TP
+.B \-p
+When using filtering mode  (
+.BR \-g
+)a
+use
+.I prefix
+rather than the default of "prefix"
+for the set of metrics being filtered.
+(see
+.BR \-g ).
 .TP
 .B \-P
 Use
@@ -385,6 +421,9 @@ Refer to
 .BR PCPIntro (1)
 for a complete description of the syntax for
 .IR endtime .
+.B \-U
+Change the uid that the program is running under to
+.IR user .
 .RS
 .PP
 When used to define the runtime before \fBpcp2json\fR will exit,
