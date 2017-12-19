@@ -1458,4 +1458,5 @@ collectl
 1385 pmda.prometheus local
 1388 pmwebapi local
 1395 pmda.prometheus local
+2001 pcp2json python pcp2xxx local pmda.json local archive pmlogger pmdumplog
 4751 libpcp threads valgrind local
