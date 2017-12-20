@@ -13,17 +13,12 @@ seq=`basename $0`
 echo "QA output created by $seq"
 
 # get standard environment, filters and checks
-. ./common.product
-. ./common.filter
-. ./common.check
-. ./common.python
+. ./common.prometheus
 
-[ -f $PCP_PMDAS_DIR/prometheus/pmdaprometheus.python ] || _notrun "prometheus pmda not installed"
-[ -f $here/prometheus/prometheus_endpoint.python ] || _notrun "prometheus endpoint generator not installed"
+_pmdaprometheus_check || _notrun "prometheus pmda and/or load generator not installed"
 
 status=1	# failure is the default!
 $sudo rm -rf $tmp $tmp.* $seq.full
-mkdir -p $tmp
 totalendpoints=100 #total queue to work through
 endpoints=1 #prometheus endpoints
 iterations=4
@@ -32,49 +27,15 @@ instances=10
 
 _cleanup()
 {
-    cd $here
-    alive=`kill -s 0 $pid >/dev/null 2>&1`
-    pidstatus=$?
-    if [ $pidstatus = 0 ]
-    then
-	$sudo kill $pid 2>&1 >/dev/null
-    fi
-    $sudo rm -rf $tmp $tmp.*
+    # no need to kill load generator
+    return 0
 }
-
-pmdaprometheus_remove()
-{
-    echo
-    echo "=== remove prometheus agent ==="
-    $sudo ./Remove >$tmp.out 2>&1
-    _filter_pmda_remove <$tmp.out
-}
-
-pmdaprometheus_install()
-{
-    # start from known starting points
-    cd $PCP_PMDAS_DIR/prometheus
-    $sudo ./Remove >/dev/null 2>&1
-    _service pmcd stop 2>&1 | _filter_pcp_stop
-
-    echo
-    echo "=== prometheus agent installation ==="
-    $sudo ./Install </dev/null >$tmp.out 2>&1
-    cat $tmp.out >>$here/$seq.full
-}
-
 
 _prepare_pmda prometheus
 trap "_cleanup _cleanup_pmda prometheus; exit \$status" 0 1 2 3 15
 
-_save_config $PCP_PMDAS_DIR/prometheus/urls.d
-_save_config $PCP_VAR_DIR/config/pmda
-#$sudo rm -f $PCP_PMDAS_DIR/prometheus/urls.d/*
-find $PCP_PMDAS_DIR/prometheus/urls.d -type f -print0 | $sudo xargs -0 rm -rf
-find $PCP_VAR_DIR/config/pmda -name "144.*" -type f -print0 | $sudo xargs -0 rm -rf
-$sudo chmod 777 $PCP_PMDAS_DIR/prometheus/urls.d/
-
-pmdaprometheus_install
+_pmdaprometheus_save_config
+_pmdaprometheus_install
 
 $python $here/prometheus/prometheus_endpoint.python \
 	--output=$PCP_PMDAS_DIR/prometheus/urls.d/ \
@@ -84,10 +45,15 @@ $python $here/prometheus/prometheus_endpoint.python \
 	--instances $instances \
 	--limit $iterations >$tmp.endpoint 2>&1 &
 pid=$!
-sleep 3 #avoid racing (zoom zoom)
 
-metrics=`pminfo prometheus | LC_COLLATE=POSIX sort`
-if pminfo -b 10000000 -v $metrics > $tmp.info 2> $tmp.err
+if ! _pmdaprometheus_wait_for_metric prometheus.source0
+then
+    _pmdaprometheus_restore_config
+    status=1
+    exit
+fi
+
+if pminfo -b 10000000 -v `pminfo prometheus | LC_COLLATE=POSIX sort` > $tmp.info 2> $tmp.err
 then
     :
 else
@@ -96,7 +62,7 @@ else
 fi
 cat $tmp.info $tmp.err
 #sleep 120
-if pminfo -b 10000000 -fd $metrics > $tmp.info 2>$tmp.err
+if pminfo -b 10000000 -fd `pminfo prometheus | LC_COLLATE=POSIX sort` > $tmp.info 2>$tmp.err
    then
     echo "Fetch and desc prometheus metrics: success"
     cat $tmp.info
@@ -105,22 +71,19 @@ else
     cat $tmp.err
 fi
 
-pminfo -b 10000000 -tf prometheus.source0
+pminfo -b 10000000 -tf `pminfo prometheus.source0 | LC_COLLATE=POSIX sort`
 
 for i in `seq 1 1 99`
 do
-    pminfo -b 10000000 -tf prometheus.source$i
-    pminfo -b 10000000 -tf prometheus.source$i
-    pminfo -b 10000000 -tf prometheus.source$i
+    pminfo -b 10000000 -tf `pminfo prometheus.source$i | LC_COLLATE=POSIX sort`
+    pminfo -b 10000000 -tf `pminfo prometheus.source$i | LC_COLLATE=POSIX sort`
+    pminfo -b 10000000 -tf `pminfo prometheus.source$i | LC_COLLATE=POSIX sort`
     sleep 0.5
 done
 
-
-pmdaprometheus_remove
-#$sudo rm -rf $PCP_VAR_DIR/config/pmda/pmda.$seq*
+_pmdaprometheus_remove
+_pmdaprometheus_restore_config
 find $PCP_VAR_DIR/config/pmda -name "144.*" -type f -print0 | $sudo xargs -0 rm -rf
-_restore_config $PCP_PMDAS_DIR/prometheus/urls.d
-_restore_config $PCP_VAR_DIR/config/pmda
 
 # success, all done
 status=0

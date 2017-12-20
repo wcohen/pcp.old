@@ -222,7 +222,7 @@ performance metrics. If
 .I derived
 starts with a slash (``/'') or with a dot (``.'') it will be
 interpreted as a derived metrics configuration file, otherwise it will
-be interpreted as comma-separated derived metric expressions.
+be interpreted as comma- or semicolon-separated derived metric expressions.
 For details see
 .BR pmLoadDerivedConfig (3)
 and
@@ -351,6 +351,9 @@ Use
 .I precision
 for numeric non-integer output values.
 The default is to use 3 decimal places (when applicable).
+This option will
+.I not
+override possible per-metric specifications.
 .TP
 .B \-q
 .I Unit/scale
