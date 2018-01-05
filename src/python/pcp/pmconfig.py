@@ -15,15 +15,15 @@
 # pylint: disable=too-many-boolean-expressions, too-many-statements
 # pylint: disable=too-many-instance-attributes, too-many-locals
 # pylint: disable=too-many-branches, too-many-nested-blocks
-# pylint: disable=bare-except, broad-except
+# pylint: disable=broad-except
 
 """ PCP Python Utils Config Routines """
 
 from collections import OrderedDict
 try:
-    import ConfigParser
-except ImportError:
     import configparser as ConfigParser
+except ImportError:
+    import ConfigParser
 import signal
 import time
 import csv
@@ -46,7 +46,7 @@ class pmConfig(object):
         self.arghelp = ('-?', '--help', '-V', '--version')
 
         # Supported metricset specifiers
-        self.metricspec = ('label', 'instances', 'unit', 'type', 'width', 'formula')
+        self.metricspec = ('label', 'instances', 'unit', 'type', 'width', 'precision', 'formula')
 
         # Main utility reference
         self.util = util
@@ -73,7 +73,7 @@ class pmConfig(object):
             try:
                 signum = getattr(signal, sig)
                 signal.signal(signum, handler)
-            except:
+            except Exception:
                 pass
 
     def set_config_file(self, default_config):
@@ -136,6 +136,11 @@ class pmConfig(object):
                 self.util.type = 1
             else:
                 self.util.type = 0
+        elif name == 'type_prefer':
+            if value == 'raw':
+                self.util.type_prefer = 1
+            else:
+                self.util.type_prefer = 0
         elif name == 'instances':
             self.util.instances = value.split(",") # pylint: disable=no-member
         else:
@@ -196,7 +201,7 @@ class pmConfig(object):
         # We need to detect which is the case here. What a mess.
         quoted = 0
         s = spec.split(",")[2]
-        if s and (s[1] == "'" or s[1] == '"'):
+        if s and len(s) > 2 and (s[0] == "'" or s[0] == '"'):
             quoted = 1
         if spec.count('"') or spec.count("'"):
             inststr = spec.partition(",")[2].partition(",")[2]
@@ -327,6 +332,12 @@ class pmConfig(object):
         if not self.util.metrics:
             raise IOError("No metrics specified.")
 
+    def do_live_filtering(self):
+        """ Check if doing live filtering """
+        if hasattr(self.util, 'live_filter') and self.util.live_filter:
+            return True
+        return False
+
     def check_metric(self, metric):
         """ Validate individual metric and get its details """
         try:
@@ -354,9 +365,9 @@ class pmConfig(object):
                     desc.contents.type == pmapi.c_api.PM_TYPE_STRING):
                 raise pmapi.pmErr(pmapi.c_api.PM_ERR_TYPE)
             instances = self.util.instances if not self._tmp else self._tmp
-            if self.util.omit_flat and instances and not inst[1][0]:
+            if hasattr(self.util, 'omit_flat') and self.util.omit_flat and not inst[1][0]:
                 return
-            if instances and inst[1][0]:
+            if instances and inst[1][0] and not self.do_live_filtering():
                 found = [[], []]
                 for r in instances:
                     try:
@@ -365,6 +376,7 @@ class pmConfig(object):
                             if re.match(cr, s):
                                 found[0].append(inst[0][i])
                                 found[1].append(inst[1][i])
+                        del cr
                     except Exception as e:
                         sys.stderr.write("Invalid regex '%s': %s.\n" % (r, e))
                         sys.exit(1)
@@ -381,7 +393,7 @@ class pmConfig(object):
             sys.exit(1)
 
     def format_metric_label(self, label):
-        """ Format a metric label """
+        """ Format a metric text label """
         # See src/libpcp/src/units.c
         if ' / ' in label:
             label = label.replace("nanosec", "ns").replace("microsec", "us")
@@ -400,23 +412,49 @@ class pmConfig(object):
             """ Retrieve the items """
             return self._items
 
+    def validate_common_options(self):
+        """ Validate common utility options """
+        try:
+            err = "Non-negative integer expected"
+            if hasattr(self.util, 'width'):
+                self.util.width = int(self.util.width)
+                if self.util.width < 0:
+                    raise ValueError(err)
+            if hasattr(self.util, 'width_force') and self.util.width_force:
+                self.util.width_force = int(self.util.width_force)
+                if self.util.width_force < 0:
+                    raise ValueError(err)
+            if hasattr(self.util, 'precision'):
+                self.util.precision = int(self.util.precision)
+                if self.util.precision < 0:
+                    raise ValueError(err)
+            if hasattr(self.util, 'precision_force') and self.util.precision_force:
+                self.util.precision_force = int(self.util.precision_force)
+                if self.util.precision_force < 0:
+                    raise ValueError(err)
+            if hasattr(self.util, 'repeat_header'):
+                self.util.repeat_header = int(self.util.repeat_header)
+                if self.util.repeat_header < 0:
+                    raise ValueError(err)
+        except ValueError:
+            sys.stderr.write("Error while parsing options: %s.\n" % err)
+            sys.exit(1)
+
     def validate_metrics(self, curr_insts=CURR_INSTS, max_insts=MAX_INSTS):
         """ Validate the metricset """
         # Check the metrics against PMNS, resolve non-leaf metrics
         if self.util.derived:
-            if self.util.derived.startswith(";"):
-                self.util.derived = self.util.derived[1:]
-            if self.util.derived.startswith("/") or self.util.derived.startswith("."):
-                try:
-                    self.util.context.pmLoadDerivedConfig(self.util.derived)
-                except pmapi.pmErr as error:
-                    sys.stderr.write("Failed to load derived metric definitions from file '%s':\n%s.\n" % (self.util.derived, str(error)))
-                    sys.exit(1)
-            else:
-                for definition in self.util.derived.split(";"):
+            for derived in filter(None, self.util.derived.split(";")):
+                if derived.startswith("/") or derived.startswith("."):
+                    try:
+                        self.util.context.pmLoadDerivedConfig(derived)
+                    except pmapi.pmErr as error:
+                        sys.stderr.write("Failed to load derived metric definitions from file '%s':\n%s.\n" % (derived, str(error)))
+                        sys.exit(1)
+                else:
                     err = ""
                     try:
-                        name, expr = definition.split("=", 1)
+                        name, expr = derived.split("=", 1)
                         self.util.context.pmLookupName(name.strip())
                     except pmapi.pmErr as error:
                         if error.args[0] != pmapi.c_api.PM_ERR_NAME:
@@ -485,13 +523,13 @@ class pmConfig(object):
                     else:
                         self.util.metrics[metric].append(None)
 
-            # Label
+            # Text label
             if not self.util.metrics[metric][0]:
                 # mem.util.free -> m.u.free
                 name = ""
                 for m in metric.split("."):
                     name += m[0] + "."
-                self.util.metrics[metric][0] = name[:-2] + m # pylint: disable=undefined-loop-variable
+                self.util.metrics[metric][0] = name[:-2] + metric.split(".")[-1]
 
             # Instance(s)
             if not self.util.metrics[metric][1] and self.util.instances:
@@ -501,37 +539,74 @@ class pmConfig(object):
                 self.util.metrics[metric][1] = []
 
             # Rawness
-            # As a special service for pmrep(1) utility we hardcode
-            # support for its two output modes, archive and csv.
-            if (hasattr(self.util, 'type') and self.util.type == 1) or \
-               self.util.metrics[metric][3] == 'raw' or \
-               self.util.output == 'archive' or \
-               self.util.output == 'csv':
+            if hasattr(self.util, 'type_prefer') and not self.util.metrics[metric][3]:
+                self.util.metrics[metric][3] = self.util.type_prefer
+            elif self.util.metrics[metric][3] == 'raw':
                 self.util.metrics[metric][3] = 1
             else:
                 self.util.metrics[metric][3] = 0
+            # As a special service for the pmrep(1) utility,
+            # we force raw output with its archive mode.
+            if (hasattr(self.util, 'type') and self.util.type == 1) or \
+               self.util.metrics[metric][3] == 'raw' or \
+               self.util.output == 'archive':
+                self.util.metrics[metric][3] = 1
 
-            # Set unit/scale if not specified on per-metric basis
-            if not self.util.metrics[metric][2]:
-                unit = self.descs[i].contents.units
-                self.util.metrics[metric][2] = str(unit)
-                if self.util.count_scale and \
-                   unit.dimCount == 1 and ( \
+            # Dimension test helpers
+            def is_count(unit):
+                """ Test count dimension """
+                if unit.dimCount == 1 and ( \
                    unit.dimSpace == 0 and \
                    unit.dimTime == 0):
-                    self.util.metrics[metric][2] = self.util.count_scale
-                if self.util.space_scale and \
-                   unit.dimSpace == 1 and ( \
+                    return True
+                return False
+
+            def is_space(unit):
+                """ Test space dimension """
+                if unit.dimSpace == 1 and ( \
                    unit.dimCount == 0 and \
                    unit.dimTime == 0):
-                    self.util.metrics[metric][2] = self.util.space_scale
-                if self.util.time_scale and \
-                   unit.dimTime == 1 and ( \
+                    return True
+                return False
+
+            def is_time(unit):
+                """ Test time dimension """
+                if unit.dimTime == 1 and ( \
                    unit.dimCount == 0 and \
                    unit.dimSpace == 0):
-                    self.util.metrics[metric][2] = self.util.time_scale
+                    return True
+                return False
 
-            # Finalize label and unit/scale
+            # Set unit/scale
+            unit = self.descs[i].contents.units
+            if is_count(unit):
+                if hasattr(self.util, 'count_scale_force') and self.util.count_scale_force:
+                    self.util.metrics[metric][2] = self.util.count_scale_force
+                elif hasattr(self.util, 'count_scale') and self.util.count_scale and \
+                   not self.util.metrics[metric][2]:
+                    self.util.metrics[metric][2] = self.util.count_scale
+                elif not self.util.metrics[metric][2]:
+                    self.util.metrics[metric][2] = str(unit)
+            if is_space(unit):
+                if hasattr(self.util, 'space_scale_force') and self.util.space_scale_force:
+                    self.util.metrics[metric][2] = self.util.space_scale_force
+                elif hasattr(self.util, 'space_scale') and self.util.space_scale and \
+                   not self.util.metrics[metric][2]:
+                    self.util.metrics[metric][2] = self.util.space_scale
+                elif not self.util.metrics[metric][2]:
+                    self.util.metrics[metric][2] = str(unit)
+            if is_time(unit):
+                if hasattr(self.util, 'time_scale_force') and self.util.time_scale_force:
+                    self.util.metrics[metric][2] = self.util.time_scale_force
+                elif hasattr(self.util, 'time_scale') and self.util.time_scale and \
+                   not self.util.metrics[metric][2]:
+                    self.util.metrics[metric][2] = self.util.time_scale
+                elif not self.util.metrics[metric][2]:
+                    self.util.metrics[metric][2] = str(unit)
+            if not self.util.metrics[metric][2]:
+                self.util.metrics[metric][2] = str(unit)
+
+            # Finalize text label and unit/scale
             try:
                 label = self.util.metrics[metric][2]
                 (unitstr, mult) = self.util.context.pmParseUnitsStr(self.util.metrics[metric][2])
@@ -559,24 +634,40 @@ class pmConfig(object):
             if self.descs[i].contents.type == pmapi.c_api.PM_TYPE_STRING:
                 mtype = self.descs[i].contents.type
 
-            # Set default width if not specified on per-metric basis
+            # Set width
             if self.util.metrics[metric][4]:
-                self.util.metrics[metric][4] = int(self.util.metrics[metric][4])
-            elif hasattr(self.util, 'width') and self.util.width != 0:
+                try:
+                    self.util.metrics[metric][4] = int(self.util.metrics[metric][4])
+                    if self.util.metrics[metric][4] < 0:
+                        raise ValueError
+                except Exception:
+                    sys.stderr.write("Non-negative integer expected: %s\n" % metric)
+                    sys.exit(1)
+            elif hasattr(self.util, 'width'):
                 self.util.metrics[metric][4] = self.util.width
             else:
+                self.util.metrics[metric][4] = 0 # Auto-adjust
+            if hasattr(self.util, 'width_force') and self.util.width_force is not None:
+                self.util.metrics[metric][4] = self.util.width_force
+            if not self.util.metrics[metric][4]:
                 self.util.metrics[metric][4] = len(self.util.metrics[metric][0])
             if self.util.metrics[metric][4] < len(TRUNC):
                 self.util.metrics[metric][4] = len(TRUNC) # Forced minimum
 
-            # Set default precision if not specified on per-metric basis
+            # Set precision
             # NB. We need to take into account that clients expect pmfg item in [5]
             if self.util.metrics[metric][5]:
-                self.util.metrics[metric][6] = int(self.util.metrics[metric][5])
-            elif hasattr(self.util, 'precision') and self.util.precision >= 0:
+                try:
+                    self.util.metrics[metric][6] = int(self.util.metrics[metric][5])
+                except Exception:
+                    sys.stderr.write("Non-negative integer expected: %s\n" % metric)
+                    sys.exit(1)
+            elif hasattr(self.util, 'precision'):
                 self.util.metrics[metric][6] = self.util.precision
             else:
                 self.util.metrics[metric][6] = 3 # Built-in default
+            if hasattr(self.util, 'precision_force') and self.util.precision_force is not None:
+                self.util.metrics[metric][6] = self.util.precision_force
             self.util.metrics[metric][5] = None
 
             # Add fetchgroup items
@@ -592,7 +683,9 @@ class pmConfig(object):
                             try:
                                 items.append((self.insts[i][0][j], self.insts[i][1][j], self.util.pmfg.extend_item(metric, mtype, scale, self.insts[i][1][j])))
                                 mitems += 1
-                            except:
+                            except pmapi.pmErr as error:
+                                if error.args[0] == pmapi.c_api.PM_ERR_CONV:
+                                    raise
                                 vanished.append(j)
                         else:
                             del self.insts[i][0][-1]
@@ -604,7 +697,7 @@ class pmConfig(object):
                     self.util.metrics[metric][5] = self.pmfg_items_to_indom(items)
                 else:
                     self.util.metrics[metric][5] = self.util.pmfg.extend_indom(metric, mtype, scale, max_insts)
-            except:
+            except Exception:
                 if hasattr(self.util, 'ignore_incompat') and self.util.ignore_incompat:
                     # Schedule the metric for removal
                     incompat_metrics[metric] = i
@@ -642,7 +735,7 @@ class pmConfig(object):
                     self.util.interval = pmapi.timeval(0)
                 try:
                     self.util.samples = int(self.util.runtime / float(self.util.interval) + 1)
-                except:
+                except Exception:
                     pass
         else:
             self.util.samples = self.util.opts.pmGetOptionSamples()
@@ -665,3 +758,21 @@ class pmConfig(object):
 
         if sleep > 0:
             time.sleep(sleep)
+
+    def filter_instance(self, metric, name):
+        """ Filter given instance name against requested metric instances """
+        if not self.util.metrics[metric][1]:
+            return True
+
+        try:
+            for r in self.util.metrics[metric][1]:
+                cr = re.compile(r'\A' + r + r'\Z')
+                found = re.match(cr, name)
+                del cr
+                if found:
+                    return True
+        except Exception as e:
+            sys.stderr.write("Invalid regex '%s': %s.\n" % (r, e))
+            sys.exit(1)
+
+        return False

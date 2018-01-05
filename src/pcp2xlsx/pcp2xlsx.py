@@ -17,7 +17,7 @@
 # pylint: disable=too-many-boolean-expressions, too-many-statements
 # pylint: disable=too-many-instance-attributes, too-many-locals
 # pylint: disable=too-many-branches, too-many-nested-blocks
-# pylint: disable=bare-except, broad-except
+# pylint: disable=broad-except
 
 """ PCP to XLSX Bridge """
 
@@ -59,6 +59,8 @@ class PCP2XLSX(object):
                      'samples', 'interval', 'type', 'precision', 'daemonize',
                      'timefmt',
                      'count_scale', 'space_scale', 'time_scale', 'version',
+                     'count_scale_force', 'space_scale_force', 'time_scale_force',
+                     'type_prefer', 'precision_force',
                      'speclocal', 'instances', 'ignore_incompat', 'omit_flat')
 
         # The order of preference for options (as present):
@@ -78,15 +80,20 @@ class PCP2XLSX(object):
         self.opts.pmSetOptionInterval(str(60)) # 60 sec
         self.delay = 0
         self.type = 0
+        self.type_prefer = self.type
         self.ignore_incompat = 0
         self.instances = []
         self.omit_flat = 0
         self.precision = 3 # .3f
+        self.precision_force = None
         self.timefmt = TIMEFMT
         self.interpol = 0
         self.count_scale = None
         self.space_scale = None
         self.time_scale = None
+        self.count_scale_force = None
+        self.space_scale_force = None
+        self.time_scale_force = None
 
         # Not in pcp2xlsx.conf, won't overwrite
         self.outfile = None
@@ -102,7 +109,7 @@ class PCP2XLSX(object):
 
         # Performance metrics store
         # key - metric name
-        # values - 0:label, 1:instance(s), 2:unit/scale, 3:type, 4:width, 5:pmfg item, 6: precision
+        # values - 0:txt label, 1:instance(s), 2:unit/scale, 3:type, 4:width, 5:pmfg item, 6: precision
         self.metrics = OrderedDict()
         self.pmfg = None
         self.pmfg_ts = None
@@ -119,7 +126,7 @@ class PCP2XLSX(object):
         opts = pmapi.pmOptions()
         opts.pmSetOptionCallback(self.option)
         opts.pmSetOverrideCallback(self.option_override)
-        opts.pmSetShortOptions("a:h:LK:c:Ce:D:V?HGA:S:T:O:s:t:rIi:vP:q:b:y:F:f:Z:z")
+        opts.pmSetShortOptions("a:h:LK:c:Ce:D:V?HGA:S:T:O:s:t:rRIi:vP:0:q:b:y:Q:B:Y:F:f:Z:z")
         opts.pmSetShortUsage("[option...] metricspec [...]")
 
         opts.pmSetLongOptionHeader("General options")
@@ -150,14 +157,19 @@ class PCP2XLSX(object):
         opts.pmSetLongOptionTimeZone()     # -Z/--timezone
         opts.pmSetLongOptionHostZone()     # -z/--hostzone
         opts.pmSetLongOption("raw", 0, "r", "", "output raw counter values (no rate conversion)")
+        opts.pmSetLongOption("raw-prefer", 0, "R", "", "prefer output raw counter values (no rate conversion)")
         opts.pmSetLongOption("ignore-incompat", 0, "I", "", "ignore incompatible instances (default: abort)")
         opts.pmSetLongOption("instances", 1, "i", "STR", "instances to report (default: all current)")
         opts.pmSetLongOption("omit-flat", 0, "v", "", "omit single-valued metrics with -i (default: include)")
         opts.pmSetLongOption("precision", 1, "P", "N", "N digits after the decimal separator (default: 3)")
+        opts.pmSetLongOption("precision-force", 1, "0", "N", "forced precision")
         opts.pmSetLongOption("timestamp-format", 1, "f", "STR", "xlsxwriter timestamp format")
         opts.pmSetLongOption("count-scale", 1, "q", "SCALE", "default count unit")
         opts.pmSetLongOption("space-scale", 1, "b", "SCALE", "default space unit")
         opts.pmSetLongOption("time-scale", 1, "y", "SCALE", "default time unit")
+        opts.pmSetLongOption("count-scale-force", 1, "Q", "SCALE", "forced count unit")
+        opts.pmSetLongOption("space-scale-force", 1, "B", "SCALE", "forced space unit")
+        opts.pmSetLongOption("time-scale-force", 1, "Y", "SCALE", "forced time unit")
 
         return opts
 
@@ -197,6 +209,8 @@ class PCP2XLSX(object):
             self.globals = 0
         elif opt == 'r':
             self.type = 1
+        elif opt == 'R':
+            self.type_prefer = 1
         elif opt == 'I':
             self.ignore_incompat = 1
         elif opt == 'i':
@@ -204,11 +218,9 @@ class PCP2XLSX(object):
         elif opt == 'v':
             self.omit_flat = 1
         elif opt == 'P':
-            try:
-                self.precision = int(optarg)
-            except:
-                sys.stderr.write("Error while parsing options: Integer expected.\n")
-                sys.exit(1)
+            self.precision = optarg
+        elif opt == '0':
+            self.precision_force = optarg
         elif opt == 'f':
             self.timefmt = optarg
         elif opt == 'q':
@@ -217,6 +229,12 @@ class PCP2XLSX(object):
             self.space_scale = optarg
         elif opt == 'y':
             self.time_scale = optarg
+        elif opt == 'Q':
+            self.count_scale_force = optarg
+        elif opt == 'B':
+            self.space_scale_force = optarg
+        elif opt == 'Y':
+            self.time_scale_force = optarg
         else:
             raise pmapi.pmUsageErr()
 
@@ -231,18 +249,19 @@ class PCP2XLSX(object):
         if pmapi.c_api.pmSetContextOptions(self.context.ctx, self.opts.mode, self.opts.delta):
             raise pmapi.pmUsageErr()
 
-        self.pmconfig.validate_metrics(curr_insts=True)
-
     def validate_config(self):
         """ Validate configuration options """
         if self.version != CONFVER:
             sys.stderr.write("Incompatible configuration file version (read v%s, need v%d).\n" % (self.version, CONFVER))
             sys.exit(1)
 
+        self.pmconfig.validate_common_options()
+
         if not self.outfile:
             sys.stderr.write("Output file must be defined.\n")
             sys.exit(1)
 
+        self.pmconfig.validate_metrics(curr_insts=True)
         self.pmconfig.finalize_options()
 
     def execute(self):
@@ -366,7 +385,7 @@ class PCP2XLSX(object):
             fmt = self.sheet.add_format({'bold': True})
             fmt.set_align('right')
             self.ws.write_string(self.row, col, "Time", fmt)
-            # Labels, static
+            # Metrics/instances, static
             for i, metric in enumerate(self.metrics):
                 for j in range(len(self.pmconfig.insts[i][0])):
                     col += 1
@@ -415,9 +434,9 @@ class PCP2XLSX(object):
                         continue
                     try:
                         res[metric + "+" + str(inst)] = val
-                    except:
+                    except Exception:
                         pass
-            except:
+            except Exception:
                 pass
 
         # Add corresponding values for each column in the static header
@@ -437,7 +456,7 @@ class PCP2XLSX(object):
                         self.ws.write_number(self.row, col, value, self.float_fmt)
                     else:
                         self.ws.write_number(self.row, col, value, self.int_fmt)
-                except:
+                except Exception:
                     self.ws.write_blank(self.row, col, None)
 
     def finalize(self):

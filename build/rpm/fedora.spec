@@ -2160,9 +2160,12 @@ for f in $RPM_BUILD_ROOT/%{_initddir}/{pcp,pmcd,pmlogger,pmie,pmwebd,pmmgr,pmpro
 done
 
 %if 0%{?fedora} > 26
+if [ "$1" -eq 1 ]
+then
 PCP_SYSCONFIG_DIR=%{_sysconfdir}/sysconfig
 sed -i 's/^\#\ PMLOGGER_LOCAL.*/PMLOGGER_LOCAL=1/g' "$RPM_BUILD_ROOT/$PCP_SYSCONFIG_DIR/pmlogger"
 sed -i 's/^\#\ PMCD_LOCAL.*/PMCD_LOCAL=1/g' "$RPM_BUILD_ROOT/$PCP_SYSCONFIG_DIR/pmcd"
+fi
 %endif
 
 # list of PMDAs in the base pkg
@@ -3232,7 +3235,7 @@ cd
 %endif
 
 %changelog
-* Fri Jan 19 2018 Nathan Scott <nathans@redhat.com> - 4.0.0-1
+* Fri Feb 16 2018 Nathan Scott <nathans@redhat.com> - 4.0.0-1
 - Work-in-progress, see http://pcp.io/roadmap
 
 * Wed Oct 18 2017 Lukas Berk <lberk@redhat.com> - 3.12.2-1

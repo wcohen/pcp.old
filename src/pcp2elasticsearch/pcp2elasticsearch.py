@@ -19,7 +19,7 @@
 # pylint: disable=too-many-boolean-expressions, too-many-statements
 # pylint: disable=too-many-instance-attributes, too-many-locals
 # pylint: disable=too-many-branches, too-many-nested-blocks
-# pylint: disable=bare-except, broad-except
+# pylint: disable=broad-except
 
 """ PCP to Elasticsearch Bridge """
 
@@ -62,6 +62,8 @@ class pcp2elasticsearch(object):
                      'samples', 'interval', 'type', 'precision', 'daemonize',
                      'es_server', 'es_index', 'es_hostid',
                      'count_scale', 'space_scale', 'time_scale', 'version',
+                     'count_scale_force', 'space_scale_force', 'time_scale_force',
+                     'type_prefer', 'precision_force', 'live_filter',
                      'speclocal', 'instances', 'ignore_incompat', 'omit_flat')
 
         # The order of preference for options (as present):
@@ -81,15 +83,21 @@ class pcp2elasticsearch(object):
         self.opts.pmSetOptionInterval(str(60)) # 60 sec
         self.delay = 0
         self.type = 0
+        self.type_prefer = self.type
         self.ignore_incompat = 0
         self.instances = []
+        self.live_filter = 0
         self.omit_flat = 0
         self.precision = 3 # .3f
+        self.precision_force = None
         self.timefmt = "%H:%M:%S" # For compat only
         self.interpol = 0
         self.count_scale = None
         self.space_scale = None
         self.time_scale = None
+        self.count_scale_force = None
+        self.space_scale_force = None
+        self.time_scale_force = None
 
         self.es_server = ES_SERVER
         self.es_index = ES_INDEX
@@ -100,7 +108,7 @@ class pcp2elasticsearch(object):
 
         # Performance metrics store
         # key - metric name
-        # values - 0:label, 1:instance(s), 2:unit/scale, 3:type, 4:width, 5:pmfg item, 6: precision
+        # values - 0:txt label, 1:instance(s), 2:unit/scale, 3:type, 4:width, 5:pmfg item, 6: precision
         self.metrics = OrderedDict()
         self.pmfg = None
         self.pmfg_ts = None
@@ -117,7 +125,7 @@ class pcp2elasticsearch(object):
         opts = pmapi.pmOptions()
         opts.pmSetOptionCallback(self.option)
         opts.pmSetOverrideCallback(self.option_override)
-        opts.pmSetShortOptions("a:h:LK:c:Ce:D:V?HGA:S:T:O:s:t:rIi:vP:q:b:y:g:x:X:")
+        opts.pmSetShortOptions("a:h:LK:c:Ce:D:V?HGA:S:T:O:s:t:rRIi:jvP:0:q:b:y:Q:B:Y:g:x:X:")
         opts.pmSetShortUsage("[option...] metricspec [...]")
 
         opts.pmSetLongOptionHeader("General options")
@@ -145,13 +153,19 @@ class pcp2elasticsearch(object):
         opts.pmSetLongOptionSamples()      # -s/--samples
         opts.pmSetLongOptionInterval()     # -t/--interval
         opts.pmSetLongOption("raw", 0, "r", "", "output raw counter values (no rate conversion)")
+        opts.pmSetLongOption("raw-prefer", 0, "R", "", "prefer output raw counter values (no rate conversion)")
         opts.pmSetLongOption("ignore-incompat", 0, "I", "", "ignore incompatible instances (default: abort)")
         opts.pmSetLongOption("instances", 1, "i", "STR", "instances to report (default: all current)")
+        opts.pmSetLongOption("live-filter", 0, "j", "", "perform instance live filtering")
         opts.pmSetLongOption("omit-flat", 0, "v", "", "omit single-valued metrics with -i (default: include)")
         opts.pmSetLongOption("precision", 1, "P", "N", "N digits after the decimal separator (default: 3)")
+        opts.pmSetLongOption("precision-force", 1, "0", "N", "forced precision")
         opts.pmSetLongOption("count-scale", 1, "q", "SCALE", "default count unit")
         opts.pmSetLongOption("space-scale", 1, "b", "SCALE", "default space unit")
         opts.pmSetLongOption("time-scale", 1, "y", "SCALE", "default time unit")
+        opts.pmSetLongOption("count-scale-force", 1, "Q", "SCALE", "forced count unit")
+        opts.pmSetLongOption("space-scale-force", 1, "B", "SCALE", "forced space unit")
+        opts.pmSetLongOption("time-scale-force", 1, "Y", "SCALE", "forced time unit")
 
         opts.pmSetLongOption("es-host", 1, "g", "SERVER", "elasticsearch server (default: " + ES_SERVER + ")")
         opts.pmSetLongOption("es-index", 1, "x", "INDEX", "elasticsearch index for metric names (default: " + ES_INDEX + ")")
@@ -190,24 +204,32 @@ class pcp2elasticsearch(object):
             self.globals = 0
         elif opt == 'r':
             self.type = 1
+        elif opt == 'R':
+            self.type_prefer = 1
         elif opt == 'I':
             self.ignore_incompat = 1
         elif opt == 'i':
             self.instances = self.instances + self.pmconfig.parse_instances(optarg)
+        elif opt == 'j':
+            self.live_filter = 1
         elif opt == 'v':
             self.omit_flat = 1
         elif opt == 'P':
-            try:
-                self.precision = int(optarg)
-            except:
-                sys.stderr.write("Error while parsing options: Integer expected.\n")
-                sys.exit(1)
+            self.precision = optarg
+        elif opt == '0':
+            self.precision_force = optarg
         elif opt == 'q':
             self.count_scale = optarg
         elif opt == 'b':
             self.space_scale = optarg
         elif opt == 'y':
             self.time_scale = optarg
+        elif opt == 'Q':
+            self.count_scale_force = optarg
+        elif opt == 'B':
+            self.space_scale_force = optarg
+        elif opt == 'Y':
+            self.time_scale_force = optarg
         elif opt == 'g':
             self.es_server = optarg
         elif opt == 'x':
@@ -228,17 +250,18 @@ class pcp2elasticsearch(object):
         if pmapi.c_api.pmSetContextOptions(self.context.ctx, self.opts.mode, self.opts.delta):
             raise pmapi.pmUsageErr()
 
-        self.pmconfig.validate_metrics(curr_insts=True)
-
     def validate_config(self):
         """ Validate configuration options """
         if self.version != CONFVER:
             sys.stderr.write("Incompatible configuration file version (read v%s, need v%d).\n" % (self.version, CONFVER))
             sys.exit(1)
 
+        self.pmconfig.validate_common_options()
+
         if self.es_hostid is None:
             self.es_hostid = self.context.pmGetContextHostName()
 
+        self.pmconfig.validate_metrics(curr_insts=not self.live_filter)
         self.pmconfig.finalize_options()
 
     def execute(self):
@@ -359,9 +382,14 @@ class pcp2elasticsearch(object):
                 # Find/create the parent dictionary into which to insert the final component
                 for inst, name, val in self.metrics[metric][5](): # pylint: disable=unused-variable
                     try:
+                        if inst != PM_IN_NULL and not name:
+                            continue
+                        if self.live_filter and inst != PM_IN_NULL and \
+                           not self.pmconfig.filter_instance(metric, name):
+                            continue
                         value = val()
                         value = round(value, self.metrics[metric][6]) if isinstance(value, float) else value
-                    except:
+                    except Exception:
                         continue
 
                     pmns_leaf_dict = es_doc
@@ -386,7 +414,7 @@ class pcp2elasticsearch(object):
                                 found = True
                         if not found:
                             insts.append({inst_key: name, last_part: value})
-            except:
+            except Exception:
                 pass
 
         try:
