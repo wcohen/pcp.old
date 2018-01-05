@@ -336,6 +336,8 @@ class PCP2JSON(object):
             sys.stderr.write("File %s already exists.\n" % self.outfile)
             sys.exit(1)
 
+        self.pmconfig.validate_metrics(curr_insts=not self.live_filter)
+
         if self.predicate:
             self.pred_index = -1
             incompat_metrics = OrderedDict()
@@ -362,8 +364,6 @@ class PCP2JSON(object):
                 del self.pmconfig.insts[incompat_metrics[metric]]
                 del self.metrics[metric]
             del incompat_metrics
-
-        self.pmconfig.validate_metrics(curr_insts=not self.live_filter)
 
         self.pmconfig.finalize_options()
 
