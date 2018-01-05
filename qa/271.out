@@ -3,8 +3,10 @@ QA output created by 271
 [filtered and sorted stderr]
 __pmLogOpen: inspect file "TMP.0"
 __pmLogOpen: inspect file "TMP.index"
-__pmLogOpen: inspect file "TMP.log"
 __pmLogOpen: inspect file "TMP.meta"
+__pmFopen: index_compress -> -1
+__pmFopen: index_compress -> -1
+__pmFopen: index_compress -> -1
 chkLabel: fd=<n1> vol=0 [magic=50052602 version=2 vol=0 pid=PID host=HOST]
 __pmLogChangeVol: change to volume 0
 chkLabel: fd=<n2> vol=-2 [magic=50052602 version=2 vol=-2 pid=PID host=HOST]
@@ -19,10 +21,11 @@ Performance metrics from host HOST
 === empty dir ===
 [filtered and sorted stderr]
 __pmLogOpen: inspect file "TMP.0"
-__pmLogOpen: inspect file "TMP.dir"
 __pmLogOpen: inspect file "TMP.index"
-__pmLogOpen: inspect file "TMP.log"
 __pmLogOpen: inspect file "TMP.meta"
+__pmFopen: index_compress -> -1
+__pmFopen: index_compress -> -1
+__pmFopen: index_compress -> -1
 chkLabel: fd=<n1> vol=0 [magic=50052602 version=2 vol=0 pid=PID host=HOST]
 __pmLogChangeVol: change to volume 0
 chkLabel: fd=<n2> vol=-2 [magic=50052602 version=2 vol=-2 pid=PID host=HOST]
@@ -37,10 +40,11 @@ Performance metrics from host HOST
 === non-empty dir ===
 [filtered and sorted stderr]
 __pmLogOpen: inspect file "TMP.0"
-__pmLogOpen: inspect file "TMP.dir"
 __pmLogOpen: inspect file "TMP.index"
-__pmLogOpen: inspect file "TMP.log"
 __pmLogOpen: inspect file "TMP.meta"
+__pmFopen: index_compress -> -1
+__pmFopen: index_compress -> -1
+__pmFopen: index_compress -> -1
 chkLabel: fd=<n1> vol=0 [magic=50052602 version=2 vol=0 pid=PID host=HOST]
 __pmLogChangeVol: change to volume 0
 chkLabel: fd=<n2> vol=-2 [magic=50052602 version=2 vol=-2 pid=PID host=HOST]

@@ -48,6 +48,9 @@ typedef struct {
     pmResult	*_Nresult;
     int		eof[2];
     int		mark;		/* need EOL marker */
+    int		recnum;
+    int64_t	pmcd_pid;	/* from prologue/epilogue records */
+    int32_t	pmcd_seqnum;	/* from prologue/epilogue records */
 } inarch_t;
 
 extern inarch_t	*inarch;	/* input archive control(s) */
@@ -104,7 +107,7 @@ extern int	yyparse(void);
 extern void	dometric(const char *);
 
 /* log I/O helper routines */
-extern int _pmLogGet(__pmLogCtl *, int, __pmPDU **);
+extern int _pmLogGet(__pmArchCtl *, int, __pmPDU **);
 extern int _pmLogPut(__pmFILE *, __pmPDU *);
 extern pmUnits ntoh_pmUnits(pmUnits);
 #define ntoh_pmInDom(indom) ntohl(indom)

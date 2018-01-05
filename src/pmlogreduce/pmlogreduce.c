@@ -53,7 +53,8 @@ int		numpmid;		/* all metrics from the input archive */
 pmID		*pmidlist;
 char		**namelist;
 metric_t	*metriclist;
-__pmLogCtl	logctl;			/* output archive control */
+__pmArchCtl	archctl;		/* output archive control */
+__pmLogCtl	logctl;			/* output log control */
 /* command line args */
 double		targ = 600.0;		/* -t arg - interval b/n output samples */
 int		sarg = -1;		/* -s arg - finish after X samples */
@@ -305,7 +306,8 @@ main(int argc, char **argv)
     }
 
     /* create output log - must be done before writing label */
-    if ((sts = __pmLogCreate("", oname, PM_LOG_VERS02, &logctl)) < 0) {
+    archctl.ac_log = &logctl;
+    if ((sts = __pmLogCreate("", oname, PM_LOG_VERS02, &archctl)) < 0) {
 	fprintf(stderr, "%s: Error: __pmLogCreate: %s\n",
 		pmGetProgname(), pmErrStr(sts));
 	exit(1);
@@ -341,7 +343,7 @@ main(int argc, char **argv)
      * All the initial metadata has been generated, add timestamp
      */
     __pmFflush(logctl.l_mdfp);
-    __pmLogPutIndex(&logctl, &current);
+    __pmLogPutIndex(&archctl, &current);
 
     written = 0;
 
@@ -427,7 +429,7 @@ main(int argc, char **argv)
 	 * Even without a -v option, we may need to switch volumes
 	 * if the data file exceeds 2^31-1 bytes
 	 */
-	peek_offset = __pmFtell(logctl.l_mfp);
+	peek_offset = __pmFtell(archctl.ac_mfp);
 	peek_offset += ((__pmPDUHdr *)pb)->len - sizeof(__pmPDUHdr) + 2*sizeof(int);
 	if (peek_offset > 0x7fffffff) {
 	    pmTimeval	next_stamp;
@@ -442,7 +444,7 @@ main(int argc, char **argv)
 	doindom(orp);
 
 	/* write out log record */
-	sts = __pmLogPutResult2(&logctl, pb);
+	sts = __pmLogPutResult2(&archctl, pb);
 	__pmUnpinPDUBuf(pb);
 	if (sts < 0) {
 	    fprintf(stderr, "%s: Error: __pmLogPutResult2: log data: %s\n",
@@ -458,9 +460,9 @@ next:
     }
 
     /* write the last time stamp */
-    __pmFflush(logctl.l_mfp);
+    __pmFflush(archctl.ac_mfp);
     __pmFflush(logctl.l_mdfp);
-    __pmLogPutIndex(&logctl, &current);
+    __pmLogPutIndex(&archctl, &current);
 
     exit(exit_status);
 

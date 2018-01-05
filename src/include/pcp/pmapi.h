@@ -645,7 +645,6 @@ PCP_CALL extern int pmGetArchiveEnd(struct timeval *);
 
 /* Free result buffer */
 PCP_CALL extern void pmFreeResult(pmResult *);
-PCP_CALL extern void pmFreeHighResResult(pmHighResResult *);
 
 /* Value extract from pmValue and type conversion */
 PCP_CALL extern int pmExtractValue(int, const pmValue *, int, pmAtomValue *, int);
@@ -1095,7 +1094,7 @@ typedef struct {
     int	appl1;		/* Application-specific flag 1 */
     int	appl2;		/* Application-specific flag 2 */
     int	pmns;		/* PMNS operations */
-    int	libpmda;	/* PMDA callbacks into libpcp_pmda */
+    int	libpmda;	/* PMDA operations in libpcp_pmda */
     int	timecontrol;	/* Time control API */
     int	pmc;		/* Metrics class operations */
     int	derive;		/* Derived metrics functionality */
@@ -1114,6 +1113,7 @@ typedef struct {
     int	exec;	 	/* __pmProcessExec and related calls */
     int labels;		/* Metric label metadata operations */
     int series;		/* Time series tracing */
+    int	libweb;		/* Trace services from libpcp_web */
 } pmdebugoptions_t;
 
 PCP_DATA extern pmdebugoptions_t	pmDebugOptions;
@@ -1174,6 +1174,7 @@ PCP_CALL extern void pmNotifyErr(int, const char *, ...) __PM_PRINTFLIKE(2,3);
 PCP_CALL extern void pmSyslog(int);
 
 PCP_CALL extern void pmPrintDesc(FILE *, const pmDesc *);
+PCP_CALL extern void pmPrintLabelSets(FILE *, int, int, pmLabelSet *, int);
 
 /* struct timeval manipulations */
 PCP_CALL extern void pmtimevalNow(struct timeval *);
@@ -1197,6 +1198,9 @@ PCP_CALL extern int pmSetProcessIdentity(const char *);
  * default is "pcp"
  */
 PCP_CALL extern int pmGetUsername(char **);
+
+/* DSO PMDA helpers */
+PCP_CALL extern char *pmSpecLocalPMDA(const char *);
 
 #ifdef __cplusplus
 }

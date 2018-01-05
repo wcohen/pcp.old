@@ -64,6 +64,7 @@
 #include "numa_meminfo.h"
 #include "ksm.h"
 #include "sysfs_tapestats.h"
+#include "proc_tty.h"
 
 static proc_stat_t		proc_stat;
 static proc_meminfo_t		proc_meminfo;
@@ -89,6 +90,7 @@ static proc_net_softnet_t	proc_net_softnet;
 static proc_buddyinfo_t		proc_buddyinfo;
 static ksm_info_t               ksm_info;
 static proc_fs_nfsd_t 		proc_fs_nfsd;
+static int                      proc_tty_permission = 0;
 
 static int		_isDSO = 1;	/* =0 I am a daemon */
 static int		rootfd = -1;	/* af_unix pmdaroot */
@@ -339,7 +341,8 @@ static pmdaIndom indomtab[] = {
     { BUDDYINFO_INDOM, 0, NULL },
     { ZONEINFO_INDOM, 0, NULL },
     { ZONEINFO_PROTECTION_INDOM, 0, NULL },
-    { TAPEDEV_INDOM, 0, NULL }
+    { TAPEDEV_INDOM, 0, NULL },
+    { TTY_INDOM, 0, NULL }
 };
 
 
@@ -5081,6 +5084,31 @@ static pmdaMetric metrictab[] = {
     {PMDA_PMID(28,145), PM_TYPE_U64, PM_INDOM_NULL, PM_SEM_COUNTER,
     PMDA_PMUNITS(0,0,1,0,0,PM_COUNT_ONE) }, },
 
+    /* mem.vmstat.pgscan_direct */
+    { &_pm_proc_vmstat.pgscan_direct,
+    {PMDA_PMID(28,146), PM_TYPE_U64, PM_INDOM_NULL, PM_SEM_COUNTER,
+    PMDA_PMUNITS(0,0,1,0,0,PM_COUNT_ONE) }, },
+
+    /* mem.vmstat.pgscan_direct_throttle */
+    { &_pm_proc_vmstat.pgscan_direct_throttle,
+    {PMDA_PMID(28,147), PM_TYPE_U64, PM_INDOM_NULL, PM_SEM_COUNTER,
+    PMDA_PMUNITS(0,0,1,0,0,PM_COUNT_ONE) }, },
+
+    /* mem.vmstat.pgscan_kswapd */
+    { &_pm_proc_vmstat.pgscan_kswapd,
+    {PMDA_PMID(28,148), PM_TYPE_U64, PM_INDOM_NULL, PM_SEM_COUNTER,
+    PMDA_PMUNITS(0,0,1,0,0,PM_COUNT_ONE) }, },
+
+    /* mem.vmstat.pgsteal_direct */
+    { &_pm_proc_vmstat.pgsteal_direct,
+    {PMDA_PMID(28,149), PM_TYPE_U64, PM_INDOM_NULL, PM_SEM_COUNTER,
+    PMDA_PMUNITS(0,0,1,0,0,PM_COUNT_ONE) }, },
+
+    /* mem.vmstat.pgsteal_kswapd */
+    { &_pm_proc_vmstat.pgsteal_kswapd,
+    {PMDA_PMID(28,150), PM_TYPE_U64, PM_INDOM_NULL, PM_SEM_COUNTER,
+    PMDA_PMUNITS(0,0,1,0,0,PM_COUNT_ONE) }, },
+
 /*
  * sysfs_kernel cluster
  */
@@ -5360,6 +5388,32 @@ static pmdaMetric metrictab[] = {
     /* hinv.ntape */
     { NULL, { PMDA_PMID(CLUSTER_TAPEDEV, TAPESTATS_HINV_NTAPE), PM_TYPE_U32, PM_INDOM_NULL,
 	PM_SEM_DISCRETE, PMDA_PMUNITS(0,0,0,0,0,0) }, },
+
+/*
+ * tty cluster
+ */
+    /* tty.serial.rx */
+    { NULL, {PMDA_PMID(CLUSTER_TTY, TTY_TX), PM_TYPE_U32, TTY_INDOM,
+	     PM_SEM_COUNTER, PMDA_PMUNITS(0,0,0,0,0,0)} },
+    /* tty.serial.tx */
+    { NULL, {PMDA_PMID(CLUSTER_TTY,TTY_RX), PM_TYPE_U32, TTY_INDOM,
+	     PM_SEM_COUNTER, PMDA_PMUNITS(0,0,0,0,0,0)} },
+    /* tty.serial.frame */
+    { NULL, {PMDA_PMID(CLUSTER_TTY,TTY_FRAME), PM_TYPE_U32, TTY_INDOM,
+	     PM_SEM_COUNTER, PMDA_PMUNITS(0,0,0,0,0,0)} },
+    /* tty.serial.parity */
+    { NULL, {PMDA_PMID(CLUSTER_TTY,TTY_PARITY), PM_TYPE_U32, TTY_INDOM,
+	     PM_SEM_COUNTER, PMDA_PMUNITS(0,0,0,0,0,0)} },
+    /* tty.serial.brk */
+    { NULL, {PMDA_PMID(CLUSTER_TTY,TTY_BRK), PM_TYPE_U32, TTY_INDOM,
+	     PM_SEM_COUNTER, PMDA_PMUNITS(0,0,0,0,0,0)} },
+    /* tty.serial.overrun */
+    { NULL, {PMDA_PMID(CLUSTER_TTY,TTY_OVERRUN), PM_TYPE_U32, TTY_INDOM,
+	     PM_SEM_COUNTER, PMDA_PMUNITS(0,0,0,0,0,0)} },
+    /* tty.serial.irq */
+    { NULL, {PMDA_PMID(CLUSTER_TTY,TTY_IRQ), PM_TYPE_U32, TTY_INDOM,
+	     PM_SEM_DISCRETE, PMDA_PMUNITS(0,0,0,0,0,0)} },
+
 };
 
 typedef struct {
@@ -5606,6 +5660,14 @@ linux_refresh(pmdaExt *pmda, int *need_refresh, int context)
     if (need_refresh[CLUSTER_TAPEDEV])
 	refresh_sysfs_tapestats(INDOM(TAPEDEV_INDOM));
 
+    if (need_refresh[CLUSTER_TTY]) {
+	if (access != NULL && (access->uid == 0 && access->uid_flag)) {
+	    proc_tty_permission = 1;
+	    refresh_tty(INDOM(TTY_INDOM));
+	} else {
+	    proc_tty_permission = 0;
+	}
+    }
 done:
     if (need_refresh_mtab)
 	pmdaDynamicMetricTable(pmda);
@@ -5688,6 +5750,9 @@ linux_instance(pmInDom indom, int inst, char *name, pmInResult **result, pmdaExt
         break;
     case TAPEDEV_INDOM:
 	need_refresh[CLUSTER_TAPEDEV]++;
+	break;
+    case TTY_INDOM:
+	need_refresh[CLUSTER_TTY]++;
 	break;
     /* no default label : pmdaInstance will pick up errors */
     }
@@ -7569,6 +7634,46 @@ linux_fetchCallBack(pmdaMetric *mdesc, unsigned int inst, pmAtomValue *atom)
 	}
 	break;
 
+    case CLUSTER_TTY:
+	if (proc_tty_permission != 1)
+	    return 0;
+	if (mdesc->m_desc.indom == INDOM(TTY_INDOM)) {
+	    ttydev_t *ttydev = NULL;
+	    sts = pmdaCacheLookup(INDOM(TTY_INDOM), inst, NULL, (void **)&ttydev);
+
+	    if (sts < 0)
+		return sts;
+	    if (sts != PMDA_CACHE_ACTIVE)
+		return 0;
+	    switch (item) {
+	    case TTY_TX:
+		atom->ull = ttydev->tx; /* tty.serial.tx */
+		break;
+	    case TTY_RX:
+		atom->ull = ttydev->rx; /* tty.serial.rx */
+		break;
+	    case TTY_FRAME:
+		atom->ull = ttydev->frame; /* tty.serial.frame */
+		break;
+	    case TTY_PARITY:
+		atom->ull = ttydev->parity; /* tty.serial.parity */
+		break;
+	    case TTY_BRK:
+		atom->ull = ttydev->brk; /* tty.serial.brk */
+		break;
+	    case TTY_OVERRUN:
+		atom->ull = ttydev->overrun; /* tty.serial.overrun */
+		break;
+	    case TTY_IRQ:
+		atom->ull = ttydev->irq; /* tty.serial.irq */
+		break;
+
+	    default:
+		return PM_ERR_PMID;
+	    }
+	}
+	break;
+
     default: /* unknown cluster */
 	return PM_ERR_PMID;
     }
@@ -7765,38 +7870,50 @@ linux_labelInDom(pmInDom indom, pmLabelSet **lp)
 
     switch (pmInDom_serial(indom)) {
     case CPU_INDOM:
-	if ((sts = pmdaAddLabels(lp, "{\"device_type\":\"cpu\"}")) < 0)
-	    return sts;
+	pmdaAddLabels(lp, "{\"device_type\":\"cpu\"}");
+	pmdaAddLabels(lp, "{\"indom_name\":\"per cpu\"}");
 	return 1;
     case MD_INDOM:
+	pmdaAddLabels(lp, "{\"device_type\":\"block\"}");
+	pmdaAddLabels(lp, "{\"indom_name\":\"per md device\"}");
+	return 1;
     case DM_INDOM:
+	pmdaAddLabels(lp, "{\"device_type\":\"block\"}");
+	pmdaAddLabels(lp, "{\"indom_name\":\"per dm device\"}");
+	return 1;
     case DISK_INDOM:
     case SCSI_INDOM:
+	pmdaAddLabels(lp, "{\"device_type\":\"block\"}");
+	pmdaAddLabels(lp, "{\"indom_name\":\"per disk\"}");
+	return 1;
     case PARTITIONS_INDOM:
-	if ((sts = pmdaAddLabels(lp, "{\"device_type\":\"block\"}")) < 0)
-	    return sts;
+	pmdaAddLabels(lp, "{\"device_type\":\"block\"}");
+	pmdaAddLabels(lp, "{\"indom_name\":\"per partition\"}");
 	return 1;
     case NODE_INDOM:
-	if ((sts = pmdaAddLabels(lp, "{\"device_type\":\"numa_node\"}")) < 0)
-	    return sts;
+	pmdaAddLabels(lp, "{\"device_type\":\"numa_node\"}");
+	pmdaAddLabels(lp, "{\"indom_name\":\"per numa_node\"}");
 	return 1;
     case NET_DEV_INDOM:
     case NET_ADDR_INDOM:
-	if ((sts = pmdaAddLabels(lp, "{\"device_type\":\"interface\"}")) < 0)
-	    return sts;
+	pmdaAddLabels(lp, "{\"device_type\":\"interface\"}");
+	pmdaAddLabels(lp, "{\"indom_name\":\"per interface\"}");
 	return 1;
     case SWAPDEV_INDOM:
-	if ((sts = pmdaAddLabels(lp, "{\"device_type\":[\"block\",\"memory\"]}")) < 0)
-	    return sts;
+	pmdaAddLabels(lp, "{\"device_type\":[\"block\",\"memory\"]}");
+	pmdaAddLabels(lp, "{\"indom_name\":\"per swap device\"}");
 	return 1;
     case SLAB_INDOM:
-	if ((sts = pmdaAddLabels(lp, "{\"device_type\":\"memory\"}")) < 0)
-	    return sts;
+	pmdaAddLabels(lp, "{\"device_type\":\"memory\"}");
+	pmdaAddLabels(lp, "{\"indom_name\":\"per slab\"}");
 	return 1;
     case ZONEINFO_INDOM:
+	pmdaAddLabels(lp, "{\"device_type\":[\"numa_node\",\"memory\"]}");
+	pmdaAddLabels(lp, "{\"indom_name\":\"per zone\"}");
+	return 1;
     case BUDDYINFO_INDOM:
-	if ((sts = pmdaAddLabels(lp, "{\"device_type\":[\"numa_node\",\"memory\"]}")) < 0)
-	    return sts;
+	pmdaAddLabels(lp, "{\"device_type\":[\"numa_node\",\"memory\"]}");
+	pmdaAddLabels(lp, "{\"indom_name\":\"per buddy\"}");
 	return 1;
     default:
 	sts = 0;
@@ -7810,37 +7927,26 @@ linux_labelItem(pmID pmid, pmLabelSet **lp)
 {
     unsigned int	cluster = pmID_cluster(pmid);
     unsigned int	item = pmID_item(pmid);
-    int			sts;
 
     switch (cluster) {
     case CLUSTER_STAT:
-	if (item >= 62 && item <= 71)	{ /* kernel.pernode.cpu */
-	    if ((sts = pmdaAddLabels(lp, "{\"device_type\":[\"numa_node\",\"cpu\"]}")) < 0)
-		return sts;
-	    return 1;
-	}
+	if (item >= 62 && item <= 71)	/* kernel.pernode.cpu */
+	    return pmdaAddLabels(lp, "{\"device_type\":[\"numa_node\",\"cpu\"]}");
 	else if ((item >= 20 && item <= 23) || /* kernel.all.cpu */
-	    (item >= 53 && item <= 55)) {
-	    if ((sts = pmdaAddLabels(lp, "{\"device_type\":\"cpu\"}")) < 0)
-		return sts;
-	    return 1;
-	}
+	    (item >= 53 && item <= 55))
+	    return pmdaAddLabels(lp, "{\"device_type\":\"cpu\"}");
 	else switch (item) {
 	case 77:					/* kernel.pernode.cpu */
 	case 85:
 	case 86:
-	    if ((sts = pmdaAddLabels(lp, "{\"device_type\":[\"numa_node\",\"cpu\"]}")) < 0)
-		return sts;
-	    return 1;
+	    return pmdaAddLabels(lp, "{\"device_type\":[\"numa_node\",\"cpu\"]}");
 	case 34:					/* kernel.all.cpu */
 	case 35:
 	case 60:
 	case 78:
 	case 81:
 	case 82:
-	    if ((sts = pmdaAddLabels(lp, "{\"device_type\":\"cpu\"}")) < 0)
-		return sts;
-	    return 1;
+	    return pmdaAddLabels(lp, "{\"device_type\":\"cpu\"}");
 	}
 	break;
 
@@ -7862,9 +7968,7 @@ linux_labelCallBack(pmInDom indom, unsigned int inst, pmLabelSet **lp)
 
     switch (pmInDom_serial(indom)) {
     case CPU_INDOM:
-	if ((sts = pmdaAddLabels(lp, "{\"cpu\":%u}", inst)) < 0)
-	    return sts;
-	return 1;
+	return pmdaAddLabels(lp, "{\"cpu\":%u}", inst);
 
     case DISK_INDOM:
     case DM_INDOM:
@@ -7873,34 +7977,26 @@ linux_labelCallBack(pmInDom indom, unsigned int inst, pmLabelSet **lp)
 	sts = pmdaCacheLookup(indom, inst, &name, NULL);
 	if (sts < 0 || sts == PMDA_CACHE_INACTIVE)
 	    return 0;
-	if ((sts = pmdaAddLabels(lp, "{\"device_name\":\"%s\"}", name)) < 0)
-	    return sts;
-	return 1;
+	return pmdaAddLabels(lp, "{\"device_name\":\"%s\"}", name);
 
     case NET_DEV_INDOM:
 	sts = pmdaCacheLookup(indom, inst, &name, NULL);
 	if (sts < 0 || sts == PMDA_CACHE_INACTIVE)
 	    return 0;
-	if ((sts = pmdaAddLabels(lp, "{\"interface\":\"%s\"}", name)) < 0)
-	    return sts;
-	return 1;
+	return pmdaAddLabels(lp, "{\"interface\":\"%s\"}", name);
 
     case NODE_INDOM:
-	if ((sts = pmdaAddLabels(lp, "{\"numa_node\":%u}", inst)) < 0)
-	    return sts;
-	return 1;
+	return pmdaAddLabels(lp, "{\"numa_node\":%u}", inst);
 
     case BUDDYINFO_INDOM:
 	if (inst >= proc_buddyinfo.nbuddys)
 	    return PM_ERR_INST;
 	numanode = atoi(proc_buddyinfo.buddys[inst].node_name);
 	value = proc_buddyinfo.buddys[inst].order;
-	if ((sts = pmdaAddLabels(lp,
+	return pmdaAddLabels(lp,
 			"{\"numa_node\":%u,\"zone\":\"%s\",\"order\":%u}",
 			numanode, proc_buddyinfo.buddys[inst].zone_name,
-			value)) < 0)
-	    return sts;
-	return 1;
+			value);
 
     case ZONEINFO_INDOM:
 	sts = pmdaCacheLookup(INDOM(ZONEINFO_INDOM), inst, &name, NULL);
@@ -7908,10 +8004,8 @@ linux_labelCallBack(pmInDom indom, unsigned int inst, pmLabelSet **lp)
 	    return 0;
 	if (sscanf(name, "%s::node%u", zone, &numanode) != 2)
 	    return PM_ERR_INST;
-	if ((sts = pmdaAddLabels(lp, "{\"numa_node\":%u,\"zone\":\"%s\"}",
-			numanode, zone)) < 0)
-	    return sts;
-	return 1;
+	return pmdaAddLabels(lp, "{\"numa_node\":%u,\"zone\":\"%s\"}",
+			numanode, zone);
 
     case ZONEINFO_PROTECTION_INDOM:
 	sts = pmdaCacheLookup(indom, inst, &name, NULL);
@@ -7919,11 +8013,9 @@ linux_labelCallBack(pmInDom indom, unsigned int inst, pmLabelSet **lp)
 	    return 0;
 	if (sscanf(name, "%s::node%u::lowmem_reserved%u", zone, &numanode, &value) != 3)
 	    return PM_ERR_INST;
-	if ((sts = pmdaAddLabels(lp,
+	return pmdaAddLabels(lp,
 			"{\"numa_node\":%u,\"zone\":\"%s\",\"lowmem_reserved\":%u}",
-			numanode, zone, value)) < 0)
-	    return sts;
-	return 1;
+			numanode, zone, value);
 
     default:
 	break;
@@ -8139,7 +8231,7 @@ linux_init(pmdaInterface *dp)
     nmetrics = sizeof(metrictab)/sizeof(metrictab[0]);
 
     proc_vmstat_init();
-    interrupts_init(metrictab, nmetrics);
+    interrupts_init(dp->version.any.ext, metrictab, nmetrics);
 
     rootfd = pmdaRootConnect(NULL);
     pmdaSetFlags(dp, PMDA_EXT_FLAG_HASHED);

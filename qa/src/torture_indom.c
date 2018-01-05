@@ -360,8 +360,8 @@ main(int argc, char **argv)
 	    break;
 
 	case 'K':	/* update local PMDA table */
-	    if ((errmsg = __pmSpecLocalPMDA(optarg)) != NULL) {
-		fprintf(stderr, "%s: __pmSpecLocalPMDA failed: %s\n", pmGetProgname(), errmsg);
+	    if ((errmsg = pmSpecLocalPMDA(optarg)) != NULL) {
+		fprintf(stderr, "%s: pmSpecLocalPMDA failed: %s\n", pmGetProgname(), errmsg);
 		errflag++;
 	    }
 	    break;
@@ -409,7 +409,7 @@ main(int argc, char **argv)
 Options\n\
   -a archive	metrics source is an archive log\n\
   -D debug	standard PCP debug options\n\
-  -h host	metrics source is PMCD on host (default is local libirixpmda)\n\
+  -h host	metrics source is PMCD on host (default is local context)\n\
   -L            metrics source is local connection to PMDA, no PMCD\n\
   -K spec       optional additional PMDA spec for local connection\n\
                 spec is of the form op,domain,dso-path,init-routine\n\

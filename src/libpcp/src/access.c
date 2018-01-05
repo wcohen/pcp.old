@@ -19,6 +19,14 @@
 #include "libpcp.h"
 #include "internal.h"
 
+static int __pmAccSaveUsers(void);
+static int __pmAccSaveGroups(void);
+static int __pmAccRestoreUsers(void);
+static int __pmAccRestoreGroups(void);
+static void __pmAccFreeSavedHosts(void);
+static void __pmAccFreeSavedUsers(void);
+static void __pmAccFreeSavedGroups(void);
+
 /* Host access control list */
 
 typedef struct {
@@ -187,7 +195,7 @@ __pmAccSaveHosts(void)
     return 0;
 }
 
-int
+static int
 __pmAccSaveUsers(void)
 {
     if (PM_MULTIPLE_THREADS(PM_SCOPE_ACL))
@@ -205,7 +213,7 @@ __pmAccSaveUsers(void)
     return 0;
 }
 
-int
+static int
 __pmAccSaveGroups(void)
 {
     if (PM_MULTIPLE_THREADS(PM_SCOPE_ACL))
@@ -313,7 +321,7 @@ __pmAccRestoreHosts(void)
     return 0;
 }
 
-int
+static int
 __pmAccRestoreUsers(void)
 {
     if (PM_MULTIPLE_THREADS(PM_SCOPE_ACL))
@@ -329,7 +337,7 @@ __pmAccRestoreUsers(void)
     return 0;
 }
 
-int
+static int
 __pmAccRestoreGroups(void)
 {
     if (PM_MULTIPLE_THREADS(PM_SCOPE_ACL))
@@ -357,7 +365,7 @@ __pmAccFreeSavedLists(void)
     __pmAccFreeSavedGroups();
 }
 
-void
+static void
 __pmAccFreeSavedHosts(void)
 {
     int		i;
@@ -376,7 +384,7 @@ __pmAccFreeSavedHosts(void)
     saved &= ~HOSTS_SAVED;
 }
 
-void
+static void
 __pmAccFreeSavedUsers(void)
 {
     int		i;
@@ -397,7 +405,7 @@ __pmAccFreeSavedUsers(void)
     saved &= ~USERS_SAVED;
 }
 
-void
+static void
 __pmAccFreeSavedGroups(void)
 {
     int		i;
@@ -1649,26 +1657,6 @@ __pmAccAddAccount(const char *userid, const char *groupid, unsigned int *denyOps
 
     /* Return code indicates access controls OK and have credentials */
     return 1;
-}
-
-void
-__pmAccDelAccount(const char *userid, const char *groupid)
-{
-    __pmUserID	uid;
-    __pmGroupID	gid;
-
-    if (PM_MULTIPLE_THREADS(PM_SCOPE_ACL))
-	return;
-
-    __pmUserIDFromString(userid, &uid);
-    __pmGroupIDFromString(groupid, &gid);
-
-    /* Decrement the count of current connections for this user and group
-     * in the user and groups access lists.  Must walk the supplementary
-     * ID lists as well as the primary ID ACLs.
-     */
-    updateUserAccountConnections(uid, 1, -1);
-    updateGroupAccountConnections(gid, 1, -1);
 }
 
 static void

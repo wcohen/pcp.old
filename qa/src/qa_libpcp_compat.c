@@ -33,8 +33,14 @@ extern void __pmPrintHighResStamp(FILE *, const struct timespec *);
 extern int __pmPathSeparator(void);
 extern int __pmGetUsername(char **);
 extern int __pmSetProcessIdentity(const char *);
+extern void pmFreeHighResResult(pmHighResResult *);
+extern char __pmSpecLocalPMDA(const char *);
 
 #else
+/*
+ * for source compatibility, there may be demoted symbols
+ */
+#include "libpcp.h"
 /*
  * for source compatibility, deprecated.h should handle everything
  */
@@ -48,11 +54,6 @@ extern int __pmSetProcessIdentity(const char *);
 #ifndef SEQ
 #define SEQ "9999"
 #endif
-
-static pmLongOptions longopts[] = {
-    PMOPT_DEBUG,		/* -D */
-    PMAPI_OPTIONS_END
-};
 
 static pmOptions opts = {
     .short_options = "D:",
@@ -79,8 +80,11 @@ main(int argc, char **argv)
     struct timeval	a;
     struct timeval	b;
     struct timespec	x;
-    double		s;
     double		t;
+    pmHighResResult	*rp;
+    char		buf[1024];
+    char		*pcp_pmdas_dir;
+    char		*dso_suffix;
 
     setlinebuf(stdout);
     setlinebuf(stderr);
@@ -124,7 +128,8 @@ main(int argc, char **argv)
     }
     fprintf(f, "G'day cobber\n");
     fflush(f);
-    system("cat " TMP ".log");
+    sts = system("cat " TMP ".log");
+    if (sts != 0) printf("system() returns %d?\n", sts);
 
     printf("__pmNoMem test: expect to see a message\n");
     fflush(stdout);
@@ -183,6 +188,38 @@ main(int argc, char **argv)
     if (u != NULL) printf("OK\n");
     else printf("FAIL sts=%d u==NULL\n", sts);
 
+    printf("pmFreeHighResResult test:\n");
+    fflush(stdout);
+    rp = (pmHighResResult *)malloc(sizeof(*rp));
+    rp->timestamp.tv_sec = 1;
+    rp->timestamp.tv_nsec = 123456789;
+    rp->numpmid = 0;
+    /* nothing to test here, just diags */
+    pmSetDebug("pdubuf");
+    pmFreeHighResResult(rp);
+
+    printf("pmSpecLocalPMDA test:\n");
+    fflush(stdout);
+    u = pmSpecLocalPMDA("foo");
+    if (u != NULL)
+	printf("Expected error: pmSpecLocal(foo): %s\n", u);
+    else
+	printf("Error: expected error from pmSpecLocal(foo)\n");
+    u = pmSpecLocalPMDA("clear");
+    if (u != NULL)
+	printf("Unexpected error: pmSpecLocal(clear): %s\n", u);
+    else
+	printf("pmSpecLocal(clear): OK\n");
+    pcp_pmdas_dir = pmGetConfig("PCP_PMDAS_DIR");
+    dso_suffix = pmGetConfig("DSO_SUFFIX");
+    sprintf(buf, "add,30,%s/sample/pmda_sample.%s,sample_init", pcp_pmdas_dir, dso_suffix);
+    u = pmSpecLocalPMDA(buf);
+    if (u != NULL)
+	printf("Unexpected error: pmSpecLocal(%s): %s\n", buf, u);
+    else
+	printf("pmSpecLocal(add,...): OK\n");
+
+    /* need this to be last ... this cripples the process! */
     printf("__pmSetProcessIdentity test: (expect failure)\n");
     fflush(stdout);
     sts = __pmSetProcessIdentity("no-such-user");

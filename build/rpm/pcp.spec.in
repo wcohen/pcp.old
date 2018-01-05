@@ -147,36 +147,44 @@ fi
 }
 
 %global selinux_handle_policy() %{expand:
-if [ "%1" -eq 1 ]
+if [ -e /usr/sbin/selinuxenabled ] && /usr/sbin/selinuxenabled
 then
-    PCP_SELINUX_DIR=@pcp_selinux_dir@
-    if [ -f "$PCP_SELINUX_DIR/%2" ]
+    if [ "%1" -eq 1 ]
     then
-	%if 0%{?fedora} >= 24 || 0%{?rhel} > 6
-            (semodule -X 400 -i $PCP_SELINUX_DIR/%2)
-	%else
-            (semodule -i $PCP_SELINUX_DIR/%2)
-	%endif #distro version check
-    fi
-elif [ "%1" -eq 0 ]
-then
-    if semodule -l | grep %2 >/dev/null 2>&1
+	PCP_SELINUX_DIR=@pcp_selinux_dir@
+	if [ -f "$PCP_SELINUX_DIR/%2" ]
+	then
+	    if semodule -h | grep -q "\-X" >/dev/null 2>&1
+	    then
+		(semodule -X 400 -i $PCP_SELINUX_DIR/%2)
+	    else
+		(semodule -i $PCP_SELINUX_DIR/%2)
+	    fi #semodule -X flag check
+	fi
+    elif [ "%1" -eq 0 ]
     then
-	%if 0%{?fedora} >= 24 || 0%{?rhel} > 6
-	    (semodule -X 400 -r %2 >/dev/null)
-	%else
-	    (semodule -r %2 >/dev/null)
-	%endif #distro version check
+	if semodule -l | grep %2 >/dev/null 2>&1
+	then
+	    if semodule -h | grep -q "\-X" >/dev/null 2>&1
+	    then
+		(semodule -X 400 -r %2 >/dev/null)
+	    else
+		(semodule -r %2 >/dev/null)
+	    fi #semodule -X flag check
+	fi
     fi
-fi
+fi # check for an active selinux install
 }
 
 Requires: pcp-libs = @package_version@
 %if "@enable_selinux@" == "true"
 Requires: pcp-selinux = @package_version@
 %endif
-Obsoletes: pcp-gui-debuginfo
 Obsoletes: pcp-compat
+%if 0%{?fedora} < 27
+# F27 re-introduced split-out debuginfo packages
+Obsoletes: pcp-gui-debuginfo
+%endif
 
 %description
 Performance Co-Pilot (PCP) provides a framework and services to support
@@ -2037,8 +2045,11 @@ done
 %endif
 
 %if 0%{?fedora} > 26
+if [ "$1" -eq 1 ]
+then
 sed -i 's/^\#\ PMLOGGER_LOCAL.*/PMLOGGER_LOCAL=1/g' "$RPM_BUILD_ROOT/$PCP_SYSCONFIG_DIR/pmlogger"
 sed -i 's/^\#\ PMCD_LOCAL.*/PMCD_LOCAL=1/g' "$RPM_BUILD_ROOT/$PCP_SYSCONFIG_DIR/pmcd"
+fi
 %endif
 
 PCP_CONF=$BACKDIR/src/include/pcp.conf
@@ -2599,7 +2610,7 @@ BEGIN {
 }
 $1 == "d" {
 	    if (match ($5, "'$PCP_RUN_DIR'")) {
-		printf ("%%%%ghost %s\n", $5) >> f;
+		printf ("%%%%ghost ") >> f;
 	    }
 	    printf ("%%%%dir %%%%attr(%s,%s,%s) %s\n", $2, $3, $4, $5) >> f
 	  }
@@ -3068,30 +3079,6 @@ PCP_SYSCONFIG_DIR=@pcp_sysconfig_dir@
 test -s "$PCP_LOG_DIR/configs.sh" && source "$PCP_LOG_DIR/configs.sh"
 rm -f $PCP_LOG_DIR/configs.sh
 
-# migrate old to new temp dir locations within the same filesystem)
-migrate_tempdirs()
-{
-    _sub="$1"
-    _new_tmp_dir=%{_tmpdir}
-    _old_tmp_dir=%{_localstatedir}/tmp
-
-    for d in "$_old_tmp_dir/$_sub" ; do
-	test -d "$d" -a -k "$d" || continue
-	cd "$d" || continue
-	for f in * ; do
-	    [ "$f" != "*" ] || continue
-	    source="$d/$f"
-	    target="$_new_tmp_dir/$_sub/$f"
-            [ "$source" != "$target" ] || continue
-	    [ -f "$target" ] || mv -fu "$source" "$target"
-        done
-        cd && rmdir "$d" 2>/dev/null
-    done
-}
-for daemon in mmv pmdabash pmie pmlogger
-do
-    migrate_tempdirs $daemon
-done
 chown -R pcp:pcp "$PCP_LOG_DIR/pmcd" 2>/dev/null
 chown -R pcp:pcp "$PCP_LOG_DIR/pmlogger" 2>/dev/null
 chown -R pcp:pcp "$PCP_LOG_DIR/pmie" 2>/dev/null

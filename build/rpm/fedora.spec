@@ -216,14 +216,16 @@ Requires: pcp-libs = %{version}-%{release}
 %if !%{disable_selinux}
 Requires: pcp-selinux = %{version}-%{release}
 %endif
+%if 0%{?fedora} < 27
+# F27 re-introduced split-out debuginfo packages
 Obsoletes: pcp-gui-debuginfo
+%endif
 Obsoletes: pcp-pmda-nvidia
 
 # Obsoletes for distros that already have single install pmda's with compat package
 Obsoletes: pcp-compat
 
 Requires: pcp-libs = %{version}-%{release}
-Obsoletes: pcp-gui-debuginfo
 
 %global tapsetdir      %{_datadir}/systemtap/tapset
 
@@ -305,28 +307,33 @@ fi
 }
 
 %global selinux_handle_policy() %{expand:
-if [ "%1" -eq 1 ]
+if [ -e /usr/sbin/selinuxenabled ] && /usr/sbin/selinuxenabled
 then
-    PCP_SELINUX_DIR=%{_selinuxdir}
-    if [ -f "$PCP_SELINUX_DIR/%2" ]
+    if [ "%1" -eq 1 ]
     then
-	%if 0%{?fedora} >= 24 || 0%{?rhel} > 6
-            (semodule -X 400 -i %{_selinuxdir}/%2)
-	%else
-            (semodule -i %{_selinuxdir}/%2)
-	%endif #distro version check
-    fi
-elif [ "%1" -eq 0 ]
-then
-    if semodule -l | grep %2 >/dev/null 2>&1
+	PCP_SELINUX_DIR=%{_selinuxdir}
+	if [ -f "$PCP_SELINUX_DIR/%2" ]
+	then
+	    if semodule -h | grep -q "\-X" >/dev/null 2>&1
+	    then
+		(semodule -X 400 -i %{_selinuxdir}/%2)
+	    else
+		(semodule -i %{_selinuxdir}/%2)
+	    fi #semodule -X flag check
+	fi
+    elif [ "%1" -eq 0 ]
     then
-	%if 0%{?fedora} >= 24 || 0%{?rhel} > 6
-	    (semodule -X 400 -r %2 >/dev/null)
-	%else
-	    (semodule -r %2 >/dev/null)
-	%endif #distro version check
+	if semodule -l | grep %2 >/dev/null 2>&1
+	then
+	    if semodule -h | grep -q "\-X" >/dev/null 2>&1
+	    then
+		(semodule -X 400 -r %2 >/dev/null)
+	    else
+		(semodule -r %2 >/dev/null)
+	    fi #semodule -X flag check
+	fi
     fi
-fi
+fi # check for an active selinux install
 }
 
 %description
@@ -448,7 +455,7 @@ HTTP (PMWEBAPI) protocol.
 # pcp-webjs and pcp-webapp packages
 #
 %package webjs
-License: ASL2.0 and MIT and CC-BY
+License: ASL2.0 and MIT and CC-BY and GPLv3
 Group: Applications/Internet
 Conflicts: pcp-webjs < 3.11.9
 %if !%{disable_noarch}
@@ -496,7 +503,7 @@ Grafana can render time series dashboards at the browser via flot.js
 server via png (less interactive, faster).
 
 %package webapp-graphite
-License: ASL2.0
+License: ASL2.0 and GPLv3
 Group: Applications/Internet
 Conflicts: pcp-webjs < 3.10.4
 %if !%{disable_noarch}
@@ -2153,9 +2160,12 @@ for f in $RPM_BUILD_ROOT/%{_initddir}/{pcp,pmcd,pmlogger,pmie,pmwebd,pmmgr,pmpro
 done
 
 %if 0%{?fedora} > 26
+if [ "$1" -eq 1 ]
+then
 PCP_SYSCONFIG_DIR=%{_sysconfdir}/sysconfig
 sed -i 's/^\#\ PMLOGGER_LOCAL.*/PMLOGGER_LOCAL=1/g' "$RPM_BUILD_ROOT/$PCP_SYSCONFIG_DIR/pmlogger"
 sed -i 's/^\#\ PMCD_LOCAL.*/PMCD_LOCAL=1/g' "$RPM_BUILD_ROOT/$PCP_SYSCONFIG_DIR/pmcd"
+fi
 %endif
 
 # list of PMDAs in the base pkg
@@ -2697,30 +2707,6 @@ PCP_PMNS_DIR=%{_pmnsdir}
 test -s "$PCP_LOG_DIR/configs.sh" && source "$PCP_LOG_DIR/configs.sh"
 rm -f $PCP_LOG_DIR/configs.sh
 
-# migrate old to new temp dir locations (within the same filesystem)
-migrate_tempdirs()
-{
-    _sub="$1"
-    _new_tmp_dir=%{_tempsdir}
-    _old_tmp_dir=%{_localstatedir}/tmp
-
-    for d in "$_old_tmp_dir/$_sub" ; do
-        test -d "$d" -a -k "$d" || continue
-        cd "$d" || continue
-        for f in * ; do
-            [ "$f" != "*" ] || continue
-            source="$d/$f"
-            target="$_new_tmp_dir/$_sub/$f"
-            [ "$source" != "$target" ] || continue
-	    [ -f "$target" ] || mv -fu "$source" "$target"
-        done
-        cd && rmdir "$d" 2>/dev/null
-    done
-}
-for daemon in mmv pmdabash pmie pmlogger
-do
-    migrate_tempdirs $daemon
-done
 chown -R pcp:pcp %{_logsdir}/pmcd 2>/dev/null
 chown -R pcp:pcp %{_logsdir}/pmlogger 2>/dev/null
 chown -R pcp:pcp %{_logsdir}/pmie 2>/dev/null
@@ -3249,7 +3235,7 @@ cd
 %endif
 
 %changelog
-* Fri Jan 19 2018 Nathan Scott <nathans@redhat.com> - 4.0.0-1
+* Fri Feb 16 2018 Nathan Scott <nathans@redhat.com> - 4.0.0-1
 - Work-in-progress, see http://pcp.io/roadmap
 
 * Wed Oct 18 2017 Lukas Berk <lberk@redhat.com> - 3.12.2-1

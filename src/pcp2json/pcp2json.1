@@ -1,7 +1,6 @@
-'\"! tbl | mmdoc
 '\"macro stdmacro
 .\"
-.\" Copyright (c) 2016 Red Hat.
+.\" Copyright (c) 2016-2018 Red Hat.
 .\" Copyright (C) 2015-2017 Marko Myllynen <myllynen@redhat.com>
 .\"
 .\" This program is free software; you can redistribute it and/or modify it
@@ -20,28 +19,32 @@
 \f3pcp2json\f1 \- pcp-to-json metrics exporter
 .SH SYNOPSIS
 \f3pcp2json\f1
-[\f3\-CGHILrvVxXz?\f1]
+[\f3\-CGHIjLrRvVxXz?\f1]
 [\f3\-a\f1 \f2archive\f1]
-[\f3\--archive-folio\f1 \f2folio\f1]
+[\f3\-\-archive-folio\f1 \f2folio\f1]
 [\f3\-A\f1 \f2align\f1]
-[\f3\-b\f1 \f2space-scale\f1]
+[\f3\-b|\-B\f1 \f2space-scale\f1]
 [\f3\-c\f1 \f2config\f1]
-[\f3\--container\f1 \f2container\f1]
-[\f3\--daemonize\f1]
+[\f3\-\-container\f1 \f2container\f1]
+[\f3\-\-daemonize\f1]
 [\f3\-e\f1 \f2derived\f1]
+[\f3\-E\f1 \f2rank\f1]
 [\f3\-f\f1 \f2format\f1]
 [\f3\-F\f1 \f2outfile\f1]
+[\f3\-g\f1 \f2filter\f1]
 [\f3\-h\f1 \f2host\f1]
 [\f3\-i\f1 \f2instances\f1]
 [\f3\-K\f1 \f2spec\f1]
 [\f3\-O\f1 \f2origin\f1]
-[\f3\-P\f1 \f2precision\f1]
-[\f3\-q\f1 \f2count-scale\f1]
+[\f3\-P|\-0\f1 \f2precision\f1]
+[\f3\-p\f1 \f2prefix\f1]
+[\f3\-q|\-Q\f1 \f2count-scale\f1]
 [\f3\-s\f1 \f2samples\f1]
 [\f3\-S\f1 \f2starttime\f1]
 [\f3\-t\f1 \f2interval\f1]
 [\f3\-T\f1 \f2endtime\f1]
-[\f3\-y\f1 \f2time-scale\f1]
+[\f3\-U\f1 \f2user\f1]
+[\f3\-y|\-Y\f1 \f2time-scale\f1]
 [\f3\-Z\f1 \f2timezone\f1]
 \f2metricspec [...]\f1
 .SH DESCRIPTION
@@ -110,13 +113,23 @@ The following options are common with
 .BR samples ,
 .BR interval ,
 .BR type ,
+.BR type_prefer ,
 .BR ignore_incompat ,
+.BR live_filter ,
 .BR instances ,
 .BR omit_flat ,
 .BR precision ,
+.BR precision_force ,
 .BR count_scale ,
 .BR space_scale ,
-.BR time_scale .
+.BR time_scale ,
+.BR count_scale_force ,
+.BR space_scale_force ,
+.BR time_scale_force .
+.BR predicate ,
+.BR prefix ,
+.BR rank ,
+.BR user .
 The
 .B output
 option is recognized but ignored for
@@ -152,8 +165,10 @@ one or more archives.
 .B \-\-archive\-folio
 Read metric source archives from the PCP archive
 .IR folio
-(see
-.BR mkaf (1)).
+created by tools like
+.BR pmchart (1)
+or, less often, manually with
+.BR mkaf (1).
 .TP
 .B \-A
 Force the initial sample to be
@@ -180,6 +195,13 @@ This option will
 override possible per-metric specifications.
 See also
 .BR pmParseUnitsStr (3).
+.TP
+.B \-B
+As
+.B \-b
+but this option
+.I will
+override per-metric specifications.
 .TP
 .B \-c
 Specify the
@@ -214,11 +236,19 @@ performance metrics. If
 .I derived
 starts with a slash (``/'') or with a dot (``.'') it will be
 interpreted as a derived metrics configuration file, otherwise it will
-be interpreted as comma-separated derived metric expressions.
+be interpreted as comma- or semicolon-separated derived metric expressions.
 For details see
 .BR pmLoadDerivedConfig (3)
 and
 .BR pmRegisterDerived (3).
+.TP
+.B \-E
+When in filtering mode (
+.BR \-g
+) the maximum number of instances returned is limited to
+.IR rank .
+The subset of instances for the metrics are the same instances that have the
+largest values for the instances in the metric used for the filter.
 .TP
 .B \-f
 Use the
@@ -238,6 +268,15 @@ The default with \fIcsv\fR is
 Specify the output file
 .IR outfile .
 .TP
+.B \-g
+Use predicate filter mode with the values of the instances of
+.I filter
+metric as the critera to determine which instances of other metric to include in the
+the output. By default this mode cause
+.B pcp2json
+to generate metadata.json and data.json files
+in $PCP_TMP_DIR/json/$PID that are usable by PMDA JSON.
+.TP
 .B \-G
 Do not include global metrics in reporting (see
 .BR pmrep.conf (5)).
@@ -247,7 +286,7 @@ Fetch performance metrics from
 .BR pmcd (1)
 on
 .IR host ,
-rather than the default localhost.
+rather than from the default localhost.
 .TP
 .B \-H
 Do not print any headers.
@@ -255,12 +294,13 @@ Do not print any headers.
 .B \-i
 Report only the listed
 .I instances
-(if present).
-By default all current instances are reported.
+from current instances (if present).
+By default all instances are reported.
 This is a global option that is used for all metrics unless a
 metric-specific instance definition is provided as part of a
 .IR metricspec .
-By default metrics without instances are reported as usual, use
+By default single-valued ``flat'' metrics without separate
+instances are still reported as usual, use
 .B \-v
 to change this.
 Please refer to
@@ -277,6 +317,13 @@ With this option all incompatible metrics are silently omitted
 from reporting. This may be especially useful when requesting
 non-leaf nodes of the PMNS tree for reporting.
 .TP
+.B \-j
+Perform instance live filtering.
+This allows capturing all filtered instances even if processes
+are restarted at some point (unlike without live filtering).
+Doing live filtering over a huge amount of instances naturally
+comes with some overhead so a bit of user caution is adviced.
+.TP
 .B \-K
 When fetching metrics from a local context (see
 .BR \-L ),
@@ -287,7 +334,7 @@ accessible.
 The
 .I spec
 argument conforms to the syntax described in
-.BR __pmSpecLocalPMDA(3).
+.BR pmSpecLocalPMDA(3).
 More than one
 .B \-K
 option may be used.
@@ -310,11 +357,32 @@ Refer to
 for a complete description of the syntax for
 .IR origin .
 .TP
+.B \-p
+When using filtering mode  (
+.BR \-g
+)a
+use
+.I prefix
+rather than the default of "prefix"
+for the set of metrics being filtered.
+(see
+.BR \-g ).
+.TP
 .B \-P
 Use
 .I precision
 for numeric non-integer output values.
 The default is to use 3 decimal places (when applicable).
+This option will
+.I not
+override possible per-metric specifications.
+.TP
+.B \-0
+As
+.B \-P
+but this option
+.I will
+override per-metric specifications.
 .TP
 .B \-q
 .I Unit/scale
@@ -335,9 +403,23 @@ override possible per-metric specifications.
 See also
 .BR pmParseUnitsStr (3).
 .TP
+.B \-Q
+As
+.B \-q
+but this option
+.I will
+override per-metric specifications.
+.TP
 .B \-r
 Output raw metric values, do not convert cumulative counters to rates.
 This option \fIwill\fR override possible per-metric specifications.
+.TP
+.B \-R
+As
+.B \-r
+but this option will
+.I not
+override per-metric specifications.
 .TP
 .B \-s
 The argument
@@ -385,6 +467,9 @@ Refer to
 .BR PCPIntro (1)
 for a complete description of the syntax for
 .IR endtime .
+.B \-U
+Change the uid that the program is running under to
+.IR user .
 .RS
 .PP
 When used to define the runtime before \fBpcp2json\fR will exit,
@@ -410,8 +495,12 @@ will run.
 .RE
 .TP
 .B \-v
-Omit single-valued ``flat'' metrics from reporting when instances
-were requested.
+Omit single-valued ``flat'' metrics from reporting, only consider
+multi-valued metrics (i.e., metrics with
+.IR "instance domains" ,
+or
+.IR indoms )
+for reporting.
 See
 .B -\i
 and
@@ -443,6 +532,13 @@ This option will
 override possible per-metric specifications.
 See also
 .BR pmParseUnitsStr (3).
+.TP
+.B \-Y
+As
+.B \-y
+but this option
+.I will
+override per-metric specifications.
 .TP
 .B \-z
 Use the local timezone of the host that is the source of the
@@ -500,12 +596,12 @@ as described in
 .BR pmcd (1),
 .BR pminfo (1),
 .BR pmrep (1),
-.BR __pmSpecLocalPMDA (3),
+.BR pmSpecLocalPMDA (3),
 .BR pmLoadDerivedConfig (3),
 .BR pmParseUnitsStr (3),
 .BR pmRegisterDerived (3),
+.BR LOGARCHIVE (5),
 .BR pcp.conf (5),
-.BR pmlogger (5),
 .BR pmns (5),
 .BR pmrep.conf (5)
 and

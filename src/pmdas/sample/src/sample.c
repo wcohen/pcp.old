@@ -50,7 +50,6 @@ static struct sysinfo {
 #define boolstr(truth)	((truth) ? "true" : "false")
 
 static int need_mirage;	/* only do mirage glop is someone asks for it */
-static int need_dynamic;/* only do dynamic glop is someone asks for it */
 
 /* from pmda.c: simulate PMDA busy */
 extern int	limbo(void);
@@ -368,6 +367,8 @@ static pmDesc	desctab[] = {
     { PMDA_PMID(0,152), PM_TYPE_DOUBLE, PM_INDOM_NULL, PM_SEM_DISCRETE, PMDA_PMUNITS(0,0,0,0,0,0) },
 /* sample.string.bin */
     { PMDA_PMID(0,153), PM_TYPE_STRING, PM_INDOM_NULL, PM_SEM_INSTANT, PMDA_PMUNITS(0,0,0,0,0,0) },
+/* sample.bad.fetch.again  */
+    { PMDA_PMID(0,154), PM_TYPE_32, PM_INDOM_NULL, PM_SEM_DISCRETE, PMDA_PMUNITS(0,0,0,0,0,0) },
 
 /*
  * dynamic PMNS ones
@@ -651,8 +652,11 @@ static int	numdyn = sizeof(dynamic_ones)/sizeof(dynamic_ones[0]);
 
 static int	_bin_val[] = { 100, 200, 300, 400, 500, 600, 700, 800, 900 };
 
+/*
+ * increment == 1 to add 1 to _dyn_ctr[] values
+ */
 static int
-redo_dynamic(void)
+redo_dynamic(int increment)
 {
     int			err;
     int			i;
@@ -688,9 +692,6 @@ redo_dynamic(void)
 		for (i = 0; i < idp->it_numinst; i++) {
 		    free(idp->it_set[i].i_name);
 		}
-		for (i = 0; i <= _dyn_max; i++) {
-		    _dyn_ctr[i] = -_dyn_ctr[i];
-		}
 		free(idp->it_set);
 		idp->it_numinst = 0;
 		idp->it_set = NULL;
@@ -720,19 +721,17 @@ redo_dynamic(void)
 			    fclose(fspec);
 			    return err;
 			}
-			for (i = _dyn_max+1; i <= newinst; i++)
-			    _dyn_ctr[i] = 0;
 			_dyn_max = newinst;
 		    }
-		    _dyn_ctr[newinst] = -_dyn_ctr[newinst];
 		}
 		fclose(fspec);
 		idp->it_numinst = numinst;
 
-		for (i = 0; i <= _dyn_max; i++) {
-		    if (_dyn_ctr[i] < 0)
-			_dyn_ctr[i] = 0;
-		}
+		/*
+		 * reset counters to zero if there is any indom change
+		 */
+		for (i = 0; i <= _dyn_max; i++)
+		    _dyn_ctr[i] = 0;
 
 		if (pmDebugOptions.appl0) {
 		    fprintf(stderr, "redo instance domain for dynamic: numinst: %d\n", idp->it_numinst);
@@ -753,16 +752,14 @@ redo_dynamic(void)
 	    free(idp->it_set);
 	    idp->it_set = NULL;
 	    idp->it_numinst = 0;
-	    for (i = 0; i <= _dyn_max; i++) {
-		_dyn_ctr[i] = 0;
-	    }
 	    if (pmDebugOptions.appl0)
 		fprintf(stderr, "redo instance domain for dynamic: numinst: 0 (no control file)\n");
 	}
     }
 
-    for (i = 0; i < idp->it_numinst; i++) {
-	_dyn_ctr[idp->it_set[i].i_inst]++;
+    if (increment) {
+	for (i = 0; i < idp->it_numinst; i++)
+	    _dyn_ctr[idp->it_set[i].i_inst]++;
     }
 
     return 0;
@@ -1207,7 +1204,7 @@ sample_instance(pmInDom indom, int inst, char *name, pmInResult **result, pmdaEx
 
     if (need_mirage && (i = redo_mirage()) < 0)
 	return i;
-    if (need_dynamic && (i = redo_dynamic()) < 0)
+    if (pmInDom_serial(indom) == DYNAMIC_INDOM && (i = redo_dynamic(0)) < 0)
 	return i;
 
     /*
@@ -1559,6 +1556,7 @@ sample_fetch(int numpmid, pmID pmidlist[], pmResult **resp, pmdaExt *ep)
     int		need;
     int		inst;
     int		numval;
+    int		need_dynamic = 1;
     static pmResult	*res;
     static int		maxnpmids;
     static int		nbyte;
@@ -1593,8 +1591,6 @@ sample_fetch(int numpmid, pmID pmidlist[], pmResult **resp, pmdaExt *ep)
 
     if (need_mirage && (j = redo_mirage()) < 0)
 	return j;
-    if (need_dynamic && (j = redo_dynamic()) < 0)
-	return j;
 
     if (new_dodgey < 0)
 	redo_dodgey();
@@ -1602,6 +1598,14 @@ sample_fetch(int numpmid, pmID pmidlist[], pmResult **resp, pmdaExt *ep)
     for (i = 0; i < numpmid; i++) {
 	unsigned int	cluster = pmID_cluster(pmidlist[i]);
 	unsigned int	item = pmID_item(pmidlist[i]);
+
+	if (cluster == 0 && (item == 76 || item == 77 || item == 78)) {
+	    if (need_dynamic) {
+		need_dynamic = 0;
+		if ((j = redo_dynamic(1)) < 0)
+		    return j;
+	    }
+	}
 
 	if (direct_map) {
 	    j = item;
@@ -1628,6 +1632,8 @@ doit:
 		numval = 0;
 	    else if (cluster == 0 && item == 138)	/* bad.novalues */
 		numval = 0;
+	    else if (cluster == 0 && item == 154)	/* bad.fetch.again */
+		numval = PM_ERR_AGAIN;
 	    else if (cluster == 0 &&
 	             (item == 127 ||	/* event.type */
 		      item == 128 ||	/* event.param_32 */
@@ -1657,20 +1663,6 @@ doit:
 			    _profile->profile[kp].instances_len != 0)
 				numval = 0;
 			break;
-		    }
-		}
-		else if (cluster == 0 && (item == 76 || item == 77 || item == 78)) {
-		    /*
-		     * if $(PCP_VAR_DIR)/pmdas/sample/dynamic.indom is not present,
-		     * then numinst will be zero after the redo_dynamic() call
-		     * in sample_init(), which makes zero loops through the
-		     * fetch loop, so cannot set need_dynamic there ...
-		     * do it here if not already turned on
-		     */
-		    if (need_dynamic == 0) {
-			need_dynamic = 1;
-			if ((j = redo_dynamic()) < 0)
-			    return j;
 		    }
 		}
 		if (numval == 0) {
@@ -2240,6 +2232,9 @@ doit:
 				break;
 			    case PM_TYPE_DOUBLE:
 				atom.d = 42;
+				break;
+			    case PM_TYPE_STRING:
+				atom.cp = "42";
 				break;
 			    default:
 				/* do nothing in other cases ... return garbage */
@@ -2820,18 +2815,10 @@ sample_label_domain(pmLabelSet **sets, pmdaExt *ep)
 static int
 sample_label_indom(pmInDom indom, pmLabelSet **lp)
 {
-    int		sts;
-
-    if (indom == indomtab[COLOUR_INDOM].it_indom) {
-	if ((sts = pmdaAddLabels(lp, "{\"model\":\"RGB\"}")) < 0)
-	    return sts;
-	return 1;
-    }
-    if (indom == indomtab[FAMILY_INDOM].it_indom) {
-	if ((sts = pmdaAddLabels(lp, "{\"clan\":\"mcdonell\"}")) < 0)
-	    return sts;
-	return 1;
-    }
+    if (indom == indomtab[COLOUR_INDOM].it_indom)
+	return pmdaAddLabels(lp, "{\"model\":\"RGB\"}");
+    if (indom == indomtab[FAMILY_INDOM].it_indom)
+	return pmdaAddLabels(lp, "{\"clan\":\"mcdonell\"}");
     return 0;
 }
 
@@ -2880,15 +2867,11 @@ static int
 sample_label_cb(pmInDom indom, unsigned int inst, pmLabelSet **lp)
 {
     if (indom == indomtab[BIN_INDOM].it_indom ||
-	indom == indomtab[SCRAMBLE_INDOM].it_indom) {
-	pmdaAddLabels(lp, "{\"bin\":%u}\n", inst);
-	return 1;
-    }
-    if (indom == indomtab[MIRAGE_INDOM].it_indom) {
+	indom == indomtab[SCRAMBLE_INDOM].it_indom)
+	return pmdaAddLabels(lp, "{\"bin\":%u}\n", inst);
+    if (indom == indomtab[MIRAGE_INDOM].it_indom)
 	/* instance zero is always present, the rest come and go */
-	pmdaAddLabels(lp, "{\"transient\":%s}", inst ? "true" : "false");
-	return 1;
-    }
+	return pmdaAddLabels(lp, "{\"transient\":%s}", inst ? "true" : "false");
     return 0;
 }
 
@@ -3003,7 +2986,7 @@ sample_init(pmdaInterface *dp)
     init_tables(dp->domain);
     init_events(dp->domain);
     redo_mirage();
-    redo_dynamic();
+    redo_dynamic(0);
 
     /* initialization of domain in PMIDs for dynamic PMNS entries */
     for (i = 0; i < numdyn; i++) {

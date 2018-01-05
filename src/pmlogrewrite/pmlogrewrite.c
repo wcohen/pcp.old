@@ -109,11 +109,11 @@ newvolume(int vol)
     __pmFILE		*newfp;
 
     if ((newfp = __pmLogNewFile(outarch.name, vol)) != NULL) {
-	__pmFclose(outarch.logctl.l_mfp);
-	outarch.logctl.l_mfp = newfp;
-	outarch.logctl.l_label.ill_vol = outarch.logctl.l_curvol = vol;
-	__pmLogWriteLabel(outarch.logctl.l_mfp, &outarch.logctl.l_label);
-	__pmFflush(outarch.logctl.l_mfp);
+	__pmFclose(outarch.archctl.ac_mfp);
+	outarch.archctl.ac_mfp = newfp;
+	outarch.logctl.l_label.ill_vol = outarch.archctl.ac_curvol = vol;
+	__pmLogWriteLabel(outarch.archctl.ac_mfp, &outarch.logctl.l_label);
+	__pmFflush(outarch.archctl.ac_mfp);
     }
     else {
 	fprintf(stderr, "%s: __pmLogNewFile(%s,%d) Error: %s\n",
@@ -173,14 +173,14 @@ writelabel(int do_rewind)
 	__pmFseek(outarch.logctl.l_mdfp, (long)old_offset, SEEK_SET);
 
     if (do_rewind) {
-	old_offset = __pmFtell(outarch.logctl.l_mfp);
+	old_offset = __pmFtell(outarch.archctl.ac_mfp);
 	assert(old_offset >= 0);
-	__pmRewind(outarch.logctl.l_mfp);
+	__pmRewind(outarch.archctl.ac_mfp);
     }
     outarch.logctl.l_label.ill_vol = 0;
-    __pmLogWriteLabel(outarch.logctl.l_mfp, &outarch.logctl.l_label);
+    __pmLogWriteLabel(outarch.archctl.ac_mfp, &outarch.logctl.l_label);
     if (do_rewind)
-	__pmFseek(outarch.logctl.l_mfp, (long)old_offset, SEEK_SET);
+	__pmFseek(outarch.archctl.ac_mfp, (long)old_offset, SEEK_SET);
 }
 
 /*
@@ -190,10 +190,10 @@ static int
 nextmeta()
 {
     int			sts;
-    __pmLogCtl		*lcp;
+    __pmArchCtl		*acp = inarch.ctxp->c_archctl;
+    __pmLogCtl		*lcp = acp->ac_log;
 
-    lcp = inarch.ctxp->c_archctl->ac_log;
-    if ((sts = _pmLogGet(lcp, PM_LOG_VOL_META, &inarch.metarec)) < 0) {
+    if ((sts = _pmLogGet(acp, PM_LOG_VOL_META, &inarch.metarec)) < 0) {
 	if (sts != PM_ERR_EOL) {
 	    fprintf(stderr, "%s: Error: _pmLogGet[meta %s]: %s\n",
 		    pmGetProgname(), inarch.name, pmErrStr(sts));
@@ -218,25 +218,23 @@ nextmeta()
 static int
 nextlog(void)
 {
+    __pmArchCtl		*acp = inarch.ctxp->c_archctl;
     int			sts;
-    __pmLogCtl		*lcp;
     int			old_vol;
 
-
-    lcp = inarch.ctxp->c_archctl->ac_log;
-    old_vol = inarch.ctxp->c_archctl->ac_log->l_curvol;
+    old_vol = inarch.ctxp->c_archctl->ac_curvol;
 
     sts = __pmLogRead_ctx(inarch.ctxp, PM_MODE_FORW, NULL, &inarch.rp, PMLOGREAD_NEXT);
     if (sts < 0) {
 	if (sts != PM_ERR_EOL) {
 	    fprintf(stderr, "%s: Error: __pmLogRead[log %s]: %s\n",
 		    pmGetProgname(), inarch.name, pmErrStr(sts));
-	    _report(lcp->l_mfp);
+	    _report(acp->ac_mfp);
 	}
 	return -1;
     }
 
-    return old_vol == inarch.ctxp->c_archctl->ac_log->l_curvol ? 0 : 1;
+    return old_vol == acp->ac_curvol ? 0 : 1;
 }
 
 #ifdef IS_MINGW
@@ -1052,7 +1050,8 @@ main(int argc, char **argv)
 	exit(0);
 
     /* create output log - must be done before writing label */
-    if ((sts = __pmLogCreate("", outarch.name, PM_LOG_VERS02, &outarch.logctl)) < 0) {
+    outarch.archctl.ac_log = &outarch.logctl;
+    if ((sts = __pmLogCreate("", outarch.name, PM_LOG_VERS02, &outarch.archctl)) < 0) {
 	fprintf(stderr, "%s: Error: __pmLogCreate(%s): %s\n",
 		pmGetProgname(), outarch.name, pmErrStr(sts));
 	abandon();
@@ -1081,7 +1080,7 @@ main(int argc, char **argv)
 	old_meta_offset = __pmFtell(outarch.logctl.l_mdfp);
 	assert(old_meta_offset >= 0);
 
-	in_offset = __pmFtell(inarch.ctxp->c_archctl->ac_log->l_mfp);
+	in_offset = __pmFtell(inarch.ctxp->c_archctl->ac_mfp);
 	stslog = nextlog();
 	if (stslog < 0) {
 	    if (pmDebugOptions.appl0)
@@ -1090,15 +1089,15 @@ main(int argc, char **argv)
 	}
 	if (stslog == 1) {
 	    /* volume change */
-	    if (inarch.ctxp->c_archctl->ac_log->l_curvol >= outarch.logctl.l_curvol+1)
+	    if (inarch.ctxp->c_archctl->ac_curvol >= outarch.archctl.ac_curvol+1)
 		/* track input volume numbering */
-		newvolume(inarch.ctxp->c_archctl->ac_log->l_curvol);
+		newvolume(inarch.ctxp->c_archctl->ac_curvol);
 	    else
 		/*
 		 * output archive volume number is ahead, probably because
 		 * rewriting has forced an earlier volume change
 		 */
-		newvolume(outarch.logctl.l_curvol+1);
+		newvolume(outarch.archctl.ac_curvol+1);
 	}
 	if (pmDebugOptions.appl0) {
 	    struct timeval	stamp;
@@ -1256,11 +1255,11 @@ main(int argc, char **argv)
 
 	if (needti) {
 	    __pmFflush(outarch.logctl.l_mdfp);
-	    __pmFflush(outarch.logctl.l_mfp);
+	    __pmFflush(outarch.archctl.ac_mfp);
 	    new_meta_offset = __pmFtell(outarch.logctl.l_mdfp);
 	    assert(new_meta_offset >= 0);
             __pmFseek(outarch.logctl.l_mdfp, (long)old_meta_offset, SEEK_SET);
-            __pmLogPutIndex(&outarch.logctl, &tstamp);
+            __pmLogPutIndex(&outarch.archctl, &tstamp);
             __pmFseek(outarch.logctl.l_mdfp, (long)new_meta_offset, SEEK_SET);
 	    needti = 0;
 	    doneti = 1;
@@ -1268,7 +1267,7 @@ main(int argc, char **argv)
 	else
 	    doneti = 0;
 
-	old_log_offset = __pmFtell(outarch.logctl.l_mfp);
+	old_log_offset = __pmFtell(outarch.archctl.ac_mfp);
 	assert(old_log_offset >= 0);
 
 	if (inarch.rp->numpmid == 0)
@@ -1280,9 +1279,9 @@ main(int argc, char **argv)
 
     if (!doneti) {
 	/* Final temporal index entry */
-	__pmFflush(outarch.logctl.l_mfp);
-	__pmFseek(outarch.logctl.l_mfp, (long)old_log_offset, SEEK_SET);
-	__pmLogPutIndex(&outarch.logctl, &tstamp);
+	__pmFflush(outarch.archctl.ac_mfp);
+	__pmFseek(outarch.archctl.ac_mfp, (long)old_log_offset, SEEK_SET);
+	__pmLogPutIndex(&outarch.archctl, &tstamp);
     }
 
     if (iflag) {
@@ -1296,9 +1295,9 @@ main(int argc, char **argv)
 		abandon();
 		/*NOTREACHED*/
 	}
-	if (__pmFsync(outarch.logctl.l_mfp) < 0) {
+	if (__pmFsync(outarch.archctl.ac_mfp) < 0) {
 	    fprintf(stderr, "%s: Error: fsync(%d) failed for output data file: %s\n",
-		pmGetProgname(), __pmFileno(outarch.logctl.l_mfp), strerror(errno));
+		pmGetProgname(), __pmFileno(outarch.archctl.ac_mfp), strerror(errno));
 		abandon();
 		/*NOTREACHED*/
 	}
@@ -1340,10 +1339,10 @@ abandon(void)
 	_pmLogRemove(outarch.name);
 	if (iflag)
 	    _pmLogRename(bak_base, inarch.name);
-	while (outarch.logctl.l_curvol >= 0) {
-	    pmsprintf(path, sizeof(path), "%s.%d", outarch.name, outarch.logctl.l_curvol);
+	while (outarch.archctl.ac_curvol >= 0) {
+	    pmsprintf(path, sizeof(path), "%s.%d", outarch.name, outarch.archctl.ac_curvol);
 	    unlink(path);
-	    outarch.logctl.l_curvol--;
+	    outarch.archctl.ac_curvol--;
 	}
 	pmsprintf(path, sizeof(path), "%s.meta", outarch.name);
 	unlink(path);
