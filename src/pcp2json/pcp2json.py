@@ -50,7 +50,7 @@ DEFAULT_CONFIG = ["./pcp2json.conf", "$HOME/.pcp2json.conf", "$HOME/.pcp/pcp2jso
 # Defaults
 CONFVER = 1
 INDENT = 2
-PREFIX = "prefix."
+PREFIX = "prefix"
 TIMEFMT = "%Y-%m-%d %H:%M:%S"
 PRED_PATH = "$PCP_TMP_DIR/json/$PID"
 
